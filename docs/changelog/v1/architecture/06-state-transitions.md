@@ -31,6 +31,16 @@ Ví dụ:
 - chỉ order `packed` mới được ship
 - chỉ order `delivered` mới được consume preorder quota
 
+### 2.4 Phân biệt `canonical state vocabulary` và `gateway-enforced subset`
+Tài liệu này chốt hai lớp khác nhau:
+- **canonical state vocabulary**: tập state mà domain được phép dùng để mô tả thực tế vận hành
+- **gateway-enforced subset hiện tại**: tập transition đang được `Command Gateway` enforce trong implementation phase đầu
+
+Rule đọc tài liệu:
+- nếu state đã có trong enum và trong tài liệu này, nó là state hợp lệ của domain
+- nếu transition chưa có trong gateway, coi đó là **policy chưa được enforce đầy đủ**, không phải lý do để tự ý bỏ qua guard
+- phase đầu phải ưu tiên khớp `gateway.py` trước khi mở rộng state machine phức tạp hơn
+
 ---
 
 ## 3. Customer state
@@ -85,6 +95,13 @@ Phase đầu không cần làm customer state quá phức tạp.
 - nếu quantity thay đổi sau `confirmed`, phải có event log
 - chỉ `delivered` mới được consume quota thật
 
+### Gateway-enforced subset hiện tại
+Trong implementation hiện tại của `app/core/gateway.py`, preorder mới chỉ enforce chắc các transition sau:
+- `active -> active` qua action `adjust`
+- `active -> cancelled` qua action `cancel`
+
+Các transition `draft -> confirmed -> active` vẫn là canonical flow của baseline, nhưng chưa được gateway enforce đầy đủ trong current implementation.
+
 ---
 
 ## 5. Order state
@@ -138,6 +155,21 @@ Phase đầu không cần làm customer state quá phức tạp.
 - chỉ ship nếu order đã packed ở mức chấp nhận được
 - chỉ `delivered` mới tăng lịch sử mua thật
 - cancel sau packed thường phải approval
+
+### Gateway-enforced subset hiện tại
+`app/core/gateway.py` hiện enforce chắc các transition sau:
+- `draft -> confirmed`
+- `draft -> cancelled`
+- `confirmed -> allocated`
+- `confirmed -> cancelled`
+- `allocated -> packed`
+- `allocated -> cancel_requested`
+- `packed -> shipped`
+- `packed -> cancel_requested`
+- `cancel_requested -> cancelled`
+- `shipped -> delivered`
+
+Các state và transition như `partially_allocated`, `partially_packed`, `partially_delivered`, `failed` vẫn thuộc canonical vocabulary của domain, nhưng chưa phải gateway-enforced subset của phase đầu.
 
 ---
 
@@ -196,6 +228,18 @@ Nếu chỉ có order-level state thì nhiều case sẽ bị mơ hồ.
 - `blocked` không được allocate
 - `depleted` nghĩa là quantity còn lại không đủ ý nghĩa vận hành
 
+### Gateway-enforced subset hiện tại
+`app/core/gateway.py` hiện enforce chắc các transition sau:
+- `harvested -> released`
+- `harvested -> blocked`
+- `released -> blocked`
+
+Các state `draft`, `qc_pending`, `depleted`, `closed` vẫn là canonical vocabulary của lot lifecycle, nhưng chưa được gateway phase đầu đi hết.
+
+Lưu ý quan trọng:
+- baseline policy vẫn cho phép mô hình `blocked -> released` khi workflow QC đủ chín
+- current gateway chưa mở lại transition này, nên phase đầu phải coi `blocked` là trạng thái cần xử lý thủ công hoặc mở rộng policy sau
+
 ---
 
 ## 8. Allocation state
@@ -250,6 +294,11 @@ Nếu chỉ có order-level state thì nhiều case sẽ bị mơ hồ.
 Payment state trong core là trạng thái vận hành.  
 Accounting final vẫn chốt ở ERP nếu phase đó đã có sync chuẩn.
 
+### Rule baseline
+- fulfillment và workflow vận hành nhìn vào payment state của core
+- reconcile accounting nhìn vào ERP final state
+- nếu hai hệ lệch nhau, không overwrite âm thầm; phải gắn cờ `needs_reconciliation`
+
 ---
 
 ## 11. Crop Cycle state
@@ -303,6 +352,11 @@ Không cần vi mô quá nếu hiện trường chưa dùng nổi.
 
 ### Lot release guard
 - chỉ release nếu lot có đủ dữ liệu tối thiểu và không bị blocked bởi policy
+
+### Preference confirmation guard
+- candidate từ CRM, AI, hoặc operator note không tự thành canonical preference
+- chỉ role được phép mới được xác nhận preference thành truth vận hành
+- action xác nhận phải phát sinh `CustomerPreferenceUpdated` và audit log
 
 ---
 

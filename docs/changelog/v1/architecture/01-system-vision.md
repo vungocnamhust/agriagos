@@ -171,6 +171,26 @@ Nếu workflow này chạy được end-to-end, team sẽ học ra:
 - điểm nào nên tích hợp system ngoài
 - điểm nào sau này AI có thể hỗ trợ
 
+## 7.1 P0 baseline cho phase đầu
+
+Để tránh hiểu sai scope, phase đầu phải chứng minh được **3 năng lực vận hành** sau:
+
+| Năng lực | Workflow phải chạy được | User chính |
+|---|---|---|
+| Customer to commitment | tạo customer -> tạo preorder -> theo dõi quota | Sales, CSKH |
+| Harvest to fulfillable stock | tạo plot/crop summary tối thiểu -> tạo lot -> release lot | Farm manager, QC, Ops |
+| Demand to delivery | tạo order -> allocate lot -> pack -> deliver -> cập nhật purchase history | Sales, Ops, Kho |
+
+Nếu chưa chạy được 3 năng lực này thì hệ chưa chứng minh được deterministic core phase đầu.
+
+### Ngoài baseline phase đầu
+Những thứ sau **không phải tiêu chí chốt baseline**:
+- full conversation tooling như CRM
+- accounting final như ERP
+- farm ops sâu như LiteFarm
+- agent tự động execute action nhạy cảm
+- microservice hóa hoặc event bus lớn
+
 ## 8. Ba giai đoạn phát triển
 
 ### Giai đoạn 1 - Core vận hành

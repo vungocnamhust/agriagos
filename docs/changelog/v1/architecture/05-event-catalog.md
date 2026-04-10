@@ -76,6 +76,13 @@ Payload tối thiểu:
 - preference_value
 - source
 - confidence_level
+- confirmed_by
+
+Rule baseline:
+- event này dùng cho cả hai trường hợp: xác nhận candidate thành canonical, hoặc chỉnh sửa một preference đã canonicalized
+- chỉ `Sales`, `CSKH`, `Admin vận hành`, hoặc `Founder / Super Admin` mới được phát sinh event xác nhận preference canonical
+- nếu source là CRM hoặc AI nhưng chưa có người xác nhận, dữ liệu vẫn chỉ là candidate/input cho workflow
+- event này phải đủ để audit được ai đã xác nhận và candidate nào đã được canonicalize
 
 ### `CustomerSegmentChanged`
 Khi khách được chuyển segment.
@@ -148,6 +155,10 @@ Payload:
 
 ## 3.3 Plot / Crop events
 
+Rule baseline:
+- phase đầu mặc định phát sinh plot/crop events từ Core-owned summary workflow
+- nếu phase sau LiteFarm trở thành nguồn sâu cho một tenant, các event sync vẫn phải map về snapshot tối thiểu trong Core trước khi đi vào flow thương mại
+
 ### `PlotCreated`
 Payload:
 - plot_id
@@ -214,6 +225,9 @@ Payload:
 - requested_qty
 - requested_by
 
+Rule baseline:
+- dùng cho case release nhạy cảm, release ngoài threshold, hoặc release khi policy cần lớp approve riêng
+
 ### `LotReleased`
 Khi lot được mở để allocate.
 
@@ -221,6 +235,10 @@ Payload:
 - lot_id
 - released_qty
 - available_qty
+
+Nên có thêm khi policy yêu cầu:
+- released_by
+- approval_ref
 
 ### `LotReleaseAdjusted`
 Payload:
@@ -267,11 +285,18 @@ Payload:
 - requested_by
 - reason
 
+Rule baseline:
+- event này là bắt buộc khi order đã qua mốc `packed` mà cần đi tới cancel flow
+- cancel request không đồng nghĩa cancel đã được approve
+
 ### `OrderCancelled`
 Payload:
 - order_id
 - cancelled_by
 - reason
+
+Rule baseline:
+- nếu cancel xảy ra sau `packed`, event này phải có dấu vết approval hoặc policy reference đi kèm
 
 ---
 
@@ -296,6 +321,9 @@ Payload:
 - old_qty
 - new_qty
 - reason
+
+Rule baseline:
+- nếu adjustment là override ngoài policy thường, event phải có `approved_by` hoặc `approval_ref`
 
 ### `AllocationReleased`
 Khi bỏ giữ chỗ của lot.
@@ -421,6 +449,20 @@ Payload:
 - new_amount
 - reason
 
+Rule baseline:
+- payment status trong Core là operational truth
+- adjustment nhạy cảm phải có approval theo permission matrix
+
+### `PaymentReconciliationFlagged`
+Khi operational payment state ở Core lệch khỏi accounting final ở ERP.
+
+Payload:
+- order_id
+- core_payment_status
+- erp_accounting_status
+- reason
+- flagged_by
+
 ---
 
 ## 3.9 Integration events
@@ -446,6 +488,23 @@ Payload:
 - object_id
 - target_system
 - reason
+
+### `LiteFarmSnapshotApplied`
+Khi snapshot plot/crop từ LiteFarm được apply vào Core cho tenant đã chốt integration.
+
+Payload:
+- tenant_ref
+- plot_id
+- crop_cycle_id
+- external_ref
+
+### `ERPReconciliationConfirmed`
+Khi conflict giữa Core operational state và ERP accounting final state đã được con người xác nhận xử lý xong.
+
+Payload:
+- order_id
+- resolved_by
+- resolution_note
 
 ---
 
@@ -508,6 +567,13 @@ Bộ xương sống phase đầu:
 - `OrderPacked`
 - `OrderDelivered`
 - `CustomerPreferenceUpdated`
+
+Các event sau nên được chuẩn bị ngay khi workflow nhạy cảm bắt đầu xuất hiện:
+- `LotReleaseRequested`
+- `OrderCancelRequested`
+- `PaymentReconciliationFlagged`
+
+Chúng không nhất thiết phải được emit ở mọi flow phase đầu, nhưng phải có chỗ đứng rõ trong catalog để tránh approval path bị làm âm thầm.
 
 Nếu thiếu bộ này, hệ rất khó:
 - debug

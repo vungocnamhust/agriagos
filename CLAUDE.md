@@ -71,7 +71,9 @@ agos_app/
 
 ### Domain Entities
 
-8 canonical types: `Farmer`, `Plot`, `CropCycle`, `CropTask`, `Lot/Batch`, `ProductSKU`, `Order`, `Customer`
+Canonical implementation names: `CustomerProfile`, `Preorder`, `SalesOrder`, `SalesOrderLine`, `ProductSKU`, `LotBatch`, `Plot`, `CropCycle`, `Farmer`, `CropTask`.
+
+Vietnamese architecture docs sometimes use shorter business names such as `Customer`, `Order`, and `Lot`. For the mapping between business labels and implementation names, see `docs/changelog/v1/architecture/04-canonical-data-model.md`.
 
 ### API Surface
 
@@ -95,9 +97,9 @@ All endpoints are under `/api/v1/`. The route groups are:
 
 ## Design Documentation
 
-All design docs are in the repo root (written in Vietnamese):
+Core narrative docs live in two layers:
 
-| File | Content |
+| Location | Purpose |
 |------|---------|
 | `system_v1.md` | 6-layer system vision |
 | `determistic_layer_spec_v1.md` | Module specs for the deterministic core |
@@ -105,6 +107,10 @@ All design docs are in the repo root (written in Vietnamese):
 | `minimal_requirement.md` | MVP data model requirements |
 | `deterministic_core_diagram.md` | Mermaid diagrams for all core flows |
 | `vibe_coding.md` | AI agent workflow and coding philosophy |
+| `docs/changelog/v1/README.md` | index for the current architecture baseline |
+| `docs/changelog/v1/architecture/` | phase-1 architecture set: vision, workflows, canonical data model, integration contracts, AI boundaries, migration path, and baseline sign-off |
+
+When repo-root docs and `docs/changelog/v1/architecture/` overlap, treat the `docs/changelog/v1/architecture/` set as the working baseline for current deterministic-core decisions.
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence

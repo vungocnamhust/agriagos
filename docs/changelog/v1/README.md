@@ -20,6 +20,7 @@ Mục tiêu của bộ docs:
 - `docs/architecture/08-integration-contracts.md`: hợp đồng tích hợp
 - `docs/architecture/09-ai-agent-boundaries.md`: ranh giới AI/Agent
 - `docs/architecture/10-assumptions-and-migration-path.md`: giả định và đường tiến hóa
+- `docs/architecture/11-core-baseline-signoff.md`: baseline deliverables, owner, sign-off criteria
 - `openapi/openapi.yaml`: OpenAPI v1 cho deterministic core
 - `adrs/`: các ADR khóa các quyết định kiến trúc quan trọng
 

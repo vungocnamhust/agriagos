@@ -156,6 +156,8 @@ Chưa làm nông học sâu, nhưng đủ để:
 - crop cycle là vòng đời một vụ cụ thể trên plot
 - lot thu hoạch phải truy được ngược về crop cycle
 - nếu LiteFarm là source sâu, core chỉ giữ snapshot tối thiểu
+- phase đầu mặc định build `plot/crop summary` trực tiếp trong Core
+- chỉ khi integration phase chốt snapshot contract rõ ràng thì LiteFarm mới trở thành nguồn sâu cho tenant đó
 
 ### Output
 - plot record
@@ -234,6 +236,8 @@ Lot đã tồn tại, nhưng chỉ khi đủ điều kiện mới được coi l
 - `released_qty` không được lớn hơn `actual_qty`
 - blocked lot không được allocate
 - release là quyết định nghiệp vụ, không phải chỉ là cập nhật một con số
+- case release nhạy cảm phải đi qua `request -> approval -> release`
+- approval policy tối thiểu xem ở `07-permission-matrix.md`; state guard xem ở `06-state-transitions.md`
 
 ### Output
 - lot state = `released`
@@ -242,6 +246,7 @@ Lot đã tồn tại, nhưng chỉ khi đủ điều kiện mới được coi l
 - lot xuất hiện ở board có thể allocate
 
 ### Event tối thiểu
+- `LotReleaseRequested`
 - `LotReleased`
 - `LotReleaseAdjusted`
 - `LotBlocked`
@@ -282,6 +287,8 @@ Từ nhu cầu giao cụ thể, hệ phải:
 - không allocate vượt available quantity
 - không consume delivered quantity của preorder cho đến khi order thật sự delivered
 - policy chọn lot phải rõ: FIFO / FEFO / theo chất lượng / theo vùng
+- allocation override hoặc cancel sau `packed` không được coi là action thường; phải đi qua approval policy
+- AI chỉ được suggest allocation hoặc cancel path, không được tự approve
 
 ### Output
 - order
@@ -302,6 +309,8 @@ Từ nhu cầu giao cụ thể, hệ phải:
 Đây là chỗ dễ để AI “thấy hợp lý rồi tự làm bừa”.  
 Trong phase đầu, AI chỉ được **gợi ý allocation**, không được chốt thay core.
 
+Nếu workflow cần hủy sau `packed`, phải phát sinh `OrderCancelRequested` trước khi đi tới `OrderCancelled`.
+
 ---
 
 ## 9. Workflow G - Packing
@@ -321,6 +330,7 @@ Trong phase đầu, AI chỉ được **gợi ý allocation**, không được c
 - chỉ order có allocation hợp lệ mới được pack
 - packed quantity có thể lệch với allocated quantity, nhưng phải log
 - nếu thiếu hàng, trạng thái order và line phải phản ánh rõ
+- nếu thiếu hàng dẫn tới override allocation hoặc hủy một phần, action đó phải quay lại policy của order/allocation thay vì sửa tay quantity âm thầm
 
 ### Output
 - packing record
@@ -360,6 +370,8 @@ Trong phase đầu, AI chỉ được **gợi ý allocation**, không được c
   - consume preorder quota
   - cập nhật last purchase
 - `shipped` chưa đủ để coi là hoàn tất
+- nếu logistics báo delivered nhưng policy core chưa xác nhận đủ mạnh, chưa được coi là delivered truth cuối cùng
+- payment note ở bước delivery chỉ là operational note; accounting final vẫn reconcile với ERP theo policy riêng
 
 ### Output
 - delivery record
@@ -403,6 +415,8 @@ Sau mỗi lần mua hoặc tương tác, hệ phải học dần:
 - AI có thể đề xuất preference
 - nhưng nếu preference ảnh hưởng workflow quan trọng thì phải có người hoặc rule xác nhận
 - lịch sử thay đổi preference nên giữ dạng timeline
+- candidate từ CRM hoặc AI không tự thành canonical preference
+- chỉ role được phép theo `07-permission-matrix.md` mới được xác nhận candidate thành preference dùng cho workflow
 
 ### Output
 - customer profile cập nhật
@@ -413,6 +427,10 @@ Sau mỗi lần mua hoặc tương tác, hệ phải học dần:
 - `CustomerPreferenceUpdated`
 - `CustomerSegmentChanged`
 - `CustomerLastPurchaseUpdated`
+
+### Policy hook
+- guard xác nhận preference xem ở `06-state-transitions.md`
+- quyền xác nhận preference xem ở `07-permission-matrix.md`
 
 ---
 

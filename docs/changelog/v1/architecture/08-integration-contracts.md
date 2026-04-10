@@ -48,6 +48,39 @@ Integration flow tổng thể xem ở:
 | Accounting / invoice / journal final | ERP | Không tranh source of truth với ERP |
 | Event log orchestration | Agri OS Core | Đây là vai trò riêng của core |
 
+## 3.1 Boundary baseline phải chốt trước implementation sâu
+
+| Boundary | Quyết định baseline |
+|---|---|
+| Core vs ERP | Core giữ `preorder`, `order vận hành`, `lot/allocation`, `operational payment status`; ERP giữ `invoice`, `journal`, `tax`, `accounting final` |
+| Core vs LiteFarm | Core giữ `plot/crop summary` đủ dùng cho thương mại; LiteFarm giữ `field ops sâu`, `field tasks`, `farm nhật ký sâu` |
+| Core vs CRM | Core giữ `canonical customer identity`, `purchase truth`, `confirmed preference`; CRM giữ `conversation threads`, `campaign`, `activity timeline` |
+
+### Rule baseline
+- Nếu boundary chưa chốt, không được để hai hệ cùng mutate cùng một domain.
+- Nếu một tenant chọn LiteFarm là nguồn sâu cho `plot/crop`, tenant đó phải chốt snapshot contract trước khi build sync.
+- Nếu CRM gửi `preference_candidate`, candidate đó không được trở thành truth confirmed nếu chưa đi qua policy của Core.
+- Nếu ERP trả về accounting state mâu thuẫn với Core operational payment state, conflict phải được gắn cờ reconcile chứ không overwrite âm thầm.
+
+### `Tenant` nghĩa là gì trong integration baseline
+`Tenant` là một đơn vị triển khai hoặc môi trường vận hành có lựa chọn tích hợp riêng.
+
+Ví dụ:
+- tenant chưa dùng LiteFarm: Core giữ trực tiếp `plot/crop summary`
+- tenant đã dùng LiteFarm: Core giữ `snapshot đủ dùng`, LiteFarm giữ dữ liệu sâu
+
+### Snapshot contract tối thiểu khi LiteFarm là nguồn sâu
+Core tối thiểu phải nhận được:
+- `plot_id` hoặc external mapping để map plot
+- `crop_cycle_id` hoặc external mapping để map crop cycle
+- `crop_name`
+- `growth_stage`
+- `expected_harvest_from`
+- `expected_harvest_to`
+- `status`
+
+Nếu chưa chốt được contract tối thiểu này thì chưa nên build sync plot/crop sâu.
+
 ---
 
 ## 4. Chốt dứt khoát về Customer
@@ -102,6 +135,13 @@ Nói dễ hiểu:
 - preorder logic ở core
 - allocation lot ở core
 - ERP không nên quyết định lot nào cấp cho order phase đầu
+- payment state ở core chỉ là `operational truth`; ERP mới là `accounting final truth`
+
+### Conflict: operational quantity ở Core vs accounting stock ở ERP
+- quyết định fulfillment và allocation vẫn dùng `available_qty` của Core làm nguồn vận hành chính
+- nếu ERP trả về stock/accounting state lệch với Core, hệ phải gắn cờ `needs_reconciliation`
+- phase đầu cho phép reconcile thủ công giữa Ops và Finance thay vì auto-overwrite
+- phase sau mới cân nhắc job đối soát định kỳ và rule auto-adjust nếu policy đủ chín
 
 ---
 
@@ -136,6 +176,7 @@ Nói dễ hiểu:
 ### Rule
 - nếu LiteFarm là source sâu của plot/crop, Core chỉ giữ snapshot tối thiểu
 - nhưng harvested lot khi đi vào chuỗi thương mại phải được canonicalize ở Core
+- baseline phải ghi rõ với từng tenant snapshot tối thiểu gồm những field nào để nối từ farm sang lot/order
 
 ---
 
@@ -172,6 +213,7 @@ Nói dễ hiểu:
 - một số điện thoại / customer code phải map rõ giữa core và CRM
 - CRM không được âm thầm tạo “customer truth” riêng lệch khỏi core
 - candidate preference từ CRM hoặc AI không tự thành preference confirmed
+- core chỉ nhận `conversation summary` hoặc `workflow summary` cần cho vận hành, không nhận ownership của conversation thread
 
 ---
 
@@ -254,6 +296,11 @@ Nguyên tắc:
 - ưu tiên source of truth đã chỉ định
 - hệ còn lại cập nhật theo event / sync
 - conflict nghiêm trọng gắn cờ `needs_review`
+
+### Conflict phải review bằng người
+- accounting state giữa Core và ERP
+- customer identity mapping lệch giữa Core và CRM
+- plot/crop snapshot lệch giữa Core và LiteFarm ở tenant đã chọn LiteFarm làm nguồn sâu
 
 ---
 

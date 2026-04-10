@@ -23,6 +23,31 @@ Nó chỉ chốt:
 - quan hệ logic giữa các entity
 - chỗ nào là phase đầu, chỗ nào để sau
 
+### 2.1 Mapping tên tài liệu với tên implementation
+Để tránh drift giữa docs tiếng Việt và code:
+
+| Tên trong tài liệu này | Tên implementation / canonical alias |
+|---|---|
+| Customer | `CustomerProfile` |
+| Customer Preference | `CustomerPreference` |
+| Preorder | `Preorder` |
+| Order | `SalesOrder` |
+| Order Line | `SalesOrderLine` |
+| Product SKU | `ProductSKU` |
+| Plot | `Plot` |
+| Crop Cycle | `CropCycle` |
+| Lot | `LotBatch` |
+| Allocation | `Allocation` |
+| Inventory Movement | `InventoryMovement` |
+| Payment Record | `PaymentRecord` |
+| Delivery Record | `DeliveryRecord` |
+| External Mapping | `ExternalMapping` |
+| Event Log | `DomainEvent` |
+
+Rule đọc tài liệu:
+- tên tiếng Việt giúp team nghiệp vụ đọc nhanh
+- tên implementation là tên nên ưu tiên khi viết model, DTO, schema, table alias, và code comments
+
 ---
 
 ## 3. Quy tắc chung
@@ -45,6 +70,41 @@ Canonical tables giữ trạng thái hiện tại.
 
 ### 3.4 Read models không phải sự thật gốc
 Read models chỉ là góc nhìn phục vụ từng role.
+
+### 3.5 Source-of-truth phải chốt theo domain, không theo màn hình
+Một domain có thể xuất hiện ở nhiều hệ và nhiều dashboard, nhưng chỉ một nơi được quyền giữ truth gốc cho write path.
+
+---
+
+## 3A. Domain ownership baseline
+
+| Domain | Canonical owner | Core phải giữ gì | Hệ ngoài chỉ giữ gì |
+|---|---|---|---|
+| Customer identity | Agri OS Core | customer profile, customer code, external mappings | CRM/ERP chỉ giữ mapped record theo nhu cầu riêng |
+| Customer preference confirmed | Agri OS Core | confirmed preference và operational segment dùng cho workflow | CRM và AI chỉ cung cấp candidate/input |
+| Preorder | Agri OS Core | commitment, quota balance, trạng thái preorder | ERP/CRM chỉ nhận summary nếu cần |
+| Order vận hành | Agri OS Core | order, order lines, link tới preorder, operational payment state | ERP nhận sync phục vụ chứng từ/accounting |
+| Lot / Allocation | Agri OS Core | lot truth, release state, allocations, available/reserved/released quantities | ERP chỉ nhận record phục vụ reconcile phase sau |
+| Inventory movement vận hành | Agri OS Core | movement audit để giải thích quantity hiện tại | ERP giữ stock/accounting final nếu phase đủ chín |
+| Plot / Crop summary | Agri OS Core hoặc LiteFarm snapshot theo tenant | plot ref, crop cycle summary, expected harvest summary cần cho thương mại | LiteFarm giữ field ops sâu và task execution |
+| Accounting final | ERP | Core chỉ giữ operational payment status và sync refs | ERP giữ invoice, journal, tax, settled accounting truth |
+| Conversations / campaign activity | CRM | Core chỉ giữ summary cần cho workflow và mapping về customer canonical | CRM giữ threads, activities, campaigns |
+
+### Rule baseline
+- Core không được tạo source of truth thứ hai cho `accounting final` hoặc `conversations`.
+- ERP, LiteFarm, CRM không được tạo source of truth thứ hai cho `preorder`, `order vận hành`, `lot`, `allocation`.
+- Nếu `plot/crop` do LiteFarm giữ sâu, tenant đó vẫn phải chốt rõ snapshot tối thiểu nào đi vào Core.
+
+### `Tenant` trong tài liệu này nghĩa là gì
+`Tenant` ở đây là một môi trường vận hành hoặc một đơn vị triển khai có quyết định tích hợp riêng với hệ ngoài.
+
+Ví dụ:
+- tenant A dùng LiteFarm như nguồn sâu cho farm data
+- tenant B chưa dùng LiteFarm và giữ plot/crop summary trực tiếp trong Core
+
+Phase đầu nên coi mặc định là:
+- **Core giữ plot/crop summary đủ dùng**
+- LiteFarm chỉ trở thành nguồn sâu khi team đã chốt snapshot contract cho tenant đó
 
 ---
 
@@ -82,7 +142,8 @@ CRM có thể giữ conversation, nhưng customer identity canonical vẫn phả
 ## 4.2 Customer Preference
 **Mục đích:** lưu các sở thích và xu hướng đã được xác nhận hoặc đang ở mức candidate.
 
-**Source of truth:** Agri OS Core / CRM support layer
+**Source of truth confirmed:** Agri OS Core  
+**Nguồn candidate/input:** CRM, AI, operator notes
 
 ### Field gợi ý
 - `preference_id`
@@ -97,6 +158,14 @@ CRM có thể giữ conversation, nhưng customer identity canonical vẫn phả
 ### Rule
 - nếu AI gợi ý, `source = ai_suggestion`
 - nếu chưa xác nhận, không được coi là truth cứng cho action nhạy cảm
+- preference chỉ trở thành canonical khi đã được xác nhận theo policy của core workflow
+
+### Confirmation policy baseline
+- CRM, AI, hoặc operator có thể tạo `preference candidate`
+- chỉ `Sales`, `CSKH`, `Admin vận hành`, hoặc `Founder / Super Admin` mới được xác nhận candidate thành preference canonical
+- action xác nhận phải để lại `confirmed_by` và audit log
+- event tối thiểu cho việc xác nhận hoặc chỉnh sửa là `CustomerPreferenceUpdated`
+- permission chi tiết xem ở `07-permission-matrix.md`; event payload xem ở `05-event-catalog.md`
 
 ---
 
@@ -201,7 +270,8 @@ Lot là góc nhìn vật lý.
 ## 4.7 Plot
 **Mục đích:** thửa / khu / vùng trồng.
 
-**Source of truth phase đầu:** Agri OS Core hoặc LiteFarm snapshot tùy triển khai  
+**Source of truth phase đầu mặc định:** Agri OS Core  
+**Future flexibility:** LiteFarm có thể trở thành nguồn sâu theo tenant, nhưng Core vẫn phải giữ snapshot đủ dùng  
 **Source sâu về field ops:** LiteFarm nếu đã đưa vào sớm
 
 ### Field tối thiểu
@@ -219,13 +289,18 @@ Lot là góc nhìn vật lý.
 - `geo_lat`
 - `geo_lng`
 
+### Rule baseline
+- tenant phải chốt rõ `plot` đang là canonical record ở Core hay chỉ là snapshot từ LiteFarm
+- nếu chỉ là snapshot, Core vẫn phải giữ đủ reference để nối `crop cycle -> lot -> order`
+- nếu chưa có quyết định riêng theo tenant thì mặc định build `plot summary` trực tiếp trong Core
+
 ---
 
 ## 4.8 Crop Cycle
 **Mục đích:** vòng đời một vụ trên plot.
 
-**Source of truth summary:** Agri OS Core  
-**Source sâu nếu có:** LiteFarm
+**Source of truth summary phase đầu mặc định:** Agri OS Core  
+**Source sâu nếu có:** LiteFarm theo tenant đã chốt snapshot contract
 
 ### Field tối thiểu
 - `crop_cycle_id`
@@ -240,6 +315,11 @@ Lot là góc nhìn vật lý.
 - `expected_harvest_to`
 - `estimated_yield_qty`
 - `actual_yield_qty`
+
+### Rule baseline
+- core chỉ giữ phần `summary đủ dùng cho thương mại và traceability`
+- field task, nhật ký nông học sâu, và operator workflow ngoài đồng không thuộc canonical model phase đầu của core
+- nếu tenant dùng LiteFarm làm nguồn sâu, crop cycle summary trong Core vẫn là required snapshot để nối traceability
 
 ---
 
@@ -306,6 +386,10 @@ Nếu chỉ có `lot.available_qty`, hệ rất dễ bị:
 - khó đối soát với ERP
 - khó hiểu vì sao available lại ra con số hiện tại
 
+### Rule baseline
+- `inventory movement` là operational truth của core để giải thích số lượng hiện tại
+- `accounting stock final` nếu có ở phase sau vẫn thuộc ERP, không thay thế movement audit của core
+
 ### Field tối thiểu
 - `inventory_movement_id`
 - `movement_type`
@@ -364,6 +448,17 @@ Nhưng phải giữ đủ để sales / CSKH / ops làm việc.
 - `tracking_ref`
 - `shipped_at`
 - `delivered_at`
+
+### Nên có
+- `failed_at`
+- `failure_reason`
+- `delivery_note`
+- `confirmed_by`
+
+### Rule baseline
+- logistics phase đầu có thể chỉ là nguồn cập nhật bán thủ công
+- trạng thái `delivered` trong core chỉ được coi là operational truth sau khi đi qua policy xác nhận của core
+- logistics carrier update không được overwrite âm thầm nếu policy giao hàng của core chưa xác nhận xong
 
 ---
 

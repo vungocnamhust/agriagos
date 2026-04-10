@@ -147,6 +147,36 @@ Nó chỉ làm 3 việc:
 
 ## 4. Migration path tổng thể
 
+## 4.0 Included / excluded baseline cho phase đầu
+
+### In scope
+- canonical customer identity
+- preorder quota và link từ preorder sang order
+- order vận hành
+- lot, release, allocation
+- inventory movement mức đủ audit
+- plot / crop summary mức đủ dùng
+- event log, audit log, external mapping
+
+### Out of scope
+- accounting final, journal, tax engine
+- CRM conversation tooling đầy đủ
+- field ops sâu và field task engine như farm app chuyên biệt
+- AI auto-execute trên action nhạy cảm
+- microservice tách domain và event bus lớn
+
+### Deferred nhưng phải chừa đường
+- projection workers chuẩn
+- RBAC enforcement đầy đủ
+- integration adapters production-grade
+- advanced analytics và recommendation layer
+
+### Mặc định khi chưa có quyết định theo tenant
+- Core giữ `plot/crop summary` mức đủ dùng
+- LiteFarm chỉ là nguồn sâu khi snapshot contract đã được chốt rõ
+- CRM chỉ gửi summary/candidate, không được trở thành canonical owner của identity hoặc confirmed preference
+- ERP chỉ nhận operational sync; accounting final vẫn ở ERP
+
 ### Phase 1 - Core Monolith
 Mục tiêu:
 - customer
@@ -164,6 +194,7 @@ Thành công khi:
 - workflow preorder → lot → QC → allocation chạy thật
 - team debug được bằng event log
 - role chính dùng được
+- team có thể chỉ ra rõ domain nào thuộc Core, domain nào thuộc ERP/LiteFarm/CRM
 
 ### Phase 2 - Stable Modules + Integrations
 Mục tiêu:
@@ -177,6 +208,7 @@ Thành công khi:
 - source of truth rõ giữa các hệ
 - sync không còn lỗi mù
 - read model bắt đầu phục vụ team tốt
+- boundary theo tenant không còn phải giải thích lại mỗi lần build integration
 
 ### Phase 3 - Read Models + Agent Support
 Mục tiêu:
@@ -191,6 +223,7 @@ Thành công khi:
 - operator tiết kiệm thời gian thật
 - AI không phá core truth
 - acceptance rate của suggestion ở mức chấp nhận được
+- AI vẫn đi qua boundary và policy đã chốt ở phase trước
 
 ### Phase 4 - Supervisor Agent + Event-driven Expansion
 Mục tiêu:
@@ -203,6 +236,14 @@ Thành công khi:
 - multi-agent vẫn nằm trong kiểm soát
 - observability đủ tốt
 - không tạo shadow truth
+
+## 4.1 Phase gates phải nhìn thấy được
+
+| Từ phase | Sang phase | Chỉ được đi tiếp khi |
+|---|---|---|
+| Core Monolith | Stable Modules + Integrations | P0 workflow chạy end-to-end, event log debug được, domain ownership không còn mơ hồ |
+| Stable Modules + Integrations | Read Models + Agent Support | sync có idempotency, retry, reconcile; read views phục vụ operator tốt; external mapping ổn định |
+| Read Models + Agent Support | Supervisor Agent + Event-driven Expansion | AI suggestion acceptance rate ổn định, false suggestion rate thấp, guardrails và observability đủ tốt |
 
 ---
 

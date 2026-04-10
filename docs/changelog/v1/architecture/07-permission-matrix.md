@@ -49,6 +49,14 @@ Ví dụ:
 - farm manager nên xem farm summary
 thay vì ai cũng đụng raw model toàn hệ
 
+### 3.5 Baseline policy trước, gateway enforcement theo sau
+Permission matrix này là baseline policy mà write path phải đi tới.
+
+Phase đầu cần hiểu rõ:
+- không phải mọi rule ở đây đã được gateway enforce đầy đủ
+- nhưng implementation mới không được đi ngược baseline này
+- nếu current code chưa enforce đủ, phần thiếu phải được coi là debt có chủ đích chứ không phải permission ngầm
+
 ---
 
 ## 4. Phạm vi quyền theo domain
@@ -95,6 +103,7 @@ thay vì ai cũng đụng raw model toàn hệ
 - tạo preorder
 - tạo order
 - cập nhật note bán hàng
+- xác nhận preference candidate thành preference dùng cho workflow
 
 ### Không được
 - release lot
@@ -117,6 +126,7 @@ thay vì ai cũng đụng raw model toàn hệ
 - feedback
 - preference candidate
 - lịch follow-up
+- xác nhận preference candidate theo guard chuẩn của core workflow
 
 ### Không được
 - chỉnh allocation
@@ -144,6 +154,7 @@ thay vì ai cũng đụng raw model toàn hệ
 - sửa preorder terms
 - sửa payment final
 - tự un-block lot nếu policy không cho
+- xác nhận preference canonical
 
 ---
 
@@ -167,6 +178,7 @@ thay vì ai cũng đụng raw model toàn hệ
 ### Không được
 - sửa customer / preorder / payment
 - thao tác CRM
+- tự xác nhận accounting reconcile
 
 ---
 
@@ -181,10 +193,12 @@ thay vì ai cũng đụng raw model toàn hệ
 - payment status vận hành theo policy
 - reconciliation note
 - ERP sync reference
+- xác nhận hoặc escalate conflict giữa Core operational payment state và ERP accounting final state
 
 ### Không được
 - can thiệp allocation
 - can thiệp lot release nếu không có vai trò ops/qc phù hợp
+- tự sửa customer preference canonical
 
 ---
 
@@ -216,6 +230,8 @@ thay vì ai cũng đụng raw model toàn hệ
 - chỉnh payment amount cuối cùng
 - sửa permission
 - override source of truth
+- xác nhận preference canonical
+- tự approve reconcile giữa Core và ERP
 
 ---
 
@@ -237,6 +253,8 @@ thay vì ai cũng đụng raw model toàn hệ
 | Plot/Crop sửa | full | full | no | no | limited | yes | no | no | no direct |
 | Payment status xem | full | full | limited | limited | limited | no | yes | yes | scoped |
 | Payment chỉnh | full | limited | no | no | no | no | yes | no | no direct |
+| Preference confirm | full | yes | yes | yes theo policy | no | no | no | no | no direct |
+| ERP reconcile approve | full | limited | no | no | no | no | yes | no | no direct |
 | Config / Permission | full | limited | no | no | no | no | no | no | no |
 
 ---
@@ -248,8 +266,19 @@ Bắt buộc approval trong phase đầu:
 - refund / payment adjustment
 - order cancellation sau packing
 - allocation override
+- reconcile conflict giữa Core operational state và ERP accounting final state
 - permission change
 - agent muốn execute thay vì chỉ suggest
+
+### Action nào cần ai approve
+| Action nhạy cảm | Người khởi tạo hợp lệ | Người approve hợp lệ |
+|---|---|---|
+| Cancel order sau `packed` | Admin, Ops | Founder hoặc Admin vận hành theo policy |
+| Lot release case đặc biệt | Farm Manager, Ops | Admin vận hành hoặc Founder |
+| Payment adjustment / refund | Accountant | Founder hoặc Admin vận hành |
+| ERP reconcile conflict | Accountant | Founder hoặc Admin vận hành |
+| Allocation override | Ops | Admin vận hành |
+| Preference confirm từ candidate có tác động workflow | Sales, CSKH, Admin | Không cần lớp approve riêng, nhưng bắt buộc audit log |
 
 ## 7. Pattern an toàn nên dùng với AI
 
