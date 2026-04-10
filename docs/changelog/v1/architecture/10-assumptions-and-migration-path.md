@@ -1,0 +1,284 @@
+# 10. Assumptions and Migration Path
+
+## 1. Mục tiêu
+
+Tài liệu này giúp team:
+- build nhanh nhưng không quên đường tiến hóa
+- ghi rõ giả định tạm thời
+- tránh tranh cãi kiểu “sao không làm chuẩn từ đầu”
+- giảm nỗi sợ refactor mù
+
+Nguyên tắc:
+- kiến trúc tốt không phải kiến trúc không đổi
+- kiến trúc tốt là kiến trúc **đổi được với chi phí chịu được**
+
+## 2. Cách đọc tài liệu này
+
+Tài liệu này không phải “lời hứa sẽ làm hết”.  
+Nó chỉ làm 3 việc:
+1. ghi rõ phase đầu đang đơn giản hóa ở đâu
+2. ghi rõ khi nào nên nâng cấp
+3. giữ cho team không bị ảo tưởng “phải đúng toàn cục ngay lập tức”
+
+---
+
+## 3. Các assumption phase đầu
+
+## 3.1 Monolith modular trước
+### Giả định
+- phase đầu dùng một app lõi
+- module hóa theo domain
+- chưa tách microservice
+
+### Vì sao
+- team cần tốc độ học nhanh
+- nghiệp vụ chưa đủ ổn để phân tán sớm
+- cần debug nhanh, sửa nhanh
+
+### Dấu hiệu cần xem xét tách
+- ownership domain đã rõ
+- deploy một phần ảnh hưởng quá nhiều phần khác
+- integration nội bộ phình to
+- scale / permission / data scope bắt đầu xung đột mạnh
+
+---
+
+## 3.2 Shared database trước
+### Giả định
+- dùng chung primary DB cho Agri OS Core
+- read model có thể thêm dần
+- chưa tách DB theo service
+
+### Vì sao
+- giảm độ phức tạp vận hành sớm
+- dễ build vertical slice
+- dễ lần trace từ workflow đến DB
+
+### Dấu hiệu cần tách
+- contention cao
+- read load phình to
+- domain boundary đã ổn định
+- quyền dữ liệu khác nhau quá mạnh
+
+---
+
+## 3.3 Event log ở mức app trước
+### Giả định
+- event log bắt đầu như bảng hoặc outbox pattern đơn giản
+- chưa cần event bus lớn ngay
+
+### Vì sao
+- vẫn có audit
+- vẫn nuôi được analytics
+- vẫn đủ context cho AI phase đầu
+
+### Dấu hiệu cần nâng cấp
+- có nhiều consumer realtime
+- ordering / retry bắt đầu khó
+- cần replay / recovery phức tạp hơn
+- số tích hợp tăng nhanh
+
+---
+
+## 3.4 Plot / crop giữ mức vừa đủ
+### Giả định
+- phase đầu chỉ giữ dữ liệu đồng ruộng cơ bản
+- chưa mô hình hóa nông học sâu
+
+### Vì sao
+- trọng tâm trước mắt là preorder → lot → delivery
+- field ops sâu có thể giao LiteFarm
+
+### Dấu hiệu cần sâu hơn
+- đội hiện trường bắt đầu dùng đều
+- cần dự báo sản lượng tốt hơn
+- cần trace sâu cho QC / chứng nhận
+
+---
+
+## 3.5 CRM không tự build full từ đầu
+### Giả định
+- dùng CRM / omnichannel ngoài cho conversation nếu cần
+- core chỉ giữ canonical customer + purchase truth
+
+### Vì sao
+- tự build conversation tooling rất tốn
+- lợi thế cạnh tranh nằm ở orchestration, không phải inbox tool
+
+### Dấu hiệu cần đầu tư sâu hơn
+- CRM ngoài bắt đầu không đáp ứng workflow đặc thù
+- cần role-based customer views quá riêng
+- cần policy giữa preorder / order / messaging chặt hơn
+
+---
+
+## 3.6 ERP không nuốt hết logic preorder và lot phase đầu
+### Giả định
+- ERP giữ accounting final
+- Agri OS Core vẫn giữ preorder / lot / allocation truth phase đầu
+
+### Vì sao
+- preorder và lot allocation là logic đặc thù của hệ này
+- nếu đẩy sớm hết vào ERP, rất dễ lệch workflow thật
+
+### Dấu hiệu cần chuyển ownership bớt sang ERP
+- item master / invoice / stock accounting đã ổn định
+- team tài chính muốn ERP thành nguồn chính cho nhiều hơn
+- mapping không còn gây đau lớn
+
+---
+
+## 3.7 AI chỉ ở mức suggest / draft trước
+### Giả định
+- phase đầu agent không được auto-execute action nhạy cảm
+
+### Vì sao
+- cần học từ dữ liệu thật
+- cần đo độ đúng
+- tránh excessive agency
+
+### Dấu hiệu có thể mở rộng quyền
+- suggestion acceptance rate cao ổn định
+- false suggestion rate thấp
+- guardrails và audit đã đủ tốt
+- operator tin hệ thống hơn
+
+---
+
+## 4. Migration path tổng thể
+
+### Phase 1 - Core Monolith
+Mục tiêu:
+- customer
+- preorder
+- order
+- lot
+- allocation
+- delivery
+- plot / crop cycle cơ bản
+- permission
+- event log
+
+Thành công khi:
+- workflow preorder → lot → delivery chạy thật
+- team debug được bằng event log
+- role chính dùng được
+
+### Phase 2 - Stable Modules + Integrations
+Mục tiêu:
+- ERP sync
+- CRM sync
+- LiteFarm sync summary
+- dashboards theo role
+- retry / error handling integration
+
+Thành công khi:
+- source of truth rõ giữa các hệ
+- sync không còn lỗi mù
+- read model bắt đầu phục vụ team tốt
+
+### Phase 3 - Read Models + Agent Support
+Mục tiêu:
+- customer 360
+- pending fulfillment board
+- available lots board
+- AI canonical intake
+- AI draft / suggest
+- ops summary / CRM summary
+
+Thành công khi:
+- operator tiết kiệm thời gian thật
+- AI không phá core truth
+- acceptance rate của suggestion ở mức chấp nhận được
+
+### Phase 4 - Supervisor Agent + Event-driven Expansion
+Mục tiêu:
+- supervisor điều phối nhiều role-based agents
+- thêm automation workflow
+- scale integration và analytics
+- có thể tách service nơi thật sự cần
+
+Thành công khi:
+- multi-agent vẫn nằm trong kiểm soát
+- observability đủ tốt
+- không tạo shadow truth
+
+---
+
+## 5. Những thứ chưa nên làm quá sớm
+
+- microservice hóa mọi domain
+- workflow engine quá tổng quát khi workflow thật chưa rõ
+- rule engine quá nặng khi rule còn ít
+- AI auto-execute trên action nhạy cảm
+- dashboard quá đẹp nhưng dữ liệu gốc chưa sạch
+- sensor / IoT sâu khi hiện trường chưa dùng ổn
+
+---
+
+## 6. Quy tắc quyết định khi phân vân
+
+Khi team phân vân giữa hai hướng, hỏi 5 câu:
+
+1. Workflow thật nào đang đau nhất?
+2. Source of truth của dữ liệu này ở đâu?
+3. Nếu quyết định này sai, sửa có đắt không?
+4. Cái này là lõi ổn định hay phần biến động?
+5. Nếu chưa rõ, có thể hardcode tạm + log assumption không?
+
+---
+
+## 7. Assumption log template
+
+```md
+## ASSUMPTION-001
+- Mô tả: tạm dùng Agri OS Core là source of truth cho SKU phase đầu
+- Lý do: ERP item master chưa ổn định
+- Rủi ro: sau này sync 2 chiều phức tạp
+- Dấu hiệu cần đổi: ERP team bắt đầu quản SKU chuẩn
+- Kế hoạch đổi: thêm mapping table và chuyển ownership sang ERP
+```
+
+---
+
+## 8. Ví dụ assumption thật nên ghi
+
+### ASSUMPTION-A
+- Plot / crop deep data do LiteFarm giữ
+- Core chỉ giữ summary để điều phối
+
+### ASSUMPTION-B
+- Delivery phase đầu có thể update bán thủ công
+- Chưa phụ thuộc hoàn toàn vào logistics webhook
+
+### ASSUMPTION-C
+- Payment status trong core chỉ là operational status
+- Accounting final vẫn ở ERP
+
+### ASSUMPTION-D
+- AI chỉ tạo draft / suggestion trong phase đầu
+
+---
+
+## 9. Định nghĩa “đủ tốt để đi tiếp”
+
+Một quyết định được coi là đủ tốt nếu:
+- giải quyết pain thật
+- không khóa chết đường tiến hóa
+- có log / audit để sửa sau
+- không tạo source of truth thứ hai
+- không giao quyền quá sớm cho AI
+
+## 10. Kết luận
+
+Project này không cần hoàn hảo ngay từ đầu.  
+Nó cần:
+- đúng lõi
+- rõ quyền
+- rõ dữ liệu
+- rõ state
+- rõ event
+- rõ đường tiến hóa
+
+Nói ngắn:
+**đúng lõi trước, mở rộng sau, và luôn chừa đường refactor có chủ đích.**
