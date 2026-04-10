@@ -153,14 +153,15 @@ Mục tiêu:
 - preorder
 - order
 - lot
+- lot evidence / QC review
 - allocation
-- delivery
+- inventory movement
 - plot / crop cycle cơ bản
-- permission
-- event log
+- event log / audit log
+- external mapping / channel identity binding
 
 Thành công khi:
-- workflow preorder → lot → delivery chạy thật
+- workflow preorder → lot → QC → allocation chạy thật
 - team debug được bằng event log
 - role chính dùng được
 

@@ -18,7 +18,14 @@ uvicorn app.main:app --reload
 Schema Phase 1 hiện được apply bằng Alembic thay vì chỉ đọc từ bộ SQL docs.
 
 ```bash
-export DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/agriagos
+docker run --name agriagos-postgres-dev \
+	-e POSTGRES_DB=agriagos \
+	-e POSTGRES_USER=agriagos \
+	-e POSTGRES_PASSWORD=agriagos \
+	-p 127.0.0.1:5436:5432 \
+	-d postgres:15-alpine
+
+export DATABASE_URL=postgresql+psycopg://agriagos:agriagos@127.0.0.1:5436/agriagos
 alembic upgrade head
 ```
 

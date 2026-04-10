@@ -1,16 +1,23 @@
 {
   "hooks": {
+    "PreToolUse": [
+      {
+        "type": "command",
+        "command": "cd \"$(git rev-parse --show-toplevel)\" && python3 scripts/claude/env_guard.py",
+        "timeout": 5
+      }
+    ],
     "SessionStart": [
       {
         "type": "command",
-        "command": "cd /Users/nam/Workspace/projects/running/agriagos && python3 scripts/claude/session_start.py",
+        "command": "cd \"$(git rev-parse --show-toplevel)\" && python3 scripts/claude/session_start.py",
         "timeout": 5
       }
     ],
     "PostToolUse": [
       {
         "type": "command",
-        "command": "cd /Users/nam/Workspace/projects/running/agriagos && python3 scripts/claude/contract_drift.py",
+        "command": "cd \"$(git rev-parse --show-toplevel)\" && python3 scripts/claude/contract_drift.py",
         "timeout": 10
       }
     ]

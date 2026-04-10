@@ -3,6 +3,6 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     app_name: str = "Agri OS Core API"
     version: str = "0.1.0"
-    database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/agriagos"
+    database_url: str = "postgresql+psycopg://agriagos:agriagos@127.0.0.1:5436/agriagos"
 
 settings = Settings()
