@@ -1,0 +1,48 @@
+# Agri OS Copilot Instructions
+
+Agri OS is a deterministic-core FastAPI repository for agricultural supply chain operations. Treat the architecture guidance in `CLAUDE.md`, `agos_app/app/api/CLAUDE.md`, `docs/architecture/CLAUDE.md`, and `agos_app/app/integrations/CLAUDE.md` as the primary source of truth for domain ownership, service boundaries, events, and documentation rules.
+
+## Work Model
+
+- Prefer small, local changes over broad refactors.
+- Keep routes thin, services in control of business logic, and event emission in the service layer.
+- Preserve the current deterministic-core design: AI and integration surfaces are advisory or translational, not canonical write-path owners.
+- When instructions here are incomplete, consult the nearest architecture or rule file before searching broadly.
+- Use prompt files for user-invoked task templates, skills for multi-step reusable workflows, and custom agents for narrow review or mapping roles.
+
+## Bootstrap And Run
+
+- Main app lives under `agos_app/`.
+- Install dependencies from `agos_app/requirements.txt`.
+- Start the API from `agos_app/` with `uvicorn app.main:app --reload`.
+- Current runtime dependencies are minimal: FastAPI, Uvicorn, and Pydantic.
+
+## Validation Reality
+
+- There is no confirmed lint pipeline configured in this repo yet.
+- There is no confirmed automated test suite configured in this repo yet.
+- After edits, run the narrowest available validation for the files you touched.
+- If no focused executable validation exists, inspect the diff carefully and call out the gap.
+- If you edit route, DTO, migration, or architecture files, also verify contract and documentation drift.
+
+## Pull Request Expectations
+
+- Keep diffs narrow and easy to review.
+- Update paired artifacts together: routes with DTOs, contracts, and docs; migrations with data-model docs; architecture changes with ADRs or diagrams when required.
+- State clearly what was validated and what could not be validated.
+- Prefer backward-compatible API changes unless a new versioned contract is introduced.
+
+## Documentation Discipline
+
+- Do not duplicate architecture prose from `CLAUDE.md` into new Copilot files.
+- If code changes affect events, state transitions, domain ownership, or architectural boundaries, update the relevant docs in the same change.
+- Keep OpenAPI or contract artifacts aligned when route or DTO behavior changes.
+- When a short summary is enough, point back to the authoritative architecture files instead of creating a second canon in `.github/`.
+
+## Never Do
+
+- Do not move business logic into `agos_app/app/api/routes/`.
+- Do not import integration schemas into `agos_app/app/core/` or `agos_app/app/store/`.
+- Do not treat vendor IDs as canonical internal IDs.
+- Do not silently change public field names, event names, or ownership boundaries.
+- Do not rewrite large documentation sections when a minimal correction is enough.

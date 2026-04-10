@@ -1,0 +1,22 @@
+## Review Context
+
+- Use this context only while reviewing changes, not while implementing them.
+- Review with a findings-first mindset: bugs, regressions, contract drift, missing validation, missing tests.
+- Prioritize issues by severity and tie each finding to a concrete file and behavior.
+- Check `.claude/rules/canonical-model.md` when ownership or source-of-truth boundaries may have shifted.
+- Check whether routes, DTOs, services, and docs moved together for any API-facing change.
+- Flag backward-incompatible field removals, renames, type changes, or newly required inputs.
+- Verify domain rules remain in services, not controllers.
+- Verify `core/` and `store/` do not depend on Pydantic DTO modules.
+- Check for direct cross-domain service imports that bypass orchestration or events.
+- Check import direction follows routes -> services -> core -> store.
+- Confirm emitted events are facts in past tense and come from services or orchestrators only.
+- Verify event names use the dotted lowercase past-tense runtime style.
+- Check event payloads for small, stable facts rather than raw models or vendor payloads.
+- Look for silent failures: swallowed exceptions, invalid fallbacks, duplicate transitions, or skipped validation.
+- Check idempotency-sensitive flows for duplicate business effects on retries.
+- Review for state-machine regressions, especially around orders, lots, preorders, and QC-related states.
+- Check whether public docs or diagrams are now stale when behavior or ownership changed.
+- Treat missing focused validation as a review issue when an executable check should exist.
+- Prefer actionable findings over broad style commentary.
+- If no material issues are found, say so explicitly and note any residual testing or documentation gaps.

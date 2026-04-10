@@ -1,0 +1,27 @@
+## Dev Context
+
+- Use this context only while implementing or modifying code.
+- Keep changes minimal and local to the behavior being changed.
+- Start from the concrete owning surface: route, DTO, service, store, or nearby test.
+- Prefer the code that directly decides behavior over wiring layers.
+- Cross-check `.claude/rules/canonical-model.md` before adding fields, state, or ownership.
+- Follow the layer direction in `agos_app/app/`: routes -> services -> core -> store.
+- Keep HTTP logic in `api/routes/`; do not place domain rules or store writes there.
+- Routes must not call `store/` directly; delegate all data access to services.
+- All state-changing operations must respect the Command Gateway path for validation, RBAC, and idempotency.
+- Emit domain events only from services or explicit orchestrators, never from routes.
+- Keep Pydantic DTOs in `app/models/`; do not leak them into `core/` or `store/`.
+- For API changes, update route signatures and DTOs together in the same edit.
+- Use explicit DTO names such as `CreateOrderRequest` and `OrderResponse`, not generic names.
+- Preserve backward compatibility by default; prefer additive request or response changes.
+- Use canonical aggregate names and existing lifecycle states unless the task explicitly changes them.
+- Avoid direct cross-domain service imports; coordinate via orchestration or events.
+- Check idempotency before emitting events; repeated commands must not create duplicate business effects.
+- Fix root causes when the owning path is local and the fix is smaller than the workaround.
+- After the first substantive edit, run the narrowest validation that can falsify the change.
+- Prefer focused checks: touched endpoint behavior, narrow test, or targeted import/typing check.
+- Do not widen scope before that first validation unless blocked.
+- If a change affects architecture, state flow, events, or public contracts, update docs in the same task.
+- Keep comments rare and only where the control flow would otherwise be hard to parse.
+- Do not reformat unrelated code or rename public fields without a contract reason.
+- If the repo has no targeted test for the slice, run the cheapest executable sanity check available.
