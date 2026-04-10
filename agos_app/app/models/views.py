@@ -1,8 +1,8 @@
 from pydantic import BaseModel
 from app.models.customers import CustomerDetail
-from app.models.preorders import PreorderDetail
+from app.models.enums import LotStatus, OrderStatus
 from app.models.orders import OrderDetail
-from app.models.farm import FarmView
+from app.models.preorders import PreorderDetail
 
 class CustomerPreferenceItem(BaseModel):
     preferenceType: str
@@ -21,11 +21,11 @@ class AvailableLotView(BaseModel):
     productSkuId: str
     releasedQty: float
     availableQty: float
-    status: str
+    status: LotStatus  # (06-state-transitions.md)
 
 class PendingFulfillmentView(BaseModel):
     orderId: str
     orderCode: str
     customerName: str
-    status: str
+    status: OrderStatus  # (06-state-transitions.md)
     shippingDeadline: str | None = None

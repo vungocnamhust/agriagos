@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from app.models.common import Meta
+from app.models.enums import AllocationStatus, OrderLineStatus, OrderStatus, PaymentStatus
 
 class OrderLine(BaseModel):
     orderLineId: str
@@ -9,16 +10,22 @@ class OrderLine(BaseModel):
     packedQty: float = 0
     deliveredQty: float = 0
     unit: str
+    status: OrderLineStatus = OrderLineStatus.open  # (06-state-transitions.md)
     sourcePreorderId: str | None = None
 
 class OrderDetail(BaseModel):
     orderId: str
     orderCode: str
     customerId: str
+    orderDate: str | None = None  # required in canonical model (04-canonical-data-model.md)
     channel: str
-    status: str
-    paymentStatus: str
+    status: OrderStatus  # (06-state-transitions.md)
+    paymentStatus: PaymentStatus  # (06-state-transitions.md)
     deliveryDateExpected: str | None = None
+    shippingAddress: str | None = None
+    note: str | None = None
+    createdBy: str | None = None
+    sourcePreorderFlag: bool = False
     lines: list[OrderLine]
 
 class CreateOrderLineRequest(BaseModel):
@@ -55,7 +62,8 @@ class AllocationItemResponse(BaseModel):
     orderLineId: str
     lotId: str
     allocatedQty: float
-    status: str
+    allocatedAt: str | None = None  # (04-canonical-data-model.md)
+    status: AllocationStatus  # (06-state-transitions.md)
 
 class AllocationResponse(BaseModel):
     orderId: str

@@ -1,18 +1,23 @@
 from pydantic import BaseModel
 from app.models.common import Meta
+from app.models.enums import CustomerStatus
 
 class CustomerSummary(BaseModel):
     customerId: str
     customerCode: str
     fullName: str
     phone: str
+    status: CustomerStatus  # required: active | inactive | blocked (06-state-transitions.md)
+    createdAt: str | None = None
     tags: list[str] = []
 
 class CustomerDetail(CustomerSummary):
     channelSource: str | None = None
     defaultAddress: str | None = None
+    district: str | None = None
+    province: str | None = None
     notes: str | None = None
-    status: str | None = None
+    lastOrderAt: str | None = None
 
 class CreateCustomerRequest(BaseModel):
     fullName: str

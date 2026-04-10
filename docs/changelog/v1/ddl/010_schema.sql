@@ -113,6 +113,30 @@ CREATE TABLE IF NOT EXISTS lots (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS lot_evidence (
+    lot_evidence_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    lot_id UUID NOT NULL REFERENCES lots(lot_id) ON DELETE CASCADE,
+    evidence_type TEXT NOT NULL CHECK (evidence_type IN ('photo','video','checklist','note','document','measurement')),
+    object_storage_key TEXT,
+    text_value TEXT,
+    captured_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    actor_id TEXT,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','rejected')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CHECK (object_storage_key IS NOT NULL OR text_value IS NOT NULL)
+);
+
+CREATE TABLE IF NOT EXISTS qc_reviews (
+    qc_review_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    lot_id UUID NOT NULL REFERENCES lots(lot_id) ON DELETE CASCADE,
+    checklist_version TEXT NOT NULL,
+    result TEXT NOT NULL CHECK (result IN ('pending','passed','failed','needs_more_evidence')),
+    reviewer_id TEXT,
+    reviewed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS sales_orders (
     order_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     order_code TEXT NOT NULL UNIQUE,
@@ -139,7 +163,7 @@ CREATE TABLE IF NOT EXISTS sales_order_lines (
     delivered_qty NUMERIC(18,3) NOT NULL DEFAULT 0 CHECK (delivered_qty >= 0),
     unit TEXT NOT NULL,
     source_preorder_id UUID REFERENCES preorders(preorder_id),
-    line_status TEXT NOT NULL DEFAULT 'open' CHECK (line_status IN ('open','allocated','packed','delivered','cancelled'))
+    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','allocated','packed','delivered','cancelled'))
 );
 
 CREATE TABLE IF NOT EXISTS allocations (
@@ -166,30 +190,6 @@ CREATE TABLE IF NOT EXISTS inventory_movements (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS payment_records (
-    payment_record_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    order_id UUID NOT NULL REFERENCES sales_orders(order_id) ON DELETE CASCADE,
-    payment_status TEXT NOT NULL CHECK (payment_status IN ('unpaid','partially_paid','paid','refunded','writeoff')),
-    payment_method TEXT,
-    amount_expected NUMERIC(18,2) NOT NULL DEFAULT 0,
-    amount_received NUMERIC(18,2) NOT NULL DEFAULT 0,
-    received_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS delivery_records (
-    delivery_record_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    order_id UUID NOT NULL REFERENCES sales_orders(order_id) ON DELETE CASCADE,
-    delivery_status TEXT NOT NULL CHECK (delivery_status IN ('pending','shipped','delivered','partially_delivered','failed','returned')),
-    carrier TEXT,
-    tracking_ref TEXT,
-    shipped_at TIMESTAMPTZ,
-    delivered_at TIMESTAMPTZ,
-    proof_ref TEXT,
-    note TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
 CREATE TABLE IF NOT EXISTS external_mappings (
     external_mapping_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     external_system TEXT NOT NULL,
@@ -197,7 +197,7 @@ CREATE TABLE IF NOT EXISTS external_mappings (
     external_object_id TEXT NOT NULL,
     internal_object_type TEXT NOT NULL,
     internal_object_id TEXT NOT NULL,
-    sync_status TEXT NOT NULL DEFAULT 'active' CHECK (sync_status IN ('active','pending','failed','disabled')),
+    sync_status TEXT NOT NULL DEFAULT 'pending' CHECK (sync_status IN ('pending','synced','failed','needs_review')),
     last_synced_at TIMESTAMPTZ,
     last_error TEXT,
     UNIQUE (external_system, external_object_type, external_object_id)
@@ -216,14 +216,17 @@ CREATE TABLE IF NOT EXISTS channel_identity_bindings (
 CREATE TABLE IF NOT EXISTS domain_events (
     event_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     event_name TEXT NOT NULL,
+    event_version INTEGER NOT NULL DEFAULT 1,
     aggregate_type TEXT NOT NULL,
     aggregate_id TEXT NOT NULL,
     occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     actor_type TEXT NOT NULL CHECK (actor_type IN ('user','system','agent','integration')),
     actor_id TEXT,
-    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
     correlation_id TEXT,
-    source TEXT NOT NULL DEFAULT 'agri-os-core'
+    causation_id TEXT,
+    idempotency_key TEXT,
+    source TEXT NOT NULL DEFAULT 'core' CHECK (source IN ('core','integration','system_job','agent')),
+    payload JSONB NOT NULL DEFAULT '{}'::jsonb
 );
 
 CREATE TABLE IF NOT EXISTS audit_logs (

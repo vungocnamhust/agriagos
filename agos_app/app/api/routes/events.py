@@ -1,6 +1,9 @@
 from fastapi import APIRouter
 
+from app.store import memory as store
+
 router = APIRouter()
+
 
 @router.get("")
 def list_events(
@@ -9,5 +12,10 @@ def list_events(
     eventName: str | None = None,
     correlationId: str | None = None,
 ) -> dict:
-    # TODO: query domain event store
-    return {"items": []}
+    items = store.query_events(
+        aggregate_type=aggregateType,
+        aggregate_id=aggregateId,
+        event_name=eventName,
+        correlation_id=correlationId,
+    )
+    return {"items": items, "total": len(items)}

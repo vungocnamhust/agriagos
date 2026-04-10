@@ -1,14 +1,15 @@
 from fastapi import APIRouter
-from app.models.farm import PlotSummary, CropCycleSummary
+
+from app.services import farm as svc
 
 router = APIRouter()
 
+
 @router.get("/plots")
 def list_plots() -> dict:
-    # TODO: return canonical plot summaries or snapshots from farm system
-    return {"items": []}
+    return {"items": svc.list_plots()}
+
 
 @router.get("/crop-cycles")
 def list_crop_cycles(plotId: str | None = None, status: str | None = None) -> dict:
-    # TODO: return crop cycle summaries
-    return {"items": []}
+    return {"items": svc.list_crop_cycles(plotId, status)}

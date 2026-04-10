@@ -3,14 +3,14 @@
     "SessionStart": [
       {
         "type": "command",
-        "command": "python3 ./scripts/claude/session_start.py",
+        "command": "cd /Users/nam/Workspace/projects/running/agriagos && python3 scripts/claude/session_start.py",
         "timeout": 5
       }
     ],
     "PostToolUse": [
       {
         "type": "command",
-        "command": "python3 ./scripts/claude/contract_drift.py",
+        "command": "cd /Users/nam/Workspace/projects/running/agriagos && python3 scripts/claude/contract_drift.py",
         "timeout": 10
       }
     ]

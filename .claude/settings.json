@@ -1,4 +1,12 @@
 {
+  "permissions": {
+    "additionalDirectories": [
+      "/Users/nam/Workspace/projects/running/agriagos/.claude"
+    ],
+    "allow": [
+      "Bash(cat /Users/nam/.claude/scripts/hooks/*.sh)"
+    ]
+  },
   "hooks": {
     "SessionStart": [
       {
@@ -6,7 +14,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/claude/session_start.py",
+            "command": "python3 /Users/nam/Workspace/projects/running/agriagos/scripts/claude/session_start.py",
             "timeout": 5
           }
         ]
@@ -18,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/claude/contract_drift.py",
+            "command": "python3 /Users/nam/Workspace/projects/running/agriagos/scripts/claude/contract_drift.py",
             "timeout": 10
           }
         ]
@@ -29,16 +37,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/claude/session_start.py",
+            "command": "python3 /Users/nam/Workspace/projects/running/agriagos/scripts/claude/session_start.py",
             "timeout": 5
           }
         ]
       }
-    ]
-  },
-  "permissions": {
-    "additionalDirectories": [
-      "/Users/nam/Workspace/projects/running/agriagos/.claude"
     ]
   }
 }

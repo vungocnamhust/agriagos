@@ -1,19 +1,26 @@
-from fastapi import APIRouter, HTTPException
-from app.models.preorders import CreatePreorderRequest, PreorderResponse, AdjustPreorderRequest, PreorderDetail
+from fastapi import APIRouter
+
+from app.models.preorders import (
+    AdjustPreorderRequest,
+    CreatePreorderRequest,
+    PreorderDetail,
+    PreorderResponse,
+)
+from app.services import preorders as svc
 
 router = APIRouter()
 
+
 @router.post("", response_model=PreorderResponse, status_code=201)
 def create_preorder(payload: CreatePreorderRequest) -> PreorderResponse:
-    # TODO: create preorder, set remaining_qty, append PreorderPlaced event
-    raise HTTPException(status_code=501, detail="Not implemented")
+    return svc.create_preorder(payload)
+
 
 @router.get("/{preorder_id}", response_model=PreorderDetail)
 def get_preorder(preorder_id: str) -> PreorderDetail:
-    # TODO: load preorder detail
-    raise HTTPException(status_code=501, detail="Not implemented")
+    return svc.get_preorder(preorder_id)
+
 
 @router.post("/{preorder_id}/adjust", response_model=PreorderResponse)
 def adjust_preorder(preorder_id: str, payload: AdjustPreorderRequest) -> PreorderResponse:
-    # TODO: validate state, adjust committed qty, append PreorderAdjusted event
-    raise HTTPException(status_code=501, detail="Not implemented")
+    return svc.adjust_preorder(preorder_id, payload)
