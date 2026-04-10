@@ -46,3 +46,30 @@ Mục tiêu của bộ docs:
 - **Mọi thay đổi quan trọng nên có event**
 - **AI không được định nghĩa sự thật của hệ thống**
 - **Monolith modular trước, tách dần sau**
+
+
+## DDL scope
+DDL này cố ý thiên về deterministic core vận hành:
+- customer canonical identity
+- preorder
+- orders
+- lots
+- allocations
+- inventory movements
+- farm summary
+- external mappings
+- eventing / audit / idempotency
+
+Nó chưa bao phủ:
+- accounting journal chuẩn của ERP
+- farm agronomy sâu
+- agent memory/runtime
+
+## FastAPI scope
+Skeleton route groups bám theo OpenAPI v1:
+- route có sẵn
+- DTO có sẵn
+- TODO được đặt đúng chỗ để team bắt đầu cấy business logic
+
+AI không có router riêng ở bộ này.
+Khi thêm AI sau, AI phải đi qua cùng command/query contracts hoặc một brain adapter nằm ngoài deterministic core.

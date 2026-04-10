@@ -1,0 +1,16 @@
+-- 020_indexes.sql
+CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone);
+CREATE INDEX IF NOT EXISTS idx_preorders_customer_id ON preorders(customer_id);
+CREATE INDEX IF NOT EXISTS idx_preorders_product_sku_id ON preorders(product_sku_id);
+CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON sales_orders(customer_id);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON sales_orders(status);
+CREATE INDEX IF NOT EXISTS idx_order_lines_order_id ON sales_order_lines(order_id);
+CREATE INDEX IF NOT EXISTS idx_lots_product_sku_id ON lots(product_sku_id);
+CREATE INDEX IF NOT EXISTS idx_lots_status ON lots(status);
+CREATE INDEX IF NOT EXISTS idx_allocations_order_line_id ON allocations(order_line_id);
+CREATE INDEX IF NOT EXISTS idx_allocations_lot_id ON allocations(lot_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_movements_lot_id ON inventory_movements(lot_id);
+CREATE INDEX IF NOT EXISTS idx_crop_cycles_plot_id ON crop_cycles(plot_id);
+CREATE INDEX IF NOT EXISTS idx_domain_events_aggregate ON domain_events(aggregate_type, aggregate_id);
+CREATE INDEX IF NOT EXISTS idx_domain_events_correlation ON domain_events(correlation_id);
+CREATE INDEX IF NOT EXISTS idx_external_mappings_internal ON external_mappings(internal_object_type, internal_object_id);
