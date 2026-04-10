@@ -9,33 +9,50 @@ from typing import Any
 
 from fastapi import HTTPException
 
+from app.models.enums import LotStatus, OrderStatus, PreorderStatus
 from app.store import memory as store
 
 # ── State machines ────────────────────────────────────────────────────────────
 
 # Maps current_state → set of allowed transitions (action name → next_state)
 ORDER_TRANSITIONS: dict[str, dict[str, str]] = {
-    "pending":   {"confirm": "confirmed", "cancel": "cancelled"},
-    "confirmed": {"allocate": "allocated", "cancel": "cancelled"},
-    "allocated": {"pack": "packed", "request_cancel": "cancel_requested"},
-    "packed":    {"ship": "shipped", "request_cancel": "cancel_requested"},
-    "cancel_requested": {"cancel": "cancelled"},
-    "shipped":   {"deliver": "delivered"},
-    "delivered": {},
-    "cancelled": {},
+    OrderStatus.draft.value: {"confirm": OrderStatus.confirmed.value, "cancel": OrderStatus.cancelled.value},
+    OrderStatus.confirmed.value: {"allocate": OrderStatus.allocated.value, "cancel": OrderStatus.cancelled.value},
+    OrderStatus.allocated.value: {"pack": OrderStatus.packed.value, "request_cancel": OrderStatus.cancel_requested.value},
+    OrderStatus.packed.value: {"ship": OrderStatus.shipped.value, "request_cancel": OrderStatus.cancel_requested.value},
+    OrderStatus.cancel_requested.value: {"cancel": OrderStatus.cancelled.value},
+    OrderStatus.shipped.value: {"deliver": OrderStatus.delivered.value},
+    OrderStatus.delivered.value: {},
+    OrderStatus.cancelled.value: {},
 }
 
 LOT_TRANSITIONS: dict[str, dict[str, str]] = {
-    "harvested": {"release": "released", "block": "blocked"},
-    "released":  {"block": "blocked"},
-    "blocked":   {},
+    LotStatus.harvested.value: {"release": LotStatus.released.value, "block": LotStatus.blocked.value},
+    LotStatus.released.value: {"block": LotStatus.blocked.value},
+    LotStatus.blocked.value: {},
 }
 
 PREORDER_TRANSITIONS: dict[str, dict[str, str]] = {
-    "active":    {"adjust": "active", "cancel": "cancelled"},
-    "fulfilled": {},
-    "cancelled": {},
+    PreorderStatus.active.value: {"adjust": PreorderStatus.active.value, "cancel": PreorderStatus.cancelled.value},
+    PreorderStatus.completed.value: {},
+    PreorderStatus.cancelled.value: {},
 }
+
+LEGACY_ORDER_STATES: dict[str, str] = {
+    "pending": OrderStatus.draft.value,
+}
+
+LEGACY_PREORDER_STATES: dict[str, str] = {
+    "fulfilled": PreorderStatus.completed.value,
+}
+
+
+def _normalize_legacy_order_state(current: str) -> str:
+    return LEGACY_ORDER_STATES.get(current, current)
+
+
+def _normalize_legacy_preorder_state(current: str) -> str:
+    return LEGACY_PREORDER_STATES.get(current, current)
 
 
 def check_idempotency(idempotency_key: str | None) -> Any | None:
@@ -52,17 +69,20 @@ def record_idempotency(idempotency_key: str | None, result: Any) -> None:
 
 def assert_order_transition(order: dict[str, Any], action: str) -> str:
     """Return the next state or raise 422 if the transition is not allowed."""
-    current = order.get("status", "")
+    original = order.get("status", "")
+    current = _normalize_legacy_order_state(original)
     allowed = ORDER_TRANSITIONS.get(current, {})
     if action not in allowed:
         raise HTTPException(
             status_code=422,
-            detail=f"Order transition '{action}' not allowed from state '{current}'.",
+            detail=f"Order transition '{action}' not allowed from state '{original}'.",
         )
     return allowed[action]
 
 
 def assert_lot_transition(lot: dict[str, Any], action: str) -> str:
+    # Lot states were introduced after enum standardization, so there is no
+    # legacy alias mapping to normalize here.
     current = lot.get("status", "")
     allowed = LOT_TRANSITIONS.get(current, {})
     if action not in allowed:
@@ -74,11 +94,12 @@ def assert_lot_transition(lot: dict[str, Any], action: str) -> str:
 
 
 def assert_preorder_transition(preorder: dict[str, Any], action: str) -> str:
-    current = preorder.get("status", "")
+    original = preorder.get("status", "")
+    current = _normalize_legacy_preorder_state(original)
     allowed = PREORDER_TRANSITIONS.get(current, {})
     if action not in allowed:
         raise HTTPException(
             status_code=422,
-            detail=f"Preorder transition '{action}' not allowed from state '{current}'.",
+            detail=f"Preorder transition '{action}' not allowed from state '{original}'.",
         )
     return allowed[action]

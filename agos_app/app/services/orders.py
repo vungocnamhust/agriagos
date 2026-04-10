@@ -9,6 +9,7 @@ from app.core.gateway import (
     check_idempotency,
     record_idempotency,
 )
+from app.models.enums import AllocationStatus, LotStatus, OrderStatus, PaymentStatus, PreorderStatus
 from app.models.orders import (
     AllocateOrderRequest,
     AllocationItemResponse,
@@ -23,6 +24,7 @@ from app.models.orders import (
     RequestCancelOrderRequest,
     ShipOrderRequest,
 )
+from app.store import postgres_sync
 from app.store import memory as store
 
 
@@ -44,12 +46,44 @@ def _build_order_detail(record: dict[str, Any]) -> OrderDetail:
     )
 
 
+def _get_order_record_or_404(order_id: str) -> dict[str, Any]:
+    if postgres_sync.is_enabled():
+        record = postgres_sync.fetch_order(order_id)
+    else:
+        record = store._orders.get(order_id)
+
+    if not record:
+        raise HTTPException(status_code=404, detail="Order not found.")
+    return record
+
+
+def _get_lot_record_or_404(lot_id: str) -> dict[str, Any]:
+    if postgres_sync.is_enabled():
+        lot = postgres_sync.fetch_lot(lot_id)
+    else:
+        lot = store._lots.get(lot_id)
+
+    if not lot:
+        raise HTTPException(status_code=404, detail=f"Lot {lot_id} not found.")
+    return lot
+
+
+def _get_allocations_for_order(order_id: str) -> list[dict[str, Any]]:
+    if postgres_sync.is_enabled():
+        return postgres_sync.fetch_allocations_for_order(order_id)
+    return list(store._allocations.get(order_id, []))
+
+
 def create_order(payload: CreateOrderRequest) -> OrderResponse:
     key = payload.meta.idempotencyKey if payload.meta else None
     if cached := check_idempotency(key):
         return OrderResponse(**cached)
 
-    if payload.customerId not in store._customers:
+    customer_exists = payload.customerId in store._customers
+    if postgres_sync.is_enabled():
+        customer_exists = postgres_sync.customer_exists(payload.customerId)
+
+    if not customer_exists:
         raise HTTPException(status_code=404, detail="Customer not found.")
 
     order_id = str(uuid.uuid4())
@@ -76,14 +110,15 @@ def create_order(payload: CreateOrderRequest) -> OrderResponse:
         "orderCode": order_code,
         "customerId": payload.customerId,
         "channel": payload.channel,
-        "status": "pending",
-        "paymentStatus": "unpaid",
+        "status": OrderStatus.draft.value,
+        "paymentStatus": PaymentStatus.unpaid.value,
         "deliveryDateExpected": payload.deliveryDateExpected,
         "shippingAddress": payload.shippingAddress,
         "paymentIntent": payload.paymentIntent,
         "note": payload.note,
         "lines": lines,
     }
+    postgres_sync.upsert_order(record)
     store._orders[order_id] = record
 
     events.emit(
@@ -101,27 +136,22 @@ def create_order(payload: CreateOrderRequest) -> OrderResponse:
 
 
 def get_order(order_id: str) -> OrderDetail:
-    record = store._orders.get(order_id)
-    if not record:
-        raise HTTPException(status_code=404, detail="Order not found.")
+    record = _get_order_record_or_404(order_id)
     return _build_order_detail(record)
 
 
 def confirm_order(order_id: str) -> OrderResponse:
-    record = store._orders.get(order_id)
-    if not record:
-        raise HTTPException(status_code=404, detail="Order not found.")
+    record = _get_order_record_or_404(order_id)
 
     next_status = assert_order_transition(record, "confirm")
     record["status"] = next_status
+    postgres_sync.upsert_order(record)
     events.emit("OrderConfirmed", "Order", order_id, {"orderId": order_id, "status": next_status})
     return OrderResponse(data=_build_order_detail(record))
 
 
 def allocate_order(order_id: str, payload: AllocateOrderRequest) -> AllocationResponse:
-    record = store._orders.get(order_id)
-    if not record:
-        raise HTTPException(status_code=404, detail="Order not found.")
+    record = _get_order_record_or_404(order_id)
 
     key = payload.meta.idempotencyKey if payload.meta else None
     if cached := check_idempotency(key):
@@ -129,14 +159,14 @@ def allocate_order(order_id: str, payload: AllocateOrderRequest) -> AllocationRe
 
     next_status = assert_order_transition(record, "allocate")
 
-    allocation_records: list[dict[str, Any]] = []
+    existing_allocations = _get_allocations_for_order(order_id)
+    all_allocations = list(existing_allocations)
+    new_allocations: list[dict[str, Any]] = []
     line_map = {ln["orderLineId"]: ln for ln in record["lines"]}
 
     for item in payload.allocations:
-        lot = store._lots.get(item.lotId)
-        if not lot:
-            raise HTTPException(status_code=404, detail=f"Lot {item.lotId} not found.")
-        if lot["status"] != "released":
+        lot = _get_lot_record_or_404(item.lotId)
+        if lot["status"] != LotStatus.released.value:
             raise HTTPException(
                 status_code=422,
                 detail=f"Lot {item.lotId} is not in released state (current: {lot['status']}).",
@@ -150,8 +180,6 @@ def allocate_order(order_id: str, payload: AllocateOrderRequest) -> AllocationRe
             raise HTTPException(status_code=422, detail=f"OrderLine {item.orderLineId} not found.")
 
         # Reserve inventory
-        lot["availableQty"] -= item.allocatedQty
-        lot["reservedQty"] = lot.get("reservedQty", 0.0) + item.allocatedQty
         line_map[item.orderLineId]["allocatedQty"] += item.allocatedQty
 
         allocation_id = str(uuid.uuid4())
@@ -160,31 +188,43 @@ def allocate_order(order_id: str, payload: AllocateOrderRequest) -> AllocationRe
             "orderLineId": item.orderLineId,
             "lotId": item.lotId,
             "allocatedQty": item.allocatedQty,
-            "status": "allocated",
+            "status": AllocationStatus.active.value,
         }
-        allocation_records.append(alloc_record)
-        store._allocations[order_id].append(alloc_record)
+        all_allocations.append(alloc_record)
+        new_allocations.append(alloc_record)
 
-    record["status"] = next_status
+        if not postgres_sync.is_enabled():
+            lot["availableQty"] -= item.allocatedQty
+            lot["reservedQty"] = lot.get("reservedQty", 0.0) + item.allocatedQty
+
+    if postgres_sync.is_enabled():
+        try:
+            postgres_sync.allocate_order_atomic(order_id, next_status, new_allocations)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        record = _get_order_record_or_404(order_id)
+    else:
+        record["status"] = next_status
+        postgres_sync.upsert_order(record)
+        store._allocations[order_id] = all_allocations
+
     events.emit(
         "OrderAllocated",
         "Order",
         order_id,
-        {"orderId": order_id, "allocations": allocation_records},
+        {"orderId": order_id, "allocations": new_allocations},
     )
 
     result = AllocationResponse(
         orderId=order_id,
-        allocations=[AllocationItemResponse(**a) for a in allocation_records],
+        allocations=[AllocationItemResponse(**a) for a in new_allocations],
     )
     record_idempotency(key, result.model_dump())
     return result
 
 
 def pack_order(order_id: str, payload: PackOrderRequest) -> OrderResponse:
-    record = store._orders.get(order_id)
-    if not record:
-        raise HTTPException(status_code=404, detail="Order not found.")
+    record = _get_order_record_or_404(order_id)
 
     key = payload.meta.idempotencyKey if payload.meta else None
     if cached := check_idempotency(key):
@@ -199,6 +239,7 @@ def pack_order(order_id: str, payload: PackOrderRequest) -> OrderResponse:
         line_map[item.orderLineId]["packedQty"] = item.packedQty
 
     record["status"] = next_status
+    postgres_sync.upsert_order(record)
     events.emit("OrderPacked", "Order", order_id, {"orderId": order_id, "status": next_status})
 
     result = OrderResponse(data=_build_order_detail(record))
@@ -207,9 +248,7 @@ def pack_order(order_id: str, payload: PackOrderRequest) -> OrderResponse:
 
 
 def ship_order(order_id: str, payload: ShipOrderRequest) -> OrderResponse:
-    record = store._orders.get(order_id)
-    if not record:
-        raise HTTPException(status_code=404, detail="Order not found.")
+    record = _get_order_record_or_404(order_id)
 
     key = payload.meta.idempotencyKey if payload.meta else None
     if cached := check_idempotency(key):
@@ -220,6 +259,7 @@ def ship_order(order_id: str, payload: ShipOrderRequest) -> OrderResponse:
     record["carrier"] = payload.carrier
     record["trackingRef"] = payload.trackingRef
     record["shippedAt"] = payload.shippedAt
+    postgres_sync.upsert_order(record)
 
     events.emit(
         "OrderShipped",
@@ -234,9 +274,7 @@ def ship_order(order_id: str, payload: ShipOrderRequest) -> OrderResponse:
 
 
 def deliver_order(order_id: str, payload: DeliverOrderRequest) -> OrderResponse:
-    record = store._orders.get(order_id)
-    if not record:
-        raise HTTPException(status_code=404, detail="Order not found.")
+    record = _get_order_record_or_404(order_id)
 
     key = payload.meta.idempotencyKey if payload.meta else None
     if cached := check_idempotency(key):
@@ -246,11 +284,17 @@ def deliver_order(order_id: str, payload: DeliverOrderRequest) -> OrderResponse:
     record["status"] = next_status
     record["deliveredAt"] = payload.deliveredAt
     record["proofRef"] = payload.proofRef
+    postgres_sync.upsert_order(record)
 
     # Consume preorder delivered qty for any lines linked to a preorder
     for line in record["lines"]:
         if line.get("sourcePreorderId"):
-            preorder = store._preorders.get(line["sourcePreorderId"])
+            if postgres_sync.is_enabled():
+                preorder = postgres_sync.fetch_preorder(line["sourcePreorderId"])
+                if preorder:
+                    store._preorders[line["sourcePreorderId"]] = preorder
+            else:
+                preorder = store._preorders.get(line["sourcePreorderId"])
             if preorder:
                 qty = line.get("deliveredQty", 0.0) or line.get("allocatedQty", 0.0)
                 preorder["deliveredQty"] = preorder.get("deliveredQty", 0.0) + qty
@@ -259,7 +303,8 @@ def deliver_order(order_id: str, payload: DeliverOrderRequest) -> OrderResponse:
                     preorder["committedQty"] - preorder["deliveredQty"],
                 )
                 if preorder["remainingQty"] == 0:
-                    preorder["status"] = "fulfilled"
+                    preorder["status"] = PreorderStatus.completed.value
+                postgres_sync.upsert_preorder(preorder)
 
     events.emit(
         "OrderDelivered",
@@ -274,9 +319,7 @@ def deliver_order(order_id: str, payload: DeliverOrderRequest) -> OrderResponse:
 
 
 def request_cancel_order(order_id: str, payload: RequestCancelOrderRequest) -> OrderResponse:
-    record = store._orders.get(order_id)
-    if not record:
-        raise HTTPException(status_code=404, detail="Order not found.")
+    record = _get_order_record_or_404(order_id)
 
     key = payload.meta.idempotencyKey if payload.meta else None
     if cached := check_idempotency(key):
@@ -285,6 +328,7 @@ def request_cancel_order(order_id: str, payload: RequestCancelOrderRequest) -> O
     next_status = assert_order_transition(record, "request_cancel")
     record["status"] = next_status
     record["cancelReason"] = payload.reason
+    postgres_sync.upsert_order(record)
 
     events.emit(
         "OrderCancelRequested",
@@ -299,9 +343,7 @@ def request_cancel_order(order_id: str, payload: RequestCancelOrderRequest) -> O
 
 
 def cancel_order(order_id: str, payload: CancelOrderRequest | None) -> OrderResponse:
-    record = store._orders.get(order_id)
-    if not record:
-        raise HTTPException(status_code=404, detail="Order not found.")
+    record = _get_order_record_or_404(order_id)
 
     meta = payload.meta if payload else None
     key = meta.idempotencyKey if meta else None
@@ -309,15 +351,27 @@ def cancel_order(order_id: str, payload: CancelOrderRequest | None) -> OrderResp
         return OrderResponse(**cached)
 
     next_status = assert_order_transition(record, "cancel")
+    allocations = _get_allocations_for_order(order_id)
 
     # Release reserved inventory back to lots
-    for alloc in store._allocations.get(order_id, []):
-        lot = store._lots.get(alloc["lotId"])
-        if lot:
-            lot["availableQty"] += alloc.get("allocatedQty", 0.0)
-            lot["reservedQty"] = max(0.0, lot.get("reservedQty", 0.0) - alloc.get("allocatedQty", 0.0))
+    if postgres_sync.is_enabled():
+        postgres_sync.cancel_order_atomic(order_id, next_status)
+        record = _get_order_record_or_404(order_id)
+        allocations = _get_allocations_for_order(order_id)
+    else:
+        for alloc in allocations:
+            lot = _get_lot_record_or_404(alloc["lotId"])
+            if lot:
+                lot["availableQty"] += alloc.get("allocatedQty", 0.0)
+                lot["reservedQty"] = max(0.0, lot.get("reservedQty", 0.0) - alloc.get("allocatedQty", 0.0))
+                postgres_sync.upsert_lot(lot)
 
-    record["status"] = next_status
+        record["status"] = next_status
+        postgres_sync.upsert_order(record)
+        for alloc in allocations:
+            alloc["status"] = AllocationStatus.cancelled.value
+        postgres_sync.replace_allocations_for_order(order_id, allocations)
+        store._allocations[order_id] = allocations
     events.emit(
         "OrderCancelled",
         "Order",

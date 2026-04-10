@@ -5,6 +5,7 @@ from fastapi import HTTPException
 
 from app.core import events
 from app.core.gateway import assert_lot_transition, check_idempotency, record_idempotency
+from app.models.enums import LotStatus
 from app.models.lots import (
     BlockLotRequest,
     CreateHarvestedLotRequest,
@@ -58,7 +59,7 @@ def create_harvested_lot(payload: CreateHarvestedLotRequest) -> LotResponse:
         "releasedQty": 0.0,
         "qualityNote": payload.qualityNote,
         "attachments": list(payload.attachments),
-        "status": "harvested",
+        "status": LotStatus.harvested.value,
     }
     store._lots[lot_id] = record
 

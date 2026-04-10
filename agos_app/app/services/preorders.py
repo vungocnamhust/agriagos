@@ -5,12 +5,14 @@ from fastapi import HTTPException
 
 from app.core import events
 from app.core.gateway import assert_preorder_transition, check_idempotency, record_idempotency
+from app.models.enums import PreorderStatus
 from app.models.preorders import (
     AdjustPreorderRequest,
     CreatePreorderRequest,
     PreorderDetail,
     PreorderResponse,
 )
+from app.store import postgres_sync
 from app.store import memory as store
 
 
@@ -32,12 +34,29 @@ def _build_preorder_detail(record: dict[str, Any]) -> PreorderDetail:
     )
 
 
+def _get_preorder_record_or_404(preorder_id: str) -> dict[str, Any]:
+    if postgres_sync.is_enabled():
+        record = postgres_sync.fetch_preorder(preorder_id)
+        if record:
+            store._preorders[preorder_id] = record
+    else:
+        record = store._preorders.get(preorder_id)
+
+    if not record:
+        raise HTTPException(status_code=404, detail="Preorder not found.")
+    return record
+
+
 def create_preorder(payload: CreatePreorderRequest) -> PreorderResponse:
     key = payload.meta.idempotencyKey if payload.meta else None
     if cached := check_idempotency(key):
         return PreorderResponse(**cached)
 
-    if payload.customerId not in store._customers:
+    customer_exists = payload.customerId in store._customers
+    if postgres_sync.is_enabled():
+        customer_exists = postgres_sync.customer_exists(payload.customerId)
+
+    if not customer_exists:
         raise HTTPException(status_code=404, detail="Customer not found.")
 
     preorder_id = str(uuid.uuid4())
@@ -57,8 +76,10 @@ def create_preorder(payload: CreatePreorderRequest) -> PreorderResponse:
         "deliveryCadence": payload.deliveryCadence,
         "depositAmount": payload.depositAmount,
         "notes": payload.notes,
-        "status": "active",
+        "status": PreorderStatus.active.value,
+        "startDate": payload.startDate,
     }
+    postgres_sync.upsert_preorder(record)
     store._preorders[preorder_id] = record
 
     events.emit(
@@ -76,16 +97,12 @@ def create_preorder(payload: CreatePreorderRequest) -> PreorderResponse:
 
 
 def get_preorder(preorder_id: str) -> PreorderDetail:
-    record = store._preorders.get(preorder_id)
-    if not record:
-        raise HTTPException(status_code=404, detail="Preorder not found.")
+    record = _get_preorder_record_or_404(preorder_id)
     return _build_preorder_detail(record)
 
 
 def adjust_preorder(preorder_id: str, payload: AdjustPreorderRequest) -> PreorderResponse:
-    record = store._preorders.get(preorder_id)
-    if not record:
-        raise HTTPException(status_code=404, detail="Preorder not found.")
+    record = _get_preorder_record_or_404(preorder_id)
 
     key = payload.meta.idempotencyKey if payload.meta else None
     if cached := check_idempotency(key):
@@ -105,6 +122,7 @@ def adjust_preorder(preorder_id: str, payload: AdjustPreorderRequest) -> Preorde
     old_qty = record["committedQty"]
     record["committedQty"] = payload.newCommittedQty
     record["remainingQty"] = max(0.0, payload.newCommittedQty - record["deliveredQty"])
+    postgres_sync.upsert_preorder(record)
 
     actor_id = payload.meta.actorId if payload.meta else None
     correlation_id = payload.meta.correlationId if payload.meta else None
