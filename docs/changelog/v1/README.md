@@ -20,6 +20,9 @@ Mục tiêu của bộ docs:
 - `docs/architecture/08-integration-contracts.md`: hợp đồng tích hợp
 - `docs/architecture/09-ai-agent-boundaries.md`: ranh giới AI/Agent
 - `docs/architecture/10-assumptions-and-migration-path.md`: giả định và đường tiến hóa
+- `openapi/openapi.yaml`: OpenAPI v1 cho deterministic core
+- `adrs/`: các ADR khóa các quyết định kiến trúc quan trọng
+
 
 ## Cách dùng nhanh cho team
 
@@ -32,6 +35,9 @@ Mục tiêu của bộ docs:
    - state: `06`
    - phân quyền: `07`
    - AI có được chạm vào hay không: `09`
+5. Dùng `openapi.yaml` làm baseline cho backend routes, DTOs, validation.
+6. Dùng ADRs để khóa boundary, tránh vibe coding làm trôi source of truth.
+7. Khi thay đổi decision lớn, không sửa âm thầm — thêm ADR mới hoặc supersede ADR cũ.
 
 ## Nguyên tắc cốt lõi
 
