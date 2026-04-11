@@ -20,7 +20,7 @@ uvicorn app.main:app --reload
 # Swagger UI at http://localhost:8000/docs
 ```
 
-No test framework or linter is configured yet. PostgreSQL migration scaffolding now lives under `agos_app/alembic/`, while the service layer still uses the in-memory store until the DB-backed write path is wired in.
+Ruff is used for linting (`PYENV_VERSION=agos_3.10.14 ruff check agos_app/`). No test framework is configured yet. PostgreSQL migration scaffolding lives under `agos_app/alembic/`. The service layer defaults to in-memory store; the postgres write path is controlled by `store/_db.py::is_enabled()`.
 
 ## Architecture
 
@@ -62,9 +62,21 @@ agos_app/
 │   │   ├── router.py     # Aggregates 8 route groups under /api/v1/
 │   │   └── routes/       # One file per domain (customers, orders, lots, farm, preorders, views, events, health)
 │   ├── models/           # Pydantic v2 schemas (DTOs, not ORM models)
-│   │   ├── common.py     # Shared: Meta, ErrorResponse, DomainEvent
+│   │   ├── common.py     # Shared: Meta, ErrorResponse, DomainEvent (includes tenantId placeholder)
 │   │   └── *.py          # Per-domain schemas
-│   ├── core/config.py    # App settings via pydantic-settings
+│   ├── core/
+│   │   ├── codegen.py    # Centralized human-readable code generation (KH-, DT-, ORD-, LOT- formats)
+│   │   ├── gateway.py    # Command Gateway: idempotency, state machine transitions
+│   │   └── events.py     # Domain event factory (dotted-lowercase eventName + PascalCase eventType)
+│   ├── services/         # Application services — one file per domain
+│   ├── store/
+│   │   ├── _db.py        # DB connection + is_enabled() flag
+│   │   ├── customers.py  # Customer store operations
+│   │   ├── lots.py       # Lot store operations
+│   │   ├── orders.py     # Order store operations (atomic cancel/allocate)
+│   │   ├── preorders.py  # Preorder store + increment_delivered_qty_atomic (SSoT for delivered qty)
+│   │   ├── postgres_sync.py  # Backward-compat re-export shim (do not add logic here)
+│   │   └── memory.py     # In-memory fallback for local dev / unit tests
 │   └── db/session.py     # SQLAlchemy engine/session wiring for PostgreSQL
 ├── alembic/              # Executable schema revisions for Phase 1 PostgreSQL
 ```
@@ -109,8 +121,14 @@ Core narrative docs live in two layers:
 | `vibe_coding.md` | AI agent workflow and coding philosophy |
 | `docs/changelog/v1/README.md` | index for the current architecture baseline |
 | `docs/changelog/v1/architecture/` | phase-1 architecture set: vision, workflows, canonical data model, integration contracts, AI boundaries, migration path, and baseline sign-off |
+| `docs/changelog/v1/architecture/naming-conventions.md` | frozen naming rules: entities, events, states, endpoints, DTOs, commands, modules |
+| `docs/changelog/v1/architecture/coding-guardrails.md` | what must be correct from day 1 vs what can be stubbed in Phase 1 |
+| `docs/changelog/v1/adrs/` | 6 ADRs (ADR-001 to ADR-006) covering core architectural decisions |
+| `docs/changelog/v1/openapi/agros-api-v1.0.yaml` | committed OpenAPI baseline (27 endpoints) — update in same commit as any API change |
 
 When repo-root docs and `docs/changelog/v1/architecture/` overlap, treat the `docs/changelog/v1/architecture/` set as the working baseline for current deterministic-core decisions.
+
+**`docs/architecture/` is an empty placeholder — all actual docs are under `docs/changelog/v1/architecture/`.**
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
