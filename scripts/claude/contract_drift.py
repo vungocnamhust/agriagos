@@ -13,6 +13,18 @@ from typing import Any
 
 MAX_STDIN = 1024 * 1024
 EXIT_BLOCKING_DRIFT = 2
+GIT_TIMEOUT_SECONDS = 10
+DIFF_UNAVAILABLE = "<diff-unavailable>"
+CODE_LIKE_DIFF_PATTERNS = (
+    re.compile(r"\bdef\b"),
+    re.compile(r"\breturn\b"),
+    re.compile(r"\b(?:from|import)\b"),
+    re.compile(r"="),
+    re.compile(r"[\[\]{}()]"),
+    re.compile(r"->"),
+    re.compile(r"\b\w+\.\w+\b"),
+    re.compile(r"['\"].+['\"]\s*:\s*"),
+)
 SOURCE_REGISTRY = Path("docs/changelog/v1/architecture/00-source-of-truth-registry.md")
 DIFFERENCE_LEDGER = Path("docs/changelog/v1/divergence-ledger.md")
 DIFFERENCE_LEDGER_TEXT = str(DIFFERENCE_LEDGER).replace("\\", "/")
@@ -73,21 +85,6 @@ CORE_CONTRACT_TARGETS = {
         ARCHITECTURE_DIR / "naming-conventions.md",
         DIAGRAM_DIR / "04-event-storming-event-map.md",
     ],
-}
-
-CORE_CONTRACT_DIFF_PATTERNS = {
-    "gateway.py": (
-        re.compile(r"\b(?:ORDER_TRANSITIONS|LOT_TRANSITIONS|PREORDER_TRANSITIONS)\b"),
-        re.compile(r"\b(?:LEGACY_ORDER_STATES|LEGACY_PREORDER_STATES)\b"),
-        re.compile(r"\b(?:OrderStatus|LotStatus|PreorderStatus)\."),
-        re.compile(r"\b(?:assert_order_transition|assert_lot_transition|assert_preorder_transition)\b"),
-        re.compile(r"\b(?:_normalize_legacy_order_state|_normalize_legacy_preorder_state)\b"),
-    ),
-    "events.py": (
-        re.compile(r"\b(?:emit|_to_event_type)\b"),
-        re.compile(r"\b(?:eventName|eventType|aggregateType|aggregateId|occurredAt|actorType|actorId|correlationId|source|tenantId|payload)\b"),
-        re.compile(r"\b(?:dotted lowercase|PascalCase)\b", re.IGNORECASE),
-    ),
 }
 
 ARCHITECTURE_TARGETS = {
@@ -253,12 +250,17 @@ def classify(relative_path: Path | None) -> Surface | None:
 
 
 def list_changed_paths(repo_root: Path) -> set[Path]:
-    result = subprocess.run(
-        ["git", "status", "--porcelain=1", "-z", "--untracked-files=all"],
-        cwd=repo_root,
-        capture_output=True,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain=1", "-z", "--untracked-files=all"],
+            cwd=repo_root,
+            capture_output=True,
+            check=False,
+            timeout=GIT_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        print("[contract-drift] WARNING: git status timed out; skipping sync check.", file=sys.stderr)
+        return set()
     if result.returncode != 0:
         print(
             f"[contract-drift] WARNING: git status failed with exit code {result.returncode}; skipping sync check.",
@@ -317,48 +319,63 @@ def openapi_targets(repo_root: Path) -> list[Path]:
 
 
 def changed_diff_lines(repo_root: Path, relative_path: Path) -> list[str]:
-    result = subprocess.run(
-        ["git", "diff", "--no-ext-diff", "--unified=0", "--", str(relative_path)],
-        cwd=repo_root,
-        capture_output=True,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--no-ext-diff", "--unified=0", "--", str(relative_path)],
+            cwd=repo_root,
+            capture_output=True,
+            check=False,
+            timeout=GIT_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        print(
+            f"[contract-drift] WARNING: git diff timed out for {relative_path}; assuming contract-sensitive change.",
+            file=sys.stderr,
+        )
+        return [DIFF_UNAVAILABLE]
     if result.returncode not in {0, 1}:
         print(
             f"[contract-drift] WARNING: git diff failed for {relative_path} with exit code {result.returncode}; assuming contract-sensitive change.",
             file=sys.stderr,
         )
-        return ["<diff-unavailable>"]
+        return [DIFF_UNAVAILABLE]
 
     changed_lines: list[str] = []
+    in_docstring = False
+    docstring_delim: str | None = None
     for line in result.stdout.decode("utf-8", errors="replace").splitlines():
         if not line or line.startswith(("diff ", "index ", "@@", "+++", "---")):
             continue
         if line[0] not in {"+", "-"}:
             continue
         content = line[1:].strip()
-        if not content or content.startswith("#"):
-            continue
-        if content in {'"""', "'''"}:
-            continue
+
         if content.startswith(('"""', "'''")):
+            delim = content[:3]
+            if content.count(delim) >= 2 and len(content) > len(delim):
+                continue
+            if in_docstring and docstring_delim == delim:
+                in_docstring = False
+                docstring_delim = None
+            else:
+                in_docstring = True
+                docstring_delim = delim
+            continue
+
+        if in_docstring:
+            continue
+
+        if not content or content.startswith("#"):
             continue
         changed_lines.append(content)
     return changed_lines
 
 
 def core_contract_requires_sync(surface: Surface, repo_root: Path) -> bool:
-    if not surface.domain:
-        return True
-
-    patterns = CORE_CONTRACT_DIFF_PATTERNS.get(surface.domain)
-    if not patterns:
-        return True
-
     for line in changed_diff_lines(repo_root, surface.relative_path):
-        if line == "<diff-unavailable>":
+        if line == DIFF_UNAVAILABLE:
             return True
-        if any(pattern.search(line) for pattern in patterns):
+        if any(pattern.search(line) for pattern in CODE_LIKE_DIFF_PATTERNS):
             return True
 
     return False

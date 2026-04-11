@@ -41,6 +41,10 @@ def emit(
     actor_type: str = "user",
     actor_id: str | None = None,
     correlation_id: str | None = None,
+    causation_id: str | None = None,
+    idempotency_key: str | None = None,
+    event_version: int = 1,
+    source: str = "core",
 ) -> dict[str, Any]:
     """Append a domain event to the event store.
 
@@ -49,21 +53,25 @@ def emit(
         aggregate_type: Short canonical label, e.g. "Order", "Lot", "Customer".
         aggregate_id:   UUID of the aggregate root.
         payload:        Minimal stable facts needed by consumers.
-        actor_type:     "user" | "system" | "api" | "future_ai"
+        actor_type:     "user" | "system" | "agent" | "integration"
         actor_id:       Identifier of the acting principal (None if system).
         correlation_id: Groups related events across a workflow.
+        source:         Event source label, e.g. "core" or "integration".
     """
     event: dict[str, Any] = {
         "eventId": str(uuid.uuid4()),
         "eventName": event_name,                   # dotted lowercase — runtime/query style
         "eventType": _to_event_type(event_name),   # PascalCase — class/doc style
+        "eventVersion": event_version,
         "aggregateType": aggregate_type,
         "aggregateId": aggregate_id,
         "occurredAt": _now(),
         "actorType": actor_type,
         "actorId": actor_id,
         "correlationId": correlation_id,
-        "source": "core",
+        "causationId": causation_id,
+        "idempotencyKey": idempotency_key,
+        "source": source,
         "tenantId": "default",
         "payload": payload,
     }

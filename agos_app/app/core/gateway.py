@@ -84,10 +84,21 @@ def check_idempotency(idempotency_key: str | None) -> Any | None:
     return None
 
 
-def record_idempotency(idempotency_key: str | None, result: Any) -> None:
+def record_idempotency(
+    idempotency_key: str | None,
+    result: Any,
+    *,
+    operation_name: str = "core.write",
+    request_hash: str | None = None,
+) -> None:
     if idempotency_key:
         if postgres_enabled():
-            idempotency_store.save_response(idempotency_key, result)
+            idempotency_store.save_response(
+                idempotency_key,
+                result,
+                operation_name=operation_name,
+                request_hash=request_hash,
+            )
         store.set_idempotent_result(idempotency_key, result)
 
 

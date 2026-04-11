@@ -26,7 +26,8 @@ eventId, eventName, eventType, aggregateType, aggregateId,
 occurredAt, actorType, actorId, correlationId, source, payload
 ```
 
-Có thể thêm field mới (additive). Không được xóa hoặc rename field cũ.
+Có thể thêm field mới (additive) như `eventVersion`, `causationId`, `idempotencyKey`.
+Không được xóa hoặc rename field cũ.
 
 ### A3. Idempotency key phải check trên mọi write command
 
@@ -37,6 +38,16 @@ if cached := check_idempotency(key):
     return SomeResponse(**cached)
 ```
 Đây là correctness concern — không phải optimization.
+
+Nếu write command đã emit event, event đó phải lưu được `idempotencyKey` để replay/debug không cần join mù sang bảng idempotency.
+
+Mọi write command quan trọng cũng phải ghi audit decision:
+- `allowed` khi state write + event append thành công
+- `denied` hoặc `failed` khi business rule hay state transition chặn flow
+
+Audit decision phải mang ít nhất `correlation_id`, `actor_id`, `actor_role`, và metadata đủ để lần lại event hoặc command đã gây ra decision đó.
+
+Trên PostgreSQL path, canonical state write, domain event append, audit decision append, và idempotency snapshot phải đi trong cùng một transaction boundary.
 
 ### A4. HTTP response codes phải nhất quán
 
@@ -59,6 +70,13 @@ Dùng `core/codegen.py` — không tự generate inline trong service.
 
 Chỉ dùng `store.preorders.increment_delivered_qty_atomic()` khi deliver order.
 Không được update preorder record trực tiếp trong `orders.py`.
+
+### A7. Correlation ID phải được propagate từ request boundary
+
+Nếu client không gửi `meta.correlationId`, route layer phải lấy `X-Correlation-ID`
+từ middleware và inject vào payload meta trước khi gọi service.
+
+Không để service phải đọc trực tiếp `Request` object.
 
 Xem: [Feature 5e trong plan](../../../.claude/plans/cheeky-finding-hinton.md)
 

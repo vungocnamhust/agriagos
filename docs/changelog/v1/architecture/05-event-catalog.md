@@ -24,6 +24,8 @@ Event map tổng thể xem ở:
 Mỗi event tối thiểu nên có:
 - `event_id`
 - `event_name`
+- `event_type`
+- `event_version`
 - `aggregate_type`
 - `aggregate_id`
 - `occurred_at`
@@ -31,12 +33,16 @@ Mỗi event tối thiểu nên có:
 - `actor_id`
 - `payload`
 - `correlation_id`
+- `causation_id`
+- `idempotency_key`
 - `source`
 
 ### Giải thích ngắn
 - `aggregate_type`: thực thể chính bị tác động
 - `aggregate_id`: id của thực thể đó
 - `correlation_id`: gom nhiều event của cùng một flow
+- `causation_id`: trỏ tới event gần nhất đã dẫn tới event hiện tại trong cùng flow
+- `idempotency_key`: gắn event với write command đã được deduplicate
 - `source`: event đến từ core, integration, system job hay agent-support flow
 
 ---
