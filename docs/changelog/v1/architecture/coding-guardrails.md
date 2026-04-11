@@ -57,7 +57,8 @@ Trên PostgreSQL path, canonical state write, domain event append, audit decisio
 | Action thành công (POST .../confirm) | `200 OK` |
 | Business rule violation / state machine reject | `422 Unprocessable Entity` |
 | Resource không tồn tại | `404 Not Found` |
-| Auth chưa có (Phase 1) | Bỏ qua — không return 401/403 tạm |
+| Approval / permission guard đã được policy hóa | `403 Forbidden` |
+| Auth chưa có (Phase 1) | Bỏ qua — không return `401` tạm |
 
 Không dùng `400 Bad Request` cho business rule violations — dùng `422` với `code` rõ ràng.
 
@@ -155,7 +156,7 @@ Cần implement draft → confirmed → active flow hoặc xóa bớt states kh�
 
 | Enum | States trong enum | States có transitions | States chưa có transitions | Lý do |
 |------|-------------------|-----------------------|---------------------------|-------|
-| `LotStatus` | draft, harvested, qc_pending, released, blocked, depleted, closed | harvested, released, blocked | draft, qc_pending, depleted, closed | Phase 2 (QC workflow chưa implement) |
+| `LotStatus` | draft, harvested, qc_pending, released, blocked, depleted, closed | harvested, qc_pending, released, blocked | draft, depleted, closed | Phase 1 có release/unblock lane tối thiểu; depleted/closed vẫn để Phase 2 |
 | `OrderStatus` | draft, confirmed, allocated, partially_allocated, packed, partially_packed, shipped, delivered, partially_delivered, cancel_requested, cancelled, failed | draft, confirmed, allocated, packed, cancel_requested, shipped, delivered, cancelled | partially_allocated, partially_packed, partially_delivered, failed | Phase 2 (partial fulfillment logic chưa implement) |
 | `PreorderStatus` | draft, confirmed, active, completed, cancelled | active, completed, cancelled | draft, confirmed | Phase 1.5 (full preorder lifecycle chưa implement) |
 

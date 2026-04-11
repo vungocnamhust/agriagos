@@ -226,9 +226,8 @@ Lot đã tồn tại, nhưng chỉ khi đủ điều kiện mới được coi l
 
 ### Input
 - lot id
-- kết quả kiểm tối thiểu
 - released quantity
-- available quantity
+- QC result hoặc review state tối thiểu đã được ghi nhận trước đó
 - ghi chú nếu block hoặc release có điều kiện
 
 ### Rule chính
@@ -247,11 +246,12 @@ Lot đã tồn tại, nhưng chỉ khi đủ điều kiện mới được coi l
 - lot xuất hiện ở board có thể allocate
 
 ### Event tối thiểu
-- `LotReleaseRequested`
 - `LotReleased`
-- `LotReleaseAdjusted`
 - `LotBlocked`
 - `LotUnblocked`
+
+Event policy note:
+- `LotReleaseRequested` và `LotReleaseAdjusted` vẫn là event vocabulary hợp lệ cho phase sau nếu approval lane được tách riêng, nhưng chưa phải event tối thiểu của implementation hiện tại
 
 ---
 

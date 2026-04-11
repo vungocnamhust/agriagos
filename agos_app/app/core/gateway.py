@@ -33,7 +33,7 @@ LOT_TRANSITIONS: dict[str, dict[str, str]] = {
     LotStatus.harvested.value: {"release": LotStatus.released.value, "block": LotStatus.blocked.value},
     LotStatus.qc_pending.value: {"release": LotStatus.released.value, "block": LotStatus.blocked.value},
     LotStatus.released.value: {"block": LotStatus.blocked.value},
-    LotStatus.blocked.value: {},
+    LotStatus.blocked.value: {"unblock": LotStatus.qc_pending.value},
     # Phase 2 states — not reachable via gateway in Phase 1:
     # LotStatus.draft.value: {"harvest": LotStatus.harvested.value}
     # LotStatus.qc_pending.value: transitions handled by QC workflow module

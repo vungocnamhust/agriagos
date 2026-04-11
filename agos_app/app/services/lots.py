@@ -26,6 +26,7 @@ from app.models.lots import (
     QCReviewListResponse,
     QCReviewResponse,
     ReleaseLotRequest,
+    UnblockLotRequest,
 )
 from app.store import farm as farm_store
 from app.store.lots import (
@@ -43,6 +44,8 @@ from app.store._db import transaction as postgres_transaction
 VALID_EVIDENCE_TYPES = {"photo", "video", "checklist", "note", "document", "measurement"}
 VALID_QC_RESULTS = {"pending", "passed", "failed", "needs_more_evidence"}
 STANDARD_LOT_UNIT = "kg"
+SENSITIVE_RELEASE_ROLES = {"farm_manager", "ops", "ops_manager"}
+APPROVAL_BYPASS_ROLES = {"admin", "founder", "super_admin", "admin_van_hanh"}
 
 
 def _new_lot_code(product_sku_id: str) -> str:
@@ -78,6 +81,30 @@ def _normalize_unit(unit: str | None) -> str:
 def _validate_quantity(value: float) -> None:
     if value <= 0:
         raise HTTPException(status_code=422, detail="actualQty must be greater than 0.")
+
+
+def _list_qc_reviews_for_lot(lot_id: str) -> list[dict[str, Any]]:
+    if postgres_sync.is_enabled():
+        return list_qc_reviews(lot_id)
+    return store.get_lot_qc_reviews(lot_id)
+
+
+def _latest_qc_result(lot_id: str) -> str | None:
+    reviews = _list_qc_reviews_for_lot(lot_id)
+    if not reviews:
+        return None
+    return reviews[0].get("result")
+
+
+def _compute_available_qty(released_qty: float, reserved_qty: float) -> float:
+    return max(released_qty - reserved_qty, 0.0)
+
+
+def _requires_sensitive_release_approval(record: dict[str, Any], context: dict[str, Any]) -> bool:
+    if record.get("status") != LotStatus.harvested.value:
+        return False
+    actor_role = context.get("actor_role")
+    return actor_role in SENSITIVE_RELEASE_ROLES and actor_role not in APPROVAL_BYPASS_ROLES
 
 
 def _crop_cycle_exists(crop_cycle_id: str) -> bool:
@@ -444,6 +471,18 @@ def release_lot(lot_id: str, payload: ReleaseLotRequest) -> LotResponse:
         )
         raise
 
+    if payload.releasedQty <= 0:
+        _audit_lot(
+            "lot.release",
+            lot_id,
+            "denied",
+            context,
+            before_snapshot=before_snapshot,
+            reason_code="invalid_released_quantity",
+            metadata={"message": "releasedQty must be greater than 0."},
+        )
+        raise HTTPException(status_code=422, detail="releasedQty must be greater than 0.")
+
     if payload.releasedQty > record["actualQty"]:
         _audit_lot(
             "lot.release",
@@ -459,28 +498,86 @@ def release_lot(lot_id: str, payload: ReleaseLotRequest) -> LotResponse:
             detail=f"releasedQty ({payload.releasedQty}) exceeds actualQty ({record['actualQty']}).",
         )
 
-    record["status"] = next_status
-    record["releasedQty"] = payload.releasedQty
-    record["availableQty"] = payload.releasedQty
-    if payload.qualityStatus:
-        record["qualityStatus"] = payload.qualityStatus
-    result = LotResponse(data=_build_lot_detail(record))
+    reserved_qty = float(record.get("reservedQty", 0.0))
+    if payload.releasedQty < reserved_qty:
+        _audit_lot(
+            "lot.release",
+            lot_id,
+            "denied",
+            context,
+            before_snapshot=before_snapshot,
+            reason_code="released_qty_below_reserved",
+            metadata={
+                "message": f"releasedQty ({payload.releasedQty}) cannot be less than reservedQty ({reserved_qty})."
+            },
+        )
+        raise HTTPException(
+            status_code=422,
+            detail=f"releasedQty ({payload.releasedQty}) cannot be less than reservedQty ({reserved_qty}).",
+        )
+
+    if _requires_sensitive_release_approval(record, context) and not payload.approvalRef:
+        _audit_lot(
+            "lot.release",
+            lot_id,
+            "denied",
+            context,
+            before_snapshot=before_snapshot,
+            reason_code="approval_required",
+            metadata={"message": "Sensitive lot release requires approvalRef."},
+        )
+        raise HTTPException(status_code=403, detail="Sensitive lot release requires approvalRef.")
+
+    if record["status"] == LotStatus.qc_pending.value and _latest_qc_result(lot_id) != "passed":
+        _audit_lot(
+            "lot.release",
+            lot_id,
+            "denied",
+            context,
+            before_snapshot=before_snapshot,
+            reason_code="qc_release_guard_failed",
+            metadata={"message": "Lot requires a passed QC review before release."},
+        )
+        raise HTTPException(status_code=422, detail="Lot requires a passed QC review before release.")
+
+    if not postgres_sync.is_enabled():
+        record["status"] = next_status
+        record["releasedQty"] = payload.releasedQty
+        record["availableQty"] = _compute_available_qty(payload.releasedQty, reserved_qty)
+        if payload.qualityStatus:
+            record["qualityStatus"] = payload.qualityStatus
+    result_record = record
     with postgres_transaction() if postgres_sync.is_enabled() else nullcontext():
         if postgres_sync.is_enabled():
-            postgres_sync.upsert_lot(record)
+            persisted = postgres_sync.release_lot_atomic(
+                lot_id,
+                next_status=next_status,
+                released_qty=payload.releasedQty,
+            )
+            if persisted is None:
+                raise HTTPException(status_code=500, detail="Failed to persist lot release.")
+            result_record = persisted
         event = _emit_lot_event(
             "lot.released",
             lot_id,
-            payload={"lotId": lot_id, "releasedQty": payload.releasedQty, "status": next_status},
+            payload={
+                "lotId": lot_id,
+                "releasedQty": result_record["releasedQty"],
+                "availableQty": result_record["availableQty"],
+                "reservedQty": result_record["reservedQty"],
+                "status": next_status,
+                "approvalRef": payload.approvalRef,
+            },
             context=context,
         )
+        result = LotResponse(data=_build_lot_detail(result_record))
         _audit_lot(
             "lot.release",
             lot_id,
             "allowed",
             context,
             before_snapshot=before_snapshot,
-            after_snapshot=record,
+            after_snapshot=result_record,
             event=event,
         )
         record_idempotency(
@@ -491,7 +588,7 @@ def release_lot(lot_id: str, payload: ReleaseLotRequest) -> LotResponse:
         )
 
     if not postgres_sync.is_enabled():
-        store.save_lot(lot_id, record)
+        store.save_lot(lot_id, result_record)
     return result
 
 
@@ -517,25 +614,39 @@ def block_lot(lot_id: str, payload: BlockLotRequest) -> LotResponse:
             metadata={"message": str(exc.detail)},
         )
         raise
-    record["status"] = next_status
-    record["blockReason"] = payload.reason
-    result = LotResponse(data=_build_lot_detail(record))
+    if not postgres_sync.is_enabled():
+        record["status"] = next_status
+        record["blockReason"] = payload.reason
+        record["releasedQty"] = float(record.get("reservedQty", 0.0))
+        record["availableQty"] = 0.0
+    result_record = record
     with postgres_transaction() if postgres_sync.is_enabled() else nullcontext():
         if postgres_sync.is_enabled():
-            postgres_sync.upsert_lot(record)
+            persisted = postgres_sync.block_lot_atomic(lot_id, next_status=next_status)
+            if persisted is None:
+                raise HTTPException(status_code=500, detail="Failed to persist lot block.")
+            result_record = persisted
         event = _emit_lot_event(
             "lot.blocked",
             lot_id,
-            payload={"lotId": lot_id, "reason": payload.reason, "status": next_status},
+            payload={
+                "lotId": lot_id,
+                "reason": payload.reason,
+                "releasedQty": result_record["releasedQty"],
+                "availableQty": result_record["availableQty"],
+                "reservedQty": result_record["reservedQty"],
+                "status": next_status,
+            },
             context=context,
         )
+        result = LotResponse(data=_build_lot_detail(result_record))
         _audit_lot(
             "lot.block",
             lot_id,
             "allowed",
             context,
             before_snapshot=before_snapshot,
-            after_snapshot=record,
+            after_snapshot=result_record,
             event=event,
         )
         record_idempotency(
@@ -546,7 +657,77 @@ def block_lot(lot_id: str, payload: BlockLotRequest) -> LotResponse:
         )
 
     if not postgres_sync.is_enabled():
-        store.save_lot(lot_id, record)
+        store.save_lot(lot_id, result_record)
+    return result
+
+
+def unblock_lot(lot_id: str, payload: UnblockLotRequest) -> LotResponse:
+    context = meta_context(payload.meta)
+    record = _get_lot_record_or_404(lot_id, action_name="lot.unblock", context=context)
+    before_snapshot = copy.deepcopy(record)
+
+    key = context["idempotency_key"]
+    if cached := check_idempotency(key):
+        return LotResponse(**cached)
+
+    try:
+        next_status = assert_lot_transition(record, "unblock")
+    except HTTPException as exc:
+        _audit_lot(
+            "lot.unblock",
+            lot_id,
+            "denied",
+            context,
+            before_snapshot=before_snapshot,
+            reason_code="state_transition_rejected",
+            metadata={"message": str(exc.detail)},
+        )
+        raise
+
+    if not postgres_sync.is_enabled():
+        record["status"] = next_status
+        record["unblockReason"] = payload.reason
+        record["releasedQty"] = float(record.get("reservedQty", 0.0))
+        record["availableQty"] = 0.0
+    result_record = record
+    with postgres_transaction() if postgres_sync.is_enabled() else nullcontext():
+        if postgres_sync.is_enabled():
+            persisted = postgres_sync.unblock_lot_atomic(lot_id, next_status=next_status)
+            if persisted is None:
+                raise HTTPException(status_code=500, detail="Failed to persist lot unblock.")
+            result_record = persisted
+        event = _emit_lot_event(
+            "lot.unblocked",
+            lot_id,
+            payload={
+                "lotId": lot_id,
+                "reason": payload.reason,
+                "releasedQty": result_record["releasedQty"],
+                "availableQty": result_record["availableQty"],
+                "reservedQty": result_record["reservedQty"],
+                "status": next_status,
+            },
+            context=context,
+        )
+        result = LotResponse(data=_build_lot_detail(result_record))
+        _audit_lot(
+            "lot.unblock",
+            lot_id,
+            "allowed",
+            context,
+            before_snapshot=before_snapshot,
+            after_snapshot=result_record,
+            event=event,
+        )
+        record_idempotency(
+            key,
+            result.model_dump(),
+            operation_name="lot.unblock",
+            request_hash=build_request_hash(payload, extra={"action": "lot.unblock", "lotId": lot_id}),
+        )
+
+    if not postgres_sync.is_enabled():
+        store.save_lot(lot_id, result_record)
     return result
 
 

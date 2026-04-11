@@ -42,6 +42,7 @@ flowchart LR
     subgraph LotReleaseDomain["Lot Release [Phase 1 ✅]"]
         RL4["Command: ReleaseLot"] --> RL5["Event: LotReleased\nlot.released → LotReleased"]
         RL6["Command: BlockLot"] --> RL7["Event: LotBlocked\nlot.blocked → LotBlocked"]
+        RL8["Command: UnblockLot"] --> RL9["Event: LotUnblocked\nlot.unblocked → LotUnblocked"]
     end
 
     subgraph OrderDomain["Order / Fulfillment [Phase 1 ✅]"]
@@ -59,6 +60,8 @@ flowchart LR
     F5 --> RL4
     F7 --> Q1
     Q1 --> RL4
+    RL7 --> RL8
+    RL8 --> Q1
     RL5 --> O2
     O1 --> O_C
     O_C --> O2
@@ -87,6 +90,7 @@ flowchart LR
 | SubmitLotForQC | LotQcReviewed | `lot.qc.reviewed` |
 | ReleaseLot | LotReleased | `lot.released` |
 | BlockLot | LotBlocked | `lot.blocked` |
+| UnblockLot | LotUnblocked | `lot.unblocked` |
 | CreateOrder | OrderCreated | `order.created` |
 | ConfirmOrder | OrderConfirmed | `order.confirmed` |
 | AllocateOrderLine | OrderAllocated | `order.allocated` |

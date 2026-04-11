@@ -108,6 +108,126 @@ def test_processed_lot_route_accepts_processing_batch_source() -> None:
     assert response.json()["data"]["sourceType"] == "processing_batch"
 
 
+def test_lot_release_block_and_unblock_workflow() -> None:
+    memory.save_crop_cycle(
+        "cycle-api-unblock",
+        {
+            "cropCycleId": "cycle-api-unblock",
+            "plotId": "plot-1",
+            "cropName": "rice",
+            "growthStage": "harvested",
+            "status": "harvested",
+        },
+    )
+
+    create_response = client.post(
+        "/api/v1/lots",
+        json={
+            "productSkuId": "sku-1",
+            "sourceType": "crop_cycle",
+            "sourceRefId": "cycle-api-unblock",
+            "actualQty": 25,
+            "harvestOrProductionDate": "2026-04-11",
+            "requiresQc": True,
+            "meta": {"correlationId": "corr-lot-api-unblock-create", "idempotencyKey": "idem-lot-api-unblock-create"},
+        },
+    )
+
+    assert create_response.status_code == 201
+    lot_id = create_response.json()["data"]["lotId"]
+
+    block_response = client.post(
+        f"/api/v1/lots/{lot_id}/block",
+        json={
+            "reason": "awaiting evidence",
+            "meta": {"correlationId": "corr-lot-api-unblock-block", "idempotencyKey": "idem-lot-api-unblock-block"},
+        },
+    )
+
+    assert block_response.status_code == 200
+    assert block_response.json()["data"]["status"] == "blocked"
+
+    unblock_response = client.post(
+        f"/api/v1/lots/{lot_id}/unblock",
+        json={
+            "reason": "evidence uploaded",
+            "meta": {"correlationId": "corr-lot-api-unblock", "idempotencyKey": "idem-lot-api-unblock"},
+        },
+    )
+
+    assert unblock_response.status_code == 200
+    data = unblock_response.json()["data"]
+    assert data["status"] == "qc_pending"
+    assert data["availableQty"] == 0
+    assert data["releasedQty"] == 0
+
+
+def test_sensitive_lot_release_requires_approval_ref() -> None:
+    memory.save_crop_cycle(
+        "cycle-api-sensitive-release",
+        {
+            "cropCycleId": "cycle-api-sensitive-release",
+            "plotId": "plot-1",
+            "cropName": "rice",
+            "growthStage": "harvested",
+            "status": "harvested",
+        },
+    )
+
+    create_response = client.post(
+        "/api/v1/lots",
+        json={
+            "productSkuId": "sku-1",
+            "sourceType": "crop_cycle",
+            "sourceRefId": "cycle-api-sensitive-release",
+            "actualQty": 25,
+            "harvestOrProductionDate": "2026-04-11",
+            "meta": {
+                "correlationId": "corr-lot-api-sensitive-release-create",
+                "idempotencyKey": "idem-lot-api-sensitive-release-create",
+                "actorId": "farm-manager-1",
+                "actorRole": "farm_manager",
+            },
+        },
+    )
+
+    assert create_response.status_code == 201
+    lot_id = create_response.json()["data"]["lotId"]
+
+    denied_response = client.post(
+        f"/api/v1/lots/{lot_id}/release",
+        json={
+            "releasedQty": 10,
+            "meta": {
+                "correlationId": "corr-lot-api-sensitive-release-denied",
+                "idempotencyKey": "idem-lot-api-sensitive-release-denied",
+                "actorId": "farm-manager-1",
+                "actorRole": "farm_manager",
+            },
+        },
+    )
+
+    assert denied_response.status_code == 403
+    assert denied_response.json()["message"] == "Sensitive lot release requires approvalRef."
+
+    allowed_response = client.post(
+        f"/api/v1/lots/{lot_id}/release",
+        json={
+            "releasedQty": 10,
+            "approvalRef": "APR-LOT-002",
+            "meta": {
+                "correlationId": "corr-lot-api-sensitive-release-allowed",
+                "idempotencyKey": "idem-lot-api-sensitive-release-allowed",
+                "actorId": "farm-manager-1",
+                "actorRole": "farm_manager",
+            },
+        },
+    )
+
+    assert allowed_response.status_code == 200
+    assert allowed_response.json()["data"]["status"] == "released"
+
+
 def test_harvested_lot_route_rejects_processing_batch_source() -> None:
     response = client.post(
         "/api/v1/lots",

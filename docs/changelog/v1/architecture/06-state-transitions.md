@@ -94,13 +94,18 @@ Phase đầu không cần làm customer state quá phức tạp.
 - không đi từ `completed` về `active`
 - nếu quantity thay đổi sau `confirmed`, phải có event log
 - chỉ `delivered` mới được consume quota thật
+- `remaining_qty` là quota còn có thể allocate, không phải điều kiện duy nhất để `completed`
+- `completed` chỉ đúng khi nghĩa vụ giao còn lại theo `committed_qty - delivered_qty - cancelled_qty` về 0
 
 ### Gateway-enforced subset hiện tại
-Trong implementation hiện tại của `app/core/gateway.py`, preorder mới chỉ enforce chắc các transition sau:
+Trong implementation hiện tại của `app/core/gateway.py`, preorder đang enforce các transition sau:
+- `draft -> confirmed`
+- `draft -> cancelled`
+- `confirmed -> confirmed` qua action `adjust`
+- `confirmed -> active`
+- `confirmed -> cancelled`
 - `active -> active` qua action `adjust`
-- `active -> cancelled` qua action `cancel`
-
-Các transition `draft -> confirmed -> active` vẫn là canonical flow của baseline, nhưng chưa được gateway enforce đầy đủ trong current implementation.
+- `active -> cancelled`
 
 ---
 
@@ -216,29 +221,36 @@ Nếu chỉ có order-level state thì nhiều case sẽ bị mơ hồ.
 ### Transition hợp lệ
 - draft → harvested
 - harvested → qc_pending
+- harvested → released
+- harvested → blocked
 - qc_pending → released
 - qc_pending → blocked
 - released → blocked
-- blocked → released
+- blocked → qc_pending
 - released → depleted
 - depleted → closed
 
 ### Guard quan trọng
 - chỉ `released` mới được allocate
+- lot `qc_pending` chỉ được release khi qua QC guard tối thiểu
 - `blocked` không được allocate
+- `block` phải đóng phần `available_qty` chưa allocate; `unblock` không tự mở lại inventory
 - `depleted` nghĩa là quantity còn lại không đủ ý nghĩa vận hành
 
 ### Gateway-enforced subset hiện tại
 `app/core/gateway.py` hiện enforce chắc các transition sau:
 - `harvested -> released`
 - `harvested -> blocked`
+- `qc_pending -> released`
+- `qc_pending -> blocked`
 - `released -> blocked`
+- `blocked -> qc_pending`
 
 Các state `draft`, `qc_pending`, `depleted`, `closed` vẫn là canonical vocabulary của lot lifecycle, nhưng chưa được gateway phase đầu đi hết.
 
 Lưu ý quan trọng:
-- baseline policy vẫn cho phép mô hình `blocked -> released` khi workflow QC đủ chín
-- current gateway chưa mở lại transition này, nên phase đầu phải coi `blocked` là trạng thái cần xử lý thủ công hoặc mở rộng policy sau
+- phase hiện tại mở lại lane kiểm tra bằng `blocked -> qc_pending`, không release trực tiếp từ `blocked`
+- unblock không tự mở available quantity; lot chỉ mở inventory lại sau một lệnh release hợp lệ
 
 ---
 

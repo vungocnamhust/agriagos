@@ -138,6 +138,13 @@ Payload:
 - new_committed_qty
 - reason
 
+### `PreorderConfirmed`
+Khi preorder chuyển từ draft sang confirmed.
+
+Payload:
+- preorder_id
+- status
+
 ### `PreorderActivated`
 Khi preorder chuyển sang trạng thái active và bắt đầu có thể giao dần.
 
@@ -231,7 +238,9 @@ Payload:
 - actual_qty
 - production_date
 
-### `HarvestedLotAdjusted`
+### `LotAdjusted`
+Khi quantity thực tế của một lot thay đổi sau cân lại, kiểm kho hoặc correction hợp lệ.
+
 Payload:
 - lot_id
 - old_qty
@@ -262,12 +271,15 @@ Payload:
 - lot_id
 - released_qty
 - available_qty
+- reserved_qty
 
 Nên có thêm khi policy yêu cầu:
 - released_by
 - approval_ref
 
 ### `LotReleaseAdjusted`
+Phase sau, dùng khi release quantity được chỉnh như một workflow riêng thay vì đi qua `LotAdjusted`.
+
 Payload:
 - lot_id
 - old_released_qty
@@ -280,11 +292,17 @@ Khi lot bị chặn.
 Payload:
 - lot_id
 - reason
+- released_qty
+- available_qty
+- reserved_qty
 
 ### `LotUnblocked`
 Payload:
 - lot_id
 - reason
+- released_qty
+- available_qty
+- reserved_qty
 
 ---
 

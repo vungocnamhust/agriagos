@@ -69,6 +69,13 @@ sequenceDiagram
             EVT->>PR: Publish outbox event
             PR->>RV: Update blocked_lots_view
             QC-->>FM: Lot blocked
+            FM->>IN: UnblockLot after remediation
+            IN->>POL: Re-open QC lane without opening inventory
+            POL-->>IN: allow
+            IN->>EVT: Append LotUnblocked
+            EVT->>AU: Audit LotUnblocked
+            EVT->>PR: Publish outbox event
+            PR->>RV: Update qc_board_view (qc_pending)
         else QC pass
             POL-->>QC: pass
             QC->>EVT: Append LotPassedQC

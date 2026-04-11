@@ -10,14 +10,69 @@ from app.store import _db
 
 __all__ = [
     "append_lot_evidence",
+    "block_lot_atomic",
     "create_lot_evidence",
     "create_qc_review",
     "create_qc_review_with_lot_status",
     "fetch_lot",
     "list_lot_evidence",
     "list_qc_reviews",
+    "release_lot_atomic",
+    "unblock_lot_atomic",
     "upsert_lot",
 ]
+
+
+def _lot_record_from_row(row: Any) -> dict[str, Any]:
+    return {
+        "lotId": str(row["lot_id"]),
+        "tenantId": row["tenant_id"],
+        "lotCode": row["lot_code"],
+        "productSkuId": str(row["product_sku_id"]),
+        "sourceType": row["source_type"],
+        "sourceRefId": row["source_ref_id"],
+        "harvestOrProductionDate": (
+            row["harvest_or_production_date"].isoformat()
+            if row["harvest_or_production_date"] else None
+        ),
+        "actualQty": _db.to_float(row["actual_qty"]),
+        "availableQty": _db.to_float(row["available_qty"]),
+        "reservedQty": _db.to_float(row["reserved_qty"]),
+        "releasedQty": _db.to_float(row["released_qty"]),
+        "unit": row["unit"],
+        "qualityNote": row["quality_note"],
+        "status": row["status"],
+    }
+
+
+def _fetch_updated_lot_row(session: Any, lot_id: str) -> dict[str, Any] | None:
+    row = session.execute(
+        text(
+            """
+            SELECT
+                lot_id,
+                tenant_id,
+                lot_code,
+                product_sku_id,
+                source_type,
+                source_ref_id,
+                harvest_or_production_date,
+                actual_qty,
+                available_qty,
+                reserved_qty,
+                released_qty,
+                unit,
+                quality_note,
+                status
+            FROM lots
+            WHERE lot_id = :lot_id
+            """
+        ),
+        {"lot_id": lot_id},
+    ).mappings().first()
+    if row is None:
+        return None
+    return _lot_record_from_row(row)
 def append_lot_evidence(lot_id: str, attachments: list[str], actor_id: str | None = None) -> None:
     if not _db.is_enabled() or not attachments:
         return
@@ -381,6 +436,139 @@ def upsert_lot(record: dict[str, Any]) -> None:
             session.commit()
 
 
+def release_lot_atomic(lot_id: str, *, next_status: str, released_qty: float) -> dict[str, Any] | None:
+    if not _db.is_enabled():
+        return None
+
+    with _db.write_session() as (session, should_commit):
+        row = session.execute(
+            text(
+                """
+                UPDATE lots
+                SET
+                    status = :status,
+                    released_qty = :released_qty,
+                    available_qty = GREATEST(:released_qty - reserved_qty, 0),
+                    updated_at = now()
+                WHERE lot_id = :lot_id
+                RETURNING
+                    lot_id,
+                    tenant_id,
+                    lot_code,
+                    product_sku_id,
+                    source_type,
+                    source_ref_id,
+                    harvest_or_production_date,
+                    actual_qty,
+                    available_qty,
+                    reserved_qty,
+                    released_qty,
+                    unit,
+                    quality_note,
+                    status
+                """
+            ),
+            {
+                "lot_id": lot_id,
+                "status": next_status,
+                "released_qty": released_qty,
+            },
+        ).mappings().first()
+        if should_commit:
+            session.commit()
+    if row is None:
+        return None
+    return _lot_record_from_row(row)
+
+
+def block_lot_atomic(lot_id: str, *, next_status: str) -> dict[str, Any] | None:
+    if not _db.is_enabled():
+        return None
+
+    with _db.write_session() as (session, should_commit):
+        row = session.execute(
+            text(
+                """
+                UPDATE lots
+                SET
+                    status = :status,
+                    released_qty = reserved_qty,
+                    available_qty = 0,
+                    updated_at = now()
+                WHERE lot_id = :lot_id
+                RETURNING
+                    lot_id,
+                    tenant_id,
+                    lot_code,
+                    product_sku_id,
+                    source_type,
+                    source_ref_id,
+                    harvest_or_production_date,
+                    actual_qty,
+                    available_qty,
+                    reserved_qty,
+                    released_qty,
+                    unit,
+                    quality_note,
+                    status
+                """
+            ),
+            {
+                "lot_id": lot_id,
+                "status": next_status,
+            },
+        ).mappings().first()
+        if should_commit:
+            session.commit()
+    if row is None:
+        return None
+    return _lot_record_from_row(row)
+
+
+def unblock_lot_atomic(lot_id: str, *, next_status: str) -> dict[str, Any] | None:
+    if not _db.is_enabled():
+        return None
+
+    with _db.write_session() as (session, should_commit):
+        row = session.execute(
+            text(
+                """
+                UPDATE lots
+                SET
+                    status = :status,
+                    released_qty = reserved_qty,
+                    available_qty = 0,
+                    updated_at = now()
+                WHERE lot_id = :lot_id
+                RETURNING
+                    lot_id,
+                    tenant_id,
+                    lot_code,
+                    product_sku_id,
+                    source_type,
+                    source_ref_id,
+                    harvest_or_production_date,
+                    actual_qty,
+                    available_qty,
+                    reserved_qty,
+                    released_qty,
+                    unit,
+                    quality_note,
+                    status
+                """
+            ),
+            {
+                "lot_id": lot_id,
+                "status": next_status,
+            },
+        ).mappings().first()
+        if should_commit:
+            session.commit()
+    if row is None:
+        return None
+    return _lot_record_from_row(row)
+
+
 def fetch_lot(lot_id: str) -> dict[str, Any] | None:
     if not _db.is_enabled():
         return None
@@ -414,22 +602,4 @@ def fetch_lot(lot_id: str) -> dict[str, Any] | None:
     if row is None:
         return None
 
-    return {
-        "lotId": str(row["lot_id"]),
-        "tenantId": row["tenant_id"],
-        "lotCode": row["lot_code"],
-        "productSkuId": str(row["product_sku_id"]),
-        "sourceType": row["source_type"],
-        "sourceRefId": row["source_ref_id"],
-        "harvestOrProductionDate": (
-            row["harvest_or_production_date"].isoformat()
-            if row["harvest_or_production_date"] else None
-        ),
-        "actualQty": _db.to_float(row["actual_qty"]),
-        "availableQty": _db.to_float(row["available_qty"]),
-        "reservedQty": _db.to_float(row["reserved_qty"]),
-        "releasedQty": _db.to_float(row["released_qty"]),
-        "unit": row["unit"],
-        "qualityNote": row["quality_note"],
-        "status": row["status"],
-    }
+    return _lot_record_from_row(row)

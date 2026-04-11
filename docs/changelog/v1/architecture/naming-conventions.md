@@ -67,6 +67,7 @@ Hai style — cùng semantic, khác format tùy ngữ cảnh:
 | `lot.qc.reviewed` | `LotQcReviewed` | `Lot` |
 | `lot.released` | `LotReleased` | `Lot` |
 | `lot.blocked` | `LotBlocked` | `Lot` |
+| `lot.unblocked` | `LotUnblocked` | `Lot` |
 | `order.created` | `OrderCreated` | `Order` |
 | `order.confirmed` | `OrderConfirmed` | `Order` |
 | `order.allocated` | `OrderAllocated` | `Order` |
@@ -152,7 +153,7 @@ models/SalesOrder.py    ❌
 
 ```
 CreateOrder, ConfirmOrder, AllocateOrderLine
-ReleaseLot, BlockLot
+ReleaseLot, BlockLot, UnblockLot
 RegisterCustomer, MergeCustomer
 PlanCropCycle, CompleteCropTask
 ```

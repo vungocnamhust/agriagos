@@ -40,11 +40,15 @@ stateDiagram-v2
 ```mermaid
 stateDiagram-v2
     [*] --> harvested: CreateHarvestedLot
+    [*] --> qc_pending: CreateHarvestedLot(requiresQc)
     harvested --> released: ReleaseLot
     harvested --> blocked: BlockLot
+    qc_pending --> released: ReleaseLot (passed QC required)
+    qc_pending --> blocked: BlockLot
     released --> blocked: BlockLot
+    blocked --> qc_pending: UnblockLot
     released --> [*]: note — depleted/closed set by Phase 2
-    blocked --> [*]
+    blocked --> [*]: note — terminal unless explicitly unblocked
 ```
 
 ### 5.2b Phase 2 — Planned `[Phase 2 🔜]`

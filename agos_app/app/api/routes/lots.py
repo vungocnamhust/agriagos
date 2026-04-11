@@ -16,6 +16,7 @@ from app.models.lots import (
     QCReviewListResponse,
     QCReviewResponse,
     ReleaseLotRequest,
+    UnblockLotRequest,
 )
 from app.services import lots as svc
 
@@ -25,6 +26,11 @@ router = APIRouter()
 LOT_ERROR_RESPONSES = {
     404: {"model": ErrorResponse, "description": "Aggregate not found"},
     422: {"model": ErrorResponse, "description": "Validation error"},
+}
+
+RELEASE_ERROR_RESPONSES = {
+    403: {"model": ErrorResponse, "description": "Permission or approval required"},
+    **LOT_ERROR_RESPONSES,
 }
 
 
@@ -43,7 +49,7 @@ def get_lot(lot_id: str) -> LotDetail:
     return svc.get_lot(lot_id)
 
 
-@router.post("/{lot_id}/release", response_model=LotResponse, responses=LOT_ERROR_RESPONSES)
+@router.post("/{lot_id}/release", response_model=LotResponse, responses=RELEASE_ERROR_RESPONSES)
 def release_lot(lot_id: str, request: Request, payload: ReleaseLotRequest) -> LotResponse:
     return svc.release_lot(lot_id, apply_request_correlation(request, payload))
 
@@ -51,6 +57,11 @@ def release_lot(lot_id: str, request: Request, payload: ReleaseLotRequest) -> Lo
 @router.post("/{lot_id}/block", response_model=LotResponse, responses=LOT_ERROR_RESPONSES)
 def block_lot(lot_id: str, request: Request, payload: BlockLotRequest) -> LotResponse:
     return svc.block_lot(lot_id, apply_request_correlation(request, payload))
+
+
+@router.post("/{lot_id}/unblock", response_model=LotResponse, responses=LOT_ERROR_RESPONSES)
+def unblock_lot(lot_id: str, request: Request, payload: UnblockLotRequest) -> LotResponse:
+    return svc.unblock_lot(lot_id, apply_request_correlation(request, payload))
 
 
 @router.post("/{lot_id}/adjust", response_model=LotResponse, responses=LOT_ERROR_RESPONSES)

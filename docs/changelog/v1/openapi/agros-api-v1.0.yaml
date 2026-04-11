@@ -942,6 +942,44 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/lots/{lot_id}/unblock:
+    post:
+      tags:
+      - Lots
+      summary: Unblock Lot
+      operationId: unblock_lot_api_v1_lots__lot_id__unblock_post
+      parameters:
+      - name: lot_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Lot Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnblockLotRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LotResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/lots/{lot_id}/adjust:
     post:
       tags:
@@ -1568,6 +1606,19 @@ components:
       required:
       - reason
       title: BlockLotRequest
+    UnblockLotRequest:
+      properties:
+        reason:
+          type: string
+          title: Reason
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - reason
+      title: UnblockLotRequest
     CancelOrderRequest:
       properties:
         reason:

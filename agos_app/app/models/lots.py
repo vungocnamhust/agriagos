@@ -71,10 +71,16 @@ class AdjustLotQuantityRequest(BaseModel):
 
 class ReleaseLotRequest(BaseModel):
     releasedQty: float
+    approvalRef: str | None = None
     qualityStatus: str | None = None
     meta: Meta | None = None
 
 class BlockLotRequest(BaseModel):
+    reason: str
+    meta: Meta | None = None
+
+
+class UnblockLotRequest(BaseModel):
     reason: str
     meta: Meta | None = None
 

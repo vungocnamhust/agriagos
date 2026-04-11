@@ -256,7 +256,7 @@ Phase đầu cần hiểu rõ:
 | Order tạo/sửa | full | full | yes | limited | limited | no | no | no | propose only |
 | Lot xem | full | full | limited | limited | yes | yes | limited | yes | scoped |
 | Lot tạo | full | full | no | no | yes | yes | no | no | no direct |
-| Lot release/block | full | full | no | no | limited | limited/yes theo policy | no | no | no direct |
+| Lot release/block/unblock | full | full | no | no | limited | limited/yes theo policy | no | no | no direct |
 | Allocation | full | full | no | no | yes | no | no | no | suggest only |
 | Plot/Crop xem | full | full | limited | no | yes | yes | no | yes | scoped |
 | Plot/Crop sửa | full | full | no | no | limited | yes | no | no | no direct |
@@ -289,6 +289,9 @@ Bắt buộc approval trong phase đầu:
 | ERP reconcile conflict | Accountant | Founder hoặc Admin vận hành |
 | Allocation override | Ops | Admin vận hành |
 | Preference confirm từ candidate có tác động workflow | Sales, CSKH, Admin | Không cần lớp approve riêng, nhưng bắt buộc audit log |
+
+Phase 1 implementation note:
+- route `ReleaseLot` hiện chỉ mang `approvalRef` như approval evidence cho case đặc biệt; identity của người approve vẫn thuộc audit/workflow ngoài request schema và chưa được enforce như field riêng ở public API
 
 ## 7. Pattern an toàn nên dùng với AI
 

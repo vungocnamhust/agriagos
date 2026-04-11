@@ -5,7 +5,15 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 
 from app.models.common import Meta
-from app.models.lots import AdjustLotQuantityRequest, CreateHarvestedLotRequest, CreateProcessedLotRequest, ReleaseLotRequest
+from app.models.lots import (
+    AdjustLotQuantityRequest,
+    BlockLotRequest,
+    CreateHarvestedLotRequest,
+    CreateProcessedLotRequest,
+    CreateQCReviewRequest,
+    ReleaseLotRequest,
+    UnblockLotRequest,
+)
 from app.services import lots
 from app.store import memory
 
@@ -55,6 +63,26 @@ def test_create_processed_lot_records_processed_event(monkeypatch: pytest.Monkey
 
     assert response.data.sourceType == "processing_batch"
     assert memory.list_events()[-1]["eventName"] == "lot.processed.created"
+
+
+def test_create_processed_lot_rejects_blank_process_ref(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(lots.postgres_sync, "is_enabled", lambda: False)
+
+    with pytest.raises(HTTPException) as exc_info:
+        lots.create_processed_lot(
+            CreateProcessedLotRequest(
+                productSkuId="sku-1",
+                processRefId="   ",
+                actualQty=18,
+                harvestOrProductionDate="2026-04-11",
+                meta=Meta(correlationId="corr-lot-process-blank", idempotencyKey="idem-lot-process-blank"),
+            )
+        )
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail == "processRefId is required."
+    assert memory.list_audit_logs()[-1]["actionName"] == "lot.processed_create"
+    assert memory.list_audit_logs()[-1]["reasonCode"] == "invalid_source_ref"
 
 
 def test_create_harvested_lot_request_rejects_processing_batch_source() -> None:
@@ -215,6 +243,7 @@ def test_adjust_lot_quantity_rejects_qty_below_released(monkeypatch: pytest.Monk
         created.data.lotId,
         ReleaseLotRequest(
             releasedQty=10,
+            approvalRef="APR-LOT-ADJUST-001",
             meta=Meta(correlationId="corr-lot-adjust-limit-release", idempotencyKey="idem-lot-adjust-limit-release"),
         ),
     )
@@ -231,3 +260,227 @@ def test_adjust_lot_quantity_rejects_qty_below_released(monkeypatch: pytest.Monk
 
     assert exc_info.value.status_code == 422
     assert memory.list_audit_logs()[-1]["reasonCode"] == "adjusted_qty_below_released_qty"
+
+
+def test_block_lot_closes_available_inventory(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(lots.postgres_sync, "is_enabled", lambda: False)
+    memory.save_crop_cycle(
+        "cycle-block-release",
+        {
+            "cropCycleId": "cycle-block-release",
+            "plotId": "plot-1",
+            "cropName": "rice",
+            "growthStage": "harvested",
+            "status": "harvested",
+        },
+    )
+    created = lots.create_harvested_lot(
+        CreateHarvestedLotRequest(
+            productSkuId="sku-1",
+            sourceType="crop_cycle",
+            sourceRefId="cycle-block-release",
+            actualQty=25,
+            harvestOrProductionDate="2026-04-11",
+            meta=Meta(correlationId="corr-lot-block-release-create", idempotencyKey="idem-lot-block-release-create"),
+        )
+    )
+    lots.release_lot(
+        created.data.lotId,
+        ReleaseLotRequest(
+            releasedQty=10,
+            approvalRef="APR-LOT-BLOCK-001",
+            meta=Meta(correlationId="corr-lot-block-release-release", idempotencyKey="idem-lot-block-release-release"),
+        ),
+    )
+
+    blocked = lots.block_lot(
+        created.data.lotId,
+        BlockLotRequest(
+            reason="qc failed",
+            meta=Meta(correlationId="corr-lot-block-release-block", idempotencyKey="idem-lot-block-release-block"),
+        ),
+    )
+
+    assert blocked.data.status == "blocked"
+    assert blocked.data.availableQty == 0
+    assert blocked.data.releasedQty == 0
+    assert memory.list_events()[-1]["eventName"] == "lot.blocked"
+
+
+def test_release_lot_from_qc_pending_requires_passed_review(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(lots.postgres_sync, "is_enabled", lambda: False)
+    memory.save_crop_cycle(
+        "cycle-release-guard",
+        {
+            "cropCycleId": "cycle-release-guard",
+            "plotId": "plot-1",
+            "cropName": "rice",
+            "growthStage": "harvested",
+            "status": "harvested",
+        },
+    )
+    created = lots.create_harvested_lot(
+        CreateHarvestedLotRequest(
+            productSkuId="sku-1",
+            sourceType="crop_cycle",
+            sourceRefId="cycle-release-guard",
+            actualQty=25,
+            harvestOrProductionDate="2026-04-11",
+            requiresQc=True,
+            meta=Meta(correlationId="corr-lot-release-guard-create", idempotencyKey="idem-lot-release-guard-create"),
+        )
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        lots.release_lot(
+            created.data.lotId,
+            ReleaseLotRequest(
+                releasedQty=10,
+                meta=Meta(correlationId="corr-lot-release-guard", idempotencyKey="idem-lot-release-guard"),
+            ),
+        )
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail == "Lot requires a passed QC review before release."
+
+    qc_review = lots.create_lot_qc_review(
+        created.data.lotId,
+        CreateQCReviewRequest(
+            checklistVersion="v1",
+            result="passed",
+            meta=Meta(correlationId="corr-lot-release-guard-review", idempotencyKey="idem-lot-release-guard-review"),
+        ),
+    )
+
+    assert qc_review.data.result == "passed"
+
+    released = lots.release_lot(
+        created.data.lotId,
+        ReleaseLotRequest(
+            releasedQty=10,
+            meta=Meta(correlationId="corr-lot-release-guard-allowed", idempotencyKey="idem-lot-release-guard-allowed"),
+        ),
+    )
+
+    assert released.data.status == "released"
+    assert released.data.availableQty == 10
+
+
+def test_release_lot_from_harvested_requires_approval_for_sensitive_case(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(lots.postgres_sync, "is_enabled", lambda: False)
+    memory.save_crop_cycle(
+        "cycle-sensitive-release",
+        {
+            "cropCycleId": "cycle-sensitive-release",
+            "plotId": "plot-1",
+            "cropName": "rice",
+            "growthStage": "harvested",
+            "status": "harvested",
+        },
+    )
+    created = lots.create_harvested_lot(
+        CreateHarvestedLotRequest(
+            productSkuId="sku-1",
+            sourceType="crop_cycle",
+            sourceRefId="cycle-sensitive-release",
+            actualQty=25,
+            harvestOrProductionDate="2026-04-11",
+            meta=Meta(
+                correlationId="corr-lot-sensitive-release-create",
+                idempotencyKey="idem-lot-sensitive-release-create",
+                actorId="farm-manager-1",
+                actorRole="farm_manager",
+            ),
+        )
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        lots.release_lot(
+            created.data.lotId,
+            ReleaseLotRequest(
+                releasedQty=10,
+                meta=Meta(
+                    correlationId="corr-lot-sensitive-release-denied",
+                    idempotencyKey="idem-lot-sensitive-release-denied",
+                    actorId="farm-manager-1",
+                    actorRole="farm_manager",
+                ),
+            ),
+        )
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "Sensitive lot release requires approvalRef."
+
+    released = lots.release_lot(
+        created.data.lotId,
+        ReleaseLotRequest(
+            releasedQty=10,
+            approvalRef="APR-LOT-001",
+            meta=Meta(
+                correlationId="corr-lot-sensitive-release-allowed",
+                idempotencyKey="idem-lot-sensitive-release-allowed",
+                actorId="farm-manager-1",
+                actorRole="farm_manager",
+            ),
+        ),
+    )
+
+    assert released.data.status == "released"
+    assert memory.list_events()[-1]["payload"]["approvalRef"] == "APR-LOT-001"
+
+
+def test_unblock_lot_returns_to_qc_pending_and_keeps_inventory_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(lots.postgres_sync, "is_enabled", lambda: False)
+    memory.save_crop_cycle(
+        "cycle-unblock",
+        {
+            "cropCycleId": "cycle-unblock",
+            "plotId": "plot-1",
+            "cropName": "rice",
+            "growthStage": "harvested",
+            "status": "harvested",
+        },
+    )
+    created = lots.create_harvested_lot(
+        CreateHarvestedLotRequest(
+            productSkuId="sku-1",
+            sourceType="crop_cycle",
+            sourceRefId="cycle-unblock",
+            actualQty=25,
+            harvestOrProductionDate="2026-04-11",
+            requiresQc=True,
+            meta=Meta(correlationId="corr-lot-unblock-create", idempotencyKey="idem-lot-unblock-create"),
+        )
+    )
+    lots.block_lot(
+        created.data.lotId,
+        BlockLotRequest(
+            reason="missing evidence",
+            meta=Meta(correlationId="corr-lot-unblock-block", idempotencyKey="idem-lot-unblock-block"),
+        ),
+    )
+
+    unblocked = lots.unblock_lot(
+        created.data.lotId,
+        UnblockLotRequest(
+            reason="evidence supplied",
+            meta=Meta(correlationId="corr-lot-unblock", idempotencyKey="idem-lot-unblock"),
+        ),
+    )
+
+    assert unblocked.data.status == "qc_pending"
+    assert unblocked.data.availableQty == 0
+    assert unblocked.data.releasedQty == 0
+    assert memory.list_events()[-1]["eventName"] == "lot.unblocked"
+
+    with pytest.raises(HTTPException) as exc_info:
+        lots.release_lot(
+            created.data.lotId,
+            ReleaseLotRequest(
+                releasedQty=10,
+                meta=Meta(correlationId="corr-lot-unblock-release-denied", idempotencyKey="idem-lot-unblock-release-denied"),
+            ),
+        )
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail == "Lot requires a passed QC review before release."
