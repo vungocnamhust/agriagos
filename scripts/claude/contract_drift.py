@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -11,11 +12,44 @@ from typing import Any
 
 
 MAX_STDIN = 1024 * 1024
+EXIT_BLOCKING_DRIFT = 2
+SOURCE_REGISTRY = Path("docs/changelog/v1/architecture/00-source-of-truth-registry.md")
 ROUTES_DIR = Path("agos_app/app/api/routes")
 MODELS_DIR = Path("agos_app/app/models")
 DDL_DIR = Path("docs/changelog/v1/ddl")
 ARCHITECTURE_DIR = Path("docs/changelog/v1/architecture")
 OPENAPI_DIR = Path("docs/changelog/v1/openapi")
+INSTRUCTIONS_DIR = Path(".github/instructions")
+PROMPTS_DIR = Path(".github/prompts")
+SKILLS_DIR = Path(".github/skills")
+CLAUDE_RULES_DIR = Path(".claude/rules")
+CLAUDE_CONTEXTS_DIR = Path(".claude/contexts")
+GOVERNANCE_FILES = {
+    Path(".github/copilot-instructions.md"),
+    Path("AGENTS.md"),
+    Path("CLAUDE.md"),
+}
+FORBIDDEN_GOVERNANCE_PATTERNS = (
+    re.compile(r"docs[/\\]architecture[/\\]CLAUDE\.md"),
+    re.compile(r"primary source of truth", re.IGNORECASE),
+)
+REGISTRY_REFERENCE_PATTERNS = (
+    re.compile(re.escape(str(SOURCE_REGISTRY))),
+    re.compile(re.escape(str(SOURCE_REGISTRY).replace("/", "\\"))),
+)
+REGISTRY_REQUIRED_SURFACES = (
+    Path(".github/copilot-instructions.md"),
+    Path(".github/instructions/docs.instructions.md"),
+    Path(".github/instructions/api.instructions.md"),
+    Path(".github/prompts/docs-sync.prompt.md"),
+    Path(".github/prompts/explore-plan-act.prompt.md"),
+    Path(".github/skills/docs-sync/SKILL.md"),
+    Path(".github/skills/explore-plan-act/SKILL.md"),
+    Path(".github/skills/impact-analysis/SKILL.md"),
+    Path(".claude/rules/docs-sync.md"),
+    Path(".claude/contexts/dev.md"),
+    Path(".claude/skills/doc-sync/SKILL.md"),
+)
 
 ARCHITECTURE_TARGETS = {
     "routes": [
@@ -148,6 +182,19 @@ def classify(relative_path: Path | None) -> Surface | None:
     if openapi_tail and openapi_tail.suffix in {".yaml", ".yml", ".json"}:
         return Surface("openapi", normalized)
 
+    if normalized in GOVERNANCE_FILES:
+        return Surface("governance", normalized)
+
+    if normalized == SOURCE_REGISTRY:
+        return Surface("governance-registry", normalized)
+
+    for base in (INSTRUCTIONS_DIR, PROMPTS_DIR, SKILLS_DIR, CLAUDE_RULES_DIR, CLAUDE_CONTEXTS_DIR):
+        try:
+            normalized.relative_to(base)
+            return Surface("governance", normalized)
+        except ValueError:
+            continue
+
     return None
 
 
@@ -238,6 +285,53 @@ def code_surfaces_changed(changed_paths: set[Path]) -> bool:
     return False
 
 
+def read_text_file(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return ""
+    except OSError as error:
+        print(f"[contract-drift] WARNING: failed to read {path}: {error}", file=sys.stderr)
+        return ""
+
+
+def has_registry_reference(content: str) -> bool:
+    return any(pattern.search(content) for pattern in REGISTRY_REFERENCE_PATTERNS)
+
+
+def governance_missing_items(surface: Surface, repo_root: Path) -> list[str]:
+    missing: list[str] = []
+    content = read_text_file(repo_root / surface.relative_path)
+    normalized_content = content.replace("\\", "/")
+
+    if surface.relative_path in REGISTRY_REQUIRED_SURFACES and not has_registry_reference(normalized_content):
+        missing.append(f"add reference to {SOURCE_REGISTRY}")
+
+    for forbidden in FORBIDDEN_GOVERNANCE_PATTERNS:
+        if forbidden.search(normalized_content):
+            missing.append(f"remove stale authority claim matching: {forbidden.pattern}")
+
+    return missing
+
+
+def governance_registry_missing_items(repo_root: Path) -> list[str]:
+    missing: list[str] = []
+
+    if not (repo_root / SOURCE_REGISTRY).exists():
+        missing.append(f"restore {SOURCE_REGISTRY}")
+        return missing
+
+    for relative_path in REGISTRY_REQUIRED_SURFACES:
+        content = read_text_file(repo_root / relative_path)
+        if not content:
+            missing.append(f"restore or create {relative_path}")
+            continue
+        if not has_registry_reference(content.replace("\\", "/")):
+            missing.append(f"sync {relative_path} with {SOURCE_REGISTRY}")
+
+    return missing
+
+
 def missing_items(surface: Surface, changed_paths: set[Path], repo_root: Path) -> list[str]:
     missing: list[str] = []
 
@@ -282,6 +376,12 @@ def missing_items(surface: Surface, changed_paths: set[Path], repo_root: Path) -
             missing.append(str(DDL_DIR))
         return missing
 
+    if surface.kind == "governance":
+        return governance_missing_items(surface, repo_root)
+
+    if surface.kind == "governance-registry":
+        return governance_registry_missing_items(repo_root)
+
     return missing
 
 
@@ -305,6 +405,8 @@ def build_warning(surface: Surface, missing: list[str]) -> str:
         "schema": "DTO changed without synced contract artifacts",
         "migration": "Migration changed without synced contract artifacts",
         "architecture": "Architecture docs changed without synced code artifacts",
+        "governance": "Governance surface changed without docs-first authority guardrails",
+        "governance-registry": "Source-of-truth registry changed without synced governance surfaces",
     }
     heading = titles.get(surface.kind, "Contract drift warning")
     lines = [
@@ -330,7 +432,7 @@ def main() -> int:
     file_path = tool_input.get("file_path") or tool_input.get("file")
     surface = classify(normalize_path(str(file_path) if file_path else None, repo_root))
 
-    if surface is None or surface.kind not in {"route", "schema", "migration", "architecture"}:
+    if surface is None or surface.kind not in {"route", "schema", "migration", "architecture", "governance", "governance-registry"}:
         return 0
 
     changed_paths = list_changed_paths(repo_root)
@@ -338,6 +440,10 @@ def main() -> int:
     warning = build_warning(surface, missing)
     if warning:
         print(warning, file=sys.stderr)
+        if surface.kind == "governance-registry":
+            return EXIT_BLOCKING_DRIFT
+        if surface.kind == "governance" and any(item.startswith("remove stale authority claim") for item in missing):
+            return EXIT_BLOCKING_DRIFT
 
     return 0
 

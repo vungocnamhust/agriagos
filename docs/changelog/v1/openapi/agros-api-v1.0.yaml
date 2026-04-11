@@ -625,6 +625,120 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/lots/{lot_id}/evidence:
+    post:
+      tags:
+      - Lots
+      summary: Add Lot Evidence
+      operationId: add_lot_evidence_api_v1_lots__lot_id__evidence_post
+      parameters:
+      - name: lot_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Lot Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddLotEvidenceRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LotEvidenceResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - Lots
+      summary: Get Lot Evidence
+      operationId: get_lot_evidence_api_v1_lots__lot_id__evidence_get
+      parameters:
+      - name: lot_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Lot Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LotEvidenceListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/lots/{lot_id}/qc-reviews:
+    post:
+      tags:
+      - Lots
+      summary: Create Lot Qc Review
+      operationId: create_lot_qc_review_api_v1_lots__lot_id__qc_reviews_post
+      parameters:
+      - name: lot_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Lot Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateQCReviewRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QCReviewResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - Lots
+      summary: Get Lot Qc Reviews
+      operationId: get_lot_qc_reviews_api_v1_lots__lot_id__qc_reviews_get
+      parameters:
+      - name: lot_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Lot Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QCReviewListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/farm/plots:
     get:
       tags:
@@ -927,6 +1041,29 @@ components:
       - consumed
       - cancelled
       title: AllocationStatus
+    AddLotEvidenceRequest:
+      properties:
+        evidenceType:
+          type: string
+          title: Evidencetype
+        objectStorageKey:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Objectstoragekey
+        textValue:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Textvalue
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - evidenceType
+      title: AddLotEvidenceRequest
     BlockLotRequest:
       properties:
         reason:
@@ -1152,6 +1289,28 @@ components:
       - productSkuId
       - committedQty
       title: CreatePreorderRequest
+    CreateQCReviewRequest:
+      properties:
+        checklistVersion:
+          type: string
+          title: Checklistversion
+        result:
+          type: string
+          title: Result
+        notes:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Notes
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - checklistVersion
+      - result
+      title: CreateQCReviewRequest
     Customer360View:
       properties:
         customer:
@@ -1394,6 +1553,65 @@ components:
       - reservedQty
       - status
       title: LotDetail
+    LotEvidenceItem:
+      properties:
+        lotEvidenceId:
+          type: string
+          title: Lotevidenceid
+        lotId:
+          type: string
+          title: Lotid
+        evidenceType:
+          type: string
+          title: Evidencetype
+        objectStorageKey:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Objectstoragekey
+        textValue:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Textvalue
+        capturedAt:
+          type: string
+          title: Capturedat
+        actorId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Actorid
+        status:
+          type: string
+          title: Status
+      type: object
+      required:
+      - lotEvidenceId
+      - lotId
+      - evidenceType
+      - capturedAt
+      - status
+      title: LotEvidenceItem
+    LotEvidenceListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/LotEvidenceItem'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: LotEvidenceListResponse
+    LotEvidenceResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/LotEvidenceItem'
+      type: object
+      required:
+      - data
+      title: LotEvidenceResponse
     LotResponse:
       properties:
         data:
@@ -1729,6 +1947,60 @@ components:
       required:
       - releasedQty
       title: ReleaseLotRequest
+    QCReviewItem:
+      properties:
+        qcReviewId:
+          type: string
+          title: Qcreviewid
+        lotId:
+          type: string
+          title: Lotid
+        checklistVersion:
+          type: string
+          title: Checklistversion
+        result:
+          type: string
+          title: Result
+        reviewerId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reviewerid
+        reviewedAt:
+          type: string
+          title: Reviewedat
+        notes:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Notes
+      type: object
+      required:
+      - qcReviewId
+      - lotId
+      - checklistVersion
+      - result
+      - reviewedAt
+      title: QCReviewItem
+    QCReviewListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/QCReviewItem'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: QCReviewListResponse
+    QCReviewResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/QCReviewItem'
+      type: object
+      required:
+      - data
+      title: QCReviewResponse
     RequestCancelOrderRequest:
       properties:
         reason:

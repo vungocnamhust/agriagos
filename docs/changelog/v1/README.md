@@ -2,6 +2,8 @@
 
 Bộ tài liệu này là **xương sống kiến trúc** cho project quản lý nông nghiệp + CRM + ERP + Agent.
 
+Authority map cho toàn bộ docs-first workflow nằm ở `docs/changelog/v1/architecture/00-source-of-truth-registry.md`.
+
 Mục tiêu của bộ docs:
 - chốt phần **deterministic core** trước
 - để AI/Agent đứng ở lớp hỗ trợ và điều phối mềm
@@ -9,6 +11,7 @@ Mục tiêu của bộ docs:
 
 ## Cấu trúc chính
 
+- `docs/changelog/v1/architecture/00-source-of-truth-registry.md`: registry chỉ rõ doc chuẩn theo từng concern
 - `docs/architecture/README.md`: mục lục và cách đọc
 - `docs/architecture/01-system-vision.md`: tầm nhìn hệ thống
 - `docs/architecture/02-core-workflows.md`: workflow lõi

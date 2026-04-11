@@ -7,7 +7,10 @@ agent: "agent"
 
 Audit documentation drift for the described change.
 
+Start by resolving the owning authority doc through `docs/changelog/v1/architecture/00-source-of-truth-registry.md`. Treat repo-level summaries as secondary references only.
+
 Check at least:
+- `docs/changelog/v1/architecture/00-source-of-truth-registry.md`
 - `CLAUDE.md`
 - `system_v1.md`
 - `determistic_layer_spec_v1.md`

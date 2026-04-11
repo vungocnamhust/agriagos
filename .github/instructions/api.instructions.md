@@ -5,7 +5,7 @@ applyTo: "agos_app/app/api/**/*.py,agos_app/app/services/**/*.py,agos_app/app/mo
 
 # API Instructions
 
-- Treat `.claude/rules/api-contract-first.md`, `.claude/rules/domain-boundaries.md`, `.claude/rules/events.md`, and `.claude/rules/canonical-model.md` as the detailed authority for this surface.
+- Treat `.claude/rules/api-contract-first.md`, `.claude/rules/domain-boundaries.md`, `.claude/rules/events.md`, and `.claude/rules/canonical-model.md` as enforcement rules for this surface. Resolve mutable contract and architecture facts through `docs/changelog/v1/architecture/00-source-of-truth-registry.md` before relying on repo summaries or current code shape.
 - Keep route handlers thin: parse request, call one service path, return typed DTOs.
 - Keep business rules, state transitions, and event emission in `agos_app/app/services/` or an explicit orchestration service.
 - Update route signatures and DTOs together before or with behavior changes.

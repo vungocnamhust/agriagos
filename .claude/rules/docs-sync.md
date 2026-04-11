@@ -5,6 +5,11 @@ events, state transitions, or any documented behavior that other engineers may
 reason about from the docs. Documentation is part of the deliverable, not a
 follow-up task.
 
+Before deciding which doc to update, resolve the owning authority document
+through `docs/changelog/v1/architecture/00-source-of-truth-registry.md`.
+Repo-level summaries and local rule files are enforcement aids, not the first
+authority for mutable architecture facts.
+
 ## 1. ADR Updates Are Mandatory for Architecture-Impacting Changes
 
 Any change that alters an architectural decision must update the ADR record
@@ -69,6 +74,7 @@ Silent drift is prohibited. If the docs are knowingly wrong, say so plainly.
 
 When one of the triggers above applies, review at least these artifacts:
 
+- `docs/changelog/v1/architecture/00-source-of-truth-registry.md`
 - `CLAUDE.md`
 - `README.md` and module-level README files
 - `system_v1.md`

@@ -132,10 +132,10 @@ Do not add new sections unless the change introduces something entirely absent.
 Do not improve prose, fix grammar, or reformat — only correct what is wrong.
 
 **Ordering:** Apply patches in this sequence to avoid inconsistency:
-1. `event_desc.md` (events are the source of truth for behavior)
-2. `deterministic_core_diagram.md` (diagrams derive from events + state machines)
-3. `determistic_layer_spec_v1.md` (spec derives from diagrams)
-4. `system_v1.md` (layer model is most stable, changes least)
+1. `docs/changelog/v1/architecture/00-source-of-truth-registry.md` when authority ownership itself changes
+2. the owning changelog architecture doc resolved through the registry
+3. `event_desc.md` and `deterministic_core_diagram.md` when the owning changelog doc makes them stale
+4. `determistic_layer_spec_v1.md` and `system_v1.md` when higher-authority docs make them stale
 5. `CLAUDE.md` (developer guide, reflects everything above)
 6. Route docstrings / Pydantic Field descriptions (inline, apply last)
 7. `README.md` (user-facing, most stable)

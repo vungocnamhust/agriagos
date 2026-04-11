@@ -1,6 +1,6 @@
 # Agri OS Copilot Instructions
 
-Agri OS is a deterministic-core FastAPI repository for agricultural supply chain operations. Treat the architecture guidance in `CLAUDE.md`, `agos_app/app/api/CLAUDE.md`, `docs/architecture/CLAUDE.md`, and `agos_app/app/integrations/CLAUDE.md` as the primary source of truth for domain ownership, service boundaries, events, and documentation rules.
+Agri OS is a deterministic-core FastAPI repository for agricultural supply chain operations. Treat `docs/changelog/v1/architecture/00-source-of-truth-registry.md` as the authority map for mutable architecture and contract facts. Use the registry to find the owning changelog doc, ADR, or OpenAPI artifact before relying on summaries in repo-level instruction files.
 
 ## Work Model
 
@@ -35,6 +35,7 @@ Agri OS is a deterministic-core FastAPI repository for agricultural supply chain
 ## Documentation Discipline
 
 - Do not duplicate architecture prose from `CLAUDE.md` into new Copilot files.
+- Keep `.github/` guidance workflow-focused. For mutable facts such as domain ownership, state names, event names, permissions, and API contract shape, reference the owning doc from `docs/changelog/v1/architecture/00-source-of-truth-registry.md` instead of restating the fact locally.
 - If code changes affect events, state transitions, domain ownership, or architectural boundaries, update the relevant docs in the same change.
 - Keep OpenAPI or contract artifacts aligned when route or DTO behavior changes.
 - When a short summary is enough, point back to the authoritative architecture files instead of creating a second canon in `.github/`.

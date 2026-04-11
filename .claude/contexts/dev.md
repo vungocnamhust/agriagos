@@ -1,6 +1,7 @@
 ## Dev Context
 
 - Use this context only while implementing or modifying code.
+- Resolve mutable architecture and contract facts through `docs/changelog/v1/architecture/00-source-of-truth-registry.md` before treating repo summaries or nearby code as authoritative.
 - Keep changes minimal and local to the behavior being changed.
 - Start from the concrete owning surface: route, DTO, service, store, or nearby test.
 - Prefer the code that directly decides behavior over wiring layers.

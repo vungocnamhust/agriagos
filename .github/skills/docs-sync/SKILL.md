@@ -9,12 +9,14 @@ argument-hint: "Describe the code change or changed files"
 Use this skill after behavior, contract, or architecture changes.
 
 ## Procedure
-1. Classify what changed: route, DTO, event, state machine, schema, or architecture.
-2. Audit only the documents those changes can invalidate.
-3. Prepare the minimum patch set needed to restore accuracy.
-4. Flag when the change should be recorded as an ADR.
+1. Resolve the owning authority doc through `docs/changelog/v1/architecture/00-source-of-truth-registry.md` before trusting repo-level summaries or code comments.
+2. Classify what changed: route, DTO, event, state machine, schema, or architecture.
+3. Audit only the documents those changes can invalidate.
+4. Prepare the minimum patch set needed to restore accuracy.
+5. Flag when the change should be recorded as an ADR.
 
 ## Agri OS Surfaces To Review
+- `docs/changelog/v1/architecture/00-source-of-truth-registry.md`
 - `CLAUDE.md`
 - `system_v1.md`
 - `determistic_layer_spec_v1.md`
