@@ -175,7 +175,7 @@ Nó chỉ làm 3 việc:
 - selected role-based read models đã được ship sớm bằng SQL views thay vì đợi projection workers
 - current shipped set gồm `customer_360_view`, `available_lots_board`, `pending_fulfillment_board`, và `farm_summary_board`
 - `customer_360_view` trên PostgreSQL path đã là nested detail projection; các board còn lại vẫn là operational list views
-- validation lane hiện có một PostgreSQL integration test trực tiếp cho `customer_360_view` để giữ migration + view contract không drift
+- validation lane hiện có PostgreSQL integration coverage cho cả `customer_360_view` và sweep `/api/v1/views/*`, bao gồm store-level assertions lẫn HTTP endpoint checks để giữ migration + view contract không drift
 
 ### Mặc định khi chưa có quyết định theo tenant
 - Core giữ `plot/crop summary` mức đủ dùng

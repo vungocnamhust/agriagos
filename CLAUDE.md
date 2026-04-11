@@ -23,11 +23,15 @@ uvicorn app.main:app --reload
 DATABASE_URL=postgresql+psycopg://agriagos:agriagos@127.0.0.1:5436/agriagos \
 pytest tests/test_customer_360_view_integration.py -m postgres_integration
 
+# Run the PostgreSQL-backed /views sweep (store helpers + HTTP endpoints)
+DATABASE_URL=postgresql+psycopg://agriagos:agriagos@127.0.0.1:5436/agriagos \
+pytest tests/test_view_board_integration.py -m postgres_integration
+
 # API is available at http://localhost:8000
 # Swagger UI at http://localhost:8000/docs
 ```
 
-Ruff is used for linting (`PYENV_VERSION=agos_3.10.14 ruff check agos_app/`). Runtime dependencies stay in `agos_app/requirements.txt`; pytest/TestClient dependencies now live in `agos_app/requirements-dev.txt`. Focused pytest coverage for deterministic-core write flows and `/views` read-model slices lives under `agos_app/tests/`, including a PostgreSQL-backed integration test for `customer_360_view`. PostgreSQL migration scaffolding lives under `agos_app/alembic/`. The service layer now defaults to PostgreSQL when `POSTGRES_WRITE_PATH_ENABLED=true` and falls back to in-memory only for local simulation or tests.
+Ruff is used for linting (`PYENV_VERSION=agos_3.10.14 ruff check agos_app/`). Runtime dependencies stay in `agos_app/requirements.txt`; pytest/TestClient dependencies now live in `agos_app/requirements-dev.txt`. Focused pytest coverage for deterministic-core write flows and `/views` read-model slices lives under `agos_app/tests/`, including PostgreSQL-backed integration coverage for `customer_360_view` and the `/views` board/store endpoint sweep in `tests/test_view_board_integration.py`. PostgreSQL migration scaffolding lives under `agos_app/alembic/`. The service layer now defaults to PostgreSQL when `POSTGRES_WRITE_PATH_ENABLED=true` and falls back to in-memory only for local simulation or tests.
 
 ## Architecture
 
@@ -100,7 +104,9 @@ agos_app/
 
 ### Domain Entities
 
-Canonical implementation names: `CustomerProfile`, `Preorder`, `SalesOrder`, `SalesOrderLine`, `ProductSKU`, `LotBatch`, `Plot`, `CropCycle`, `Farmer`, `CropTask`.
+Phase 1 runtime stores the implemented core entities in PostgreSQL tables and store records such as `customers`, `preorders`, `sales_orders`, `sales_order_lines`, `product_skus`, `lots`, `plots`, and `crop_cycles`.
+
+Architecture docs use canonical aliases such as `CustomerProfile`, `Preorder`, `SalesOrder`, `SalesOrderLine`, `ProductSKU`, `LotBatch`, `Plot`, and `CropCycle` for cross-reference with business terms. They may also discuss future or broader entities such as `Farmer` and `CropTask`, but those are not yet implemented in the current Phase 1 runtime.
 
 Vietnamese architecture docs sometimes use shorter business names such as `Customer`, `Order`, and `Lot`. For the mapping between business labels and implementation names, see `docs/changelog/v1/architecture/04-canonical-data-model.md`.
 
@@ -171,7 +177,7 @@ All diagrams use `[Phase 1 ✅]` / `[Phase 2 🔜]` labels to distinguish implem
 
 **Key Phase 1 state machine facts** (source: `core/gateway.py`):
 - Order: `draft → confirmed → allocated → packed → shipped → delivered`; cancel path from `draft`/`confirmed` directly; `cancel_requested` only from `allocated`/`packed`
-- Lot: `harvested → qc_pending → released`, with `block` allowed from `harvested`, `qc_pending`, or `released`
+- Lot: `harvested → released` directly, or `harvested → qc_pending → released` when the QC workflow is used; `block` is allowed from `harvested`, `qc_pending`, or `released`
 - Preorder: created in `active`; `adjust` stays `active`; `cancel → cancelled`
 
 **Key Phase 1 event names** (source: `core/events.py` + `services/`):

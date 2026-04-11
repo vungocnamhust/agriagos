@@ -8,10 +8,16 @@ import uuid
 import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from fastapi.testclient import TestClient
 
+from app.main import app
 from app.store import _db
 from app.store import farm as farm_store
 from app.store import views as view_store
+from app.services import views as views_service
+
+
+client = TestClient(app)
 
 
 @contextmanager
@@ -409,3 +415,379 @@ def test_fetch_farm_store_and_summary_board_return_expected_postgres_rows(
     assert scoped_summary_rows[0]["growthStage"] == "maturing"
     assert scoped_summary_rows[0]["estimatedYieldQty"] == 120.0
     assert scoped_summary_rows[1]["cropCycleId"] is None
+    assert scoped_summary_rows[1]["estimatedYieldQty"] is None
+
+
+@pytest.mark.postgres_integration
+def test_customer_360_endpoint_reads_real_postgres_projection(
+    postgres_db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _enable_view_store(monkeypatch, postgres_db_session)
+    monkeypatch.setattr(views_service.postgres_sync, "is_enabled", lambda: True)
+
+    code_suffix = uuid.uuid4().hex[:8]
+    customer_id = str(uuid.uuid4())
+    sku_id = str(uuid.uuid4())
+    preorder_id = str(uuid.uuid4())
+    order_id = str(uuid.uuid4())
+    order_line_id = str(uuid.uuid4())
+    _insert_customer(postgres_db_session, customer_id, f"KH-EP-{code_suffix}", "Endpoint Customer")
+    _insert_product_sku(postgres_db_session, sku_id, f"SKU-EP-{code_suffix}", "Endpoint Rice")
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO customer_preferences (
+                preference_id,
+                customer_id,
+                preference_type,
+                preference_value,
+                source,
+                confidence_level
+            ) VALUES (
+                gen_random_uuid(),
+                CAST(:customer_id AS uuid),
+                'pack_size',
+                '5kg',
+                'human',
+                0.95
+            )
+            """
+        ),
+        {"customer_id": customer_id},
+    )
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO preorders (
+                preorder_id,
+                preorder_code,
+                customer_id,
+                product_sku_id,
+                committed_qty,
+                allocated_qty,
+                delivered_qty,
+                remaining_qty,
+                status
+            ) VALUES (
+                CAST(:preorder_id AS uuid),
+                :preorder_code,
+                CAST(:customer_id AS uuid),
+                CAST(:product_sku_id AS uuid),
+                12,
+                2,
+                1,
+                11,
+                'active'
+            )
+            """
+        ),
+        {
+            "preorder_id": preorder_id,
+            "preorder_code": f"DT-EP-{code_suffix}",
+            "customer_id": customer_id,
+            "product_sku_id": sku_id,
+        },
+    )
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO sales_orders (
+                order_id,
+                order_code,
+                customer_id,
+                channel,
+                delivery_date_expected,
+                shipping_address,
+                status,
+                payment_status,
+                source_preorder_flag
+            ) VALUES (
+                CAST(:order_id AS uuid),
+                :order_code,
+                CAST(:customer_id AS uuid),
+                'zalo',
+                CAST('2026-04-18T00:00:00+00:00' AS timestamptz),
+                'Da Lat',
+                'confirmed',
+                'unpaid',
+                true
+            )
+            """
+        ),
+        {
+            "order_id": order_id,
+            "order_code": f"ORD-EP-{code_suffix}",
+            "customer_id": customer_id,
+        },
+    )
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO sales_order_lines (
+                order_line_id,
+                order_id,
+                product_sku_id,
+                ordered_qty,
+                allocated_qty,
+                packed_qty,
+                delivered_qty,
+                unit,
+                source_preorder_id,
+                status
+            ) VALUES (
+                CAST(:order_line_id AS uuid),
+                CAST(:order_id AS uuid),
+                CAST(:product_sku_id AS uuid),
+                4,
+                1,
+                0,
+                0,
+                'kg',
+                CAST(:source_preorder_id AS uuid),
+                'allocated'
+            )
+            """
+        ),
+        {
+            "order_line_id": order_line_id,
+            "order_id": order_id,
+            "product_sku_id": sku_id,
+            "source_preorder_id": preorder_id,
+        },
+    )
+
+    response = client.get(f"/api/v1/views/customer-360/{customer_id}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["customer"]["customerId"] == customer_id
+    assert payload["customer"]["fullName"] == "Endpoint Customer"
+    assert [item["preorderCode"] for item in payload["activePreorders"]] == [f"DT-EP-{code_suffix}"]
+    assert [item["orderCode"] for item in payload["recentOrders"]] == [f"ORD-EP-{code_suffix}"]
+    assert payload["recentOrders"][0]["lines"][0]["orderLineId"] == order_line_id
+    assert payload["preferences"] == [
+        {
+            "preferenceType": "pack_size",
+            "preferenceValue": "5kg",
+            "confidenceLevel": 0.95,
+        }
+    ]
+
+
+@pytest.mark.postgres_integration
+def test_available_lots_endpoint_reads_real_postgres_projection(
+    postgres_db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _enable_view_store(monkeypatch, postgres_db_session)
+    monkeypatch.setattr(views_service.postgres_sync, "is_enabled", lambda: True)
+
+    code_suffix = uuid.uuid4().hex[:8]
+    sku_id = str(uuid.uuid4())
+    _insert_product_sku(postgres_db_session, sku_id, f"SKU-AL-{code_suffix}", "Available Rice")
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO lots (
+                lot_id,
+                lot_code,
+                product_sku_id,
+                source_type,
+                source_ref_id,
+                harvest_or_production_date,
+                actual_qty,
+                available_qty,
+                reserved_qty,
+                released_qty,
+                status
+            ) VALUES
+            (
+                CAST(:lot_id_1 AS uuid),
+                :lot_code_1,
+                CAST(:product_sku_id AS uuid),
+                'crop_cycle',
+                'cycle-a',
+                CAST('2026-04-20T00:00:00+00:00' AS timestamptz),
+                10,
+                6,
+                0,
+                6,
+                'released'
+            ),
+            (
+                CAST(:lot_id_2 AS uuid),
+                :lot_code_2,
+                CAST(:product_sku_id AS uuid),
+                'crop_cycle',
+                'cycle-b',
+                CAST('2026-04-19T00:00:00+00:00' AS timestamptz),
+                10,
+                0,
+                0,
+                6,
+                'released'
+            )
+            """
+        ),
+        {
+            "lot_id_1": str(uuid.uuid4()),
+            "lot_code_1": f"LOT-AL-{code_suffix}-1",
+            "lot_id_2": str(uuid.uuid4()),
+            "lot_code_2": f"LOT-AL-{code_suffix}-2",
+            "product_sku_id": sku_id,
+        },
+    )
+
+    response = client.get("/api/v1/views/available-lots")
+    scoped_rows = [row for row in response.json()["items"] if row["lotCode"].startswith(f"LOT-AL-{code_suffix}-")]
+
+    assert response.status_code == 200
+    assert [row["lotCode"] for row in scoped_rows] == [f"LOT-AL-{code_suffix}-1"]
+    assert scoped_rows[0]["status"] == "released"
+
+
+@pytest.mark.postgres_integration
+def test_pending_fulfillment_endpoint_reads_real_postgres_projection(
+    postgres_db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _enable_view_store(monkeypatch, postgres_db_session)
+    monkeypatch.setattr(views_service.postgres_sync, "is_enabled", lambda: True)
+
+    code_suffix = uuid.uuid4().hex[:8]
+    customer_id = str(uuid.uuid4())
+    _insert_customer(postgres_db_session, customer_id, f"KH-PF-{code_suffix}", "Pending Endpoint")
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO sales_orders (
+                order_id,
+                order_code,
+                customer_id,
+                channel,
+                delivery_date_expected,
+                shipping_address,
+                status,
+                payment_status
+            ) VALUES
+            (
+                CAST(:order_id_1 AS uuid),
+                :order_code_1,
+                CAST(:customer_id AS uuid),
+                'phone',
+                CAST('2026-04-16T00:00:00+00:00' AS timestamptz),
+                'Da Lat',
+                'confirmed',
+                'unpaid'
+            ),
+            (
+                CAST(:order_id_2 AS uuid),
+                :order_code_2,
+                CAST(:customer_id AS uuid),
+                'phone',
+                NULL,
+                'Da Lat',
+                'packed',
+                'unpaid'
+            )
+            """
+        ),
+        {
+            "order_id_1": str(uuid.uuid4()),
+            "order_code_1": f"ORD-PF-{code_suffix}-1",
+            "order_id_2": str(uuid.uuid4()),
+            "order_code_2": f"ORD-PF-{code_suffix}-2",
+            "customer_id": customer_id,
+        },
+    )
+
+    response = client.get("/api/v1/views/pending-fulfillment")
+    scoped_rows = [row for row in response.json()["items"] if row["orderCode"].startswith(f"ORD-PF-{code_suffix}-")]
+
+    assert response.status_code == 200
+    assert [row["orderCode"] for row in scoped_rows] == [f"ORD-PF-{code_suffix}-1", f"ORD-PF-{code_suffix}-2"]
+    assert [row["status"] for row in scoped_rows] == ["confirmed", "packed"]
+
+
+@pytest.mark.postgres_integration
+def test_farm_summary_board_endpoint_reads_real_postgres_projection(
+    postgres_db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _enable_view_store(monkeypatch, postgres_db_session)
+    monkeypatch.setattr(views_service.postgres_sync, "is_enabled", lambda: True)
+
+    code_suffix = uuid.uuid4().hex[:8]
+    plot_id = str(uuid.uuid4())
+    crop_cycle_id = str(uuid.uuid4())
+
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO plots (
+                plot_id,
+                plot_code,
+                name,
+                location_text,
+                area_value,
+                area_unit,
+                status
+            ) VALUES (
+                CAST(:plot_id AS uuid),
+                :plot_code,
+                'Endpoint Plot',
+                'Da Lat',
+                3.0,
+                'ha',
+                'active'
+            )
+            """
+        ),
+        {
+            "plot_id": plot_id,
+            "plot_code": f"PLOT-EP-{code_suffix}",
+        },
+    )
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO crop_cycles (
+                crop_cycle_id,
+                plot_id,
+                crop_name,
+                start_date,
+                growth_stage,
+                status,
+                expected_harvest_from,
+                expected_harvest_to,
+                estimated_yield_qty
+            ) VALUES (
+                CAST(:crop_cycle_id AS uuid),
+                CAST(:plot_id AS uuid),
+                'Coffee',
+                CAST('2026-03-15' AS date),
+                'flowering_or_maturing',
+                'near_harvest',
+                CAST('2026-06-01T00:00:00+00:00' AS timestamptz),
+                CAST('2026-06-15T00:00:00+00:00' AS timestamptz),
+                88
+            )
+            """
+        ),
+        {
+            "crop_cycle_id": crop_cycle_id,
+            "plot_id": plot_id,
+        },
+    )
+
+    response = client.get("/api/v1/views/farm-summary-board")
+    payload = response.json()["items"]
+    scoped_rows = [row for row in payload if row["plotCode"] == f"PLOT-EP-{code_suffix}"]
+
+    assert response.status_code == 200
+    assert len(scoped_rows) == 1
+    assert scoped_rows[0]["cropCycleId"] == crop_cycle_id
+    assert scoped_rows[0]["growthStage"] == "maturing"
+    assert scoped_rows[0]["cropCycleStatus"] == "near_harvest"
+    assert scoped_rows[0]["estimatedYieldQty"] == 88.0

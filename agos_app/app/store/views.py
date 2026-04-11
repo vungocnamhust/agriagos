@@ -155,7 +155,10 @@ def fetch_farm_summary_board() -> list[dict[str, Any]]:
             "cropCycleStatus": row["crop_cycle_status"],
             "expectedHarvestFrom": _iso(row["expected_harvest_from"]),
             "expectedHarvestTo": _iso(row["expected_harvest_to"]),
-            "estimatedYieldQty": _db.to_float(row["estimated_yield_qty"]),
+            "estimatedYieldQty": (
+                _db.to_float(row["estimated_yield_qty"])
+                if row["estimated_yield_qty"] is not None else None
+            ),
         }
         for row in rows
     ]

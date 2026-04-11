@@ -38,6 +38,9 @@ alembic upgrade head
 ```bash
 export DATABASE_URL=postgresql+psycopg://agriagos:agriagos@127.0.0.1:5436/agriagos
 pytest tests/test_*integration.py -m postgres_integration
+
+# hoặc chỉ chạy sweep views/store PostgreSQL
+pytest tests/test_view_board_integration.py -m postgres_integration
 ```
 
 ## DB-first mode (mặc định)
