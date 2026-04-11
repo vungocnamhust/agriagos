@@ -1,11 +1,14 @@
 from fastapi import HTTPException
 
+from app.models.farm import FarmView
 from app.models.orders import OrderDetail, OrderLine
 from app.models.preorders import PreorderDetail
 from app.models.views import (
+    AvailableLotListResponse,
     AvailableLotView,
     Customer360View,
     CustomerPreferenceItem,
+    PendingFulfillmentListResponse,
     PendingFulfillmentView,
 )
 from app.services import customers as cust_svc
@@ -62,10 +65,10 @@ def get_customer_360(customer_id: str) -> Customer360View:
     )
 
 
-def get_available_lots_board(product_sku_id: str | None = None) -> dict:
+def get_available_lots_board(product_sku_id: str | None = None) -> AvailableLotListResponse:
     if postgres_sync.is_enabled():
         lots = [AvailableLotView(**row) for row in view_store.fetch_available_lots_board(product_sku_id)]
-        return {"items": [lot.model_dump() for lot in lots]}
+        return AvailableLotListResponse(items=lots)
 
     lots = [
         AvailableLotView(
@@ -80,13 +83,13 @@ def get_available_lots_board(product_sku_id: str | None = None) -> dict:
         if lot["status"] == "released" and lot["availableQty"] > 0
         and (product_sku_id is None or lot["productSkuId"] == product_sku_id)
     ]
-    return {"items": [lot.model_dump() for lot in lots]}
+    return AvailableLotListResponse(items=lots)
 
 
-def get_pending_fulfillment() -> dict:
+def get_pending_fulfillment() -> PendingFulfillmentListResponse:
     if postgres_sync.is_enabled():
         items = [PendingFulfillmentView(**row) for row in view_store.fetch_pending_fulfillment_board()]
-        return {"items": [item.model_dump() for item in items]}
+        return PendingFulfillmentListResponse(items=items)
 
     pending_statuses = {"confirmed", "allocated", "packed"}
     customer_map = {c["customerId"]: c["fullName"] for c in store._customers.values()}
@@ -102,11 +105,11 @@ def get_pending_fulfillment() -> dict:
         for o in store._orders.values()
         if o["status"] in pending_statuses
     ]
-    return {"items": [i.model_dump() for i in items]}
+    return PendingFulfillmentListResponse(items=items)
 
 
-def get_farm_view() -> dict:
-    return {
-        "plots": farm_svc.list_plots(),
-        "cropCycles": farm_svc.list_crop_cycles(None, None),
-    }
+def get_farm_view() -> FarmView:
+    return FarmView(
+        plots=farm_svc.list_plots(),
+        cropCycles=farm_svc.list_crop_cycles(None, None),
+    )

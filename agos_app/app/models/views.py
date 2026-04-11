@@ -23,9 +23,15 @@ class AvailableLotView(BaseModel):
     availableQty: float
     status: LotStatus  # (06-state-transitions.md)
 
+class AvailableLotListResponse(BaseModel):
+    items: list[AvailableLotView]
+
 class PendingFulfillmentView(BaseModel):
     orderId: str
     orderCode: str
     customerName: str
     status: OrderStatus  # (06-state-transitions.md)
     shippingDeadline: str | None = None
+
+class PendingFulfillmentListResponse(BaseModel):
+    items: list[PendingFulfillmentView]

@@ -2,8 +2,9 @@ from fastapi import APIRouter
 
 from app.models.customers import (
     CreateCustomerRequest,
-    CustomerResponse,
     CustomerDetail,
+    CustomerListResponse,
+    CustomerResponse,
     PreferenceResponse,
     UpsertPreferenceRequest,
 )
@@ -17,13 +18,13 @@ def create_customer(payload: CreateCustomerRequest) -> CustomerResponse:
     return svc.create_customer(payload)
 
 
-@router.get("")
+@router.get("", response_model=CustomerListResponse)
 def list_customers(
     phone: str | None = None,
     q: str | None = None,
     tag: str | None = None,
-) -> dict:
-    return {"items": svc.list_customers(phone, q, tag)}
+) -> CustomerListResponse:
+    return CustomerListResponse(items=svc.list_customers(phone, q, tag))
 
 
 @router.get("/{customer_id}", response_model=CustomerDetail)

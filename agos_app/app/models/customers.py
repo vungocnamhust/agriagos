@@ -33,6 +33,9 @@ class CreateCustomerRequest(BaseModel):
 class CustomerResponse(BaseModel):
     data: CustomerSummary
 
+class CustomerListResponse(BaseModel):
+    items: list[CustomerSummary]
+
 class UpsertPreferenceRequest(BaseModel):
     preferenceType: str
     preferenceValue: str

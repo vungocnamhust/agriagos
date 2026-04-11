@@ -19,6 +19,13 @@ class ErrorResponse(BaseModel):
     details: dict[str, Any] | None = None
 
 
+class HealthResponse(BaseModel):
+    status: Literal["ok", "degraded"]
+    service: str
+    version: str
+    checks: dict[str, str] = Field(default_factory=dict)
+
+
 class DomainEvent(BaseModel):
     eventId: str
     eventName: str
@@ -31,3 +38,8 @@ class DomainEvent(BaseModel):
     source: EventSource  # required: core | integration | system_job | agent (05-event-catalog.md)
     tenantId: str = "default"  # Phase 1 placeholder; not enforced until multi-tenant auth lands
     payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class DomainEventListResponse(BaseModel):
+    items: list[DomainEvent]
+    total: int
