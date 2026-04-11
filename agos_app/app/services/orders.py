@@ -4,12 +4,13 @@ from typing import Any
 from fastapi import HTTPException
 
 from app.core import events
+from app.core.codegen import generate_order_code
 from app.core.gateway import (
     assert_order_transition,
     check_idempotency,
     record_idempotency,
 )
-from app.models.enums import AllocationStatus, LotStatus, OrderStatus, PaymentStatus, PreorderStatus
+from app.models.enums import AllocationStatus, LotStatus, OrderStatus, PaymentStatus
 from app.models.orders import (
     AllocateOrderRequest,
     AllocationItemResponse,
@@ -29,7 +30,7 @@ from app.store import memory as store
 
 
 def _new_order_code() -> str:
-    return f"ORD-{str(uuid.uuid4())[:8].upper()}"
+    return generate_order_code()
 
 
 def _build_order_detail(record: dict[str, Any]) -> OrderDetail:
@@ -287,26 +288,12 @@ def deliver_order(order_id: str, payload: DeliverOrderRequest) -> OrderResponse:
     record["proofRef"] = payload.proofRef
     postgres_sync.upsert_order(record)
 
-    # Consume preorder delivered qty for any lines linked to a preorder
+    # SSoT: atomic postgres path is the single source of truth for preorder qty updates.
+    # increment_preorder_delivered_qty_atomic is a no-op when postgres is disabled.
     for line in record["lines"]:
         if line.get("sourcePreorderId"):
-            if postgres_sync.is_enabled():
-                preorder = None
-            else:
-                preorder = store._preorders.get(line["sourcePreorderId"])
-
             qty = line.get("deliveredQty", 0.0) or line.get("allocatedQty", 0.0)
-            if postgres_sync.is_enabled():
-                postgres_sync.increment_preorder_delivered_qty_atomic(line["sourcePreorderId"], qty)
-            elif preorder:
-                preorder["deliveredQty"] = preorder.get("deliveredQty", 0.0) + qty
-                preorder["remainingQty"] = max(
-                    0.0,
-                    preorder["committedQty"] - preorder["deliveredQty"],
-                )
-                if preorder["remainingQty"] == 0:
-                    preorder["status"] = PreorderStatus.completed.value
-                postgres_sync.upsert_preorder(preorder)
+            postgres_sync.increment_preorder_delivered_qty_atomic(line["sourcePreorderId"], qty)
 
     events.emit(
         "order.delivered",

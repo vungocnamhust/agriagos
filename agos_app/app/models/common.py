@@ -29,4 +29,5 @@ class DomainEvent(BaseModel):
     actorId: str | None = None
     correlationId: str | None = None
     source: EventSource  # required: core | integration | system_job | agent (05-event-catalog.md)
+    tenantId: str = "default"  # Phase 1 placeholder; not enforced until multi-tenant auth lands
     payload: dict[str, Any] = Field(default_factory=dict)

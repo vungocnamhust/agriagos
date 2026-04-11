@@ -4,6 +4,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from app.core import events
+from app.core.codegen import generate_lot_code
 from app.core.gateway import assert_lot_transition, check_idempotency, record_idempotency
 from app.models.enums import LotStatus
 from app.models.lots import (
@@ -16,8 +17,10 @@ from app.models.lots import (
 from app.store import memory as store
 
 
-def _new_lot_code() -> str:
-    return f"LOT-{str(uuid.uuid4())[:8].upper()}"
+def _new_lot_code(product_sku_id: str) -> str:
+    # Use first 3 chars of the SKU id as the abbreviation; Phase 2 will use a proper SKU abbr field
+    sku_abbr = product_sku_id[:3].upper()
+    return generate_lot_code(sku_abbr)
 
 
 def _build_lot_detail(record: dict[str, Any]) -> LotDetail:
@@ -42,7 +45,7 @@ def create_harvested_lot(payload: CreateHarvestedLotRequest) -> LotResponse:
         return LotResponse(**cached)
 
     lot_id = str(uuid.uuid4())
-    lot_code = _new_lot_code()
+    lot_code = _new_lot_code(payload.productSkuId)
     correlation_id = payload.meta.correlationId if payload.meta else None
     actor_id = payload.meta.actorId if payload.meta else None
 

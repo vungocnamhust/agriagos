@@ -4,6 +4,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from app.core import events
+from app.core.codegen import generate_preorder_code
 from app.core.gateway import assert_preorder_transition, check_idempotency, record_idempotency
 from app.models.enums import PreorderStatus
 from app.models.preorders import (
@@ -17,7 +18,7 @@ from app.store import memory as store
 
 
 def _new_preorder_code() -> str:
-    return f"PRE-{str(uuid.uuid4())[:8].upper()}"
+    return generate_preorder_code()
 
 
 def _build_preorder_detail(record: dict[str, Any]) -> PreorderDetail:

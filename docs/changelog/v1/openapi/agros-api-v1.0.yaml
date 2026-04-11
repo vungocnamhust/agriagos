@@ -1,0 +1,1813 @@
+openapi: 3.1.0
+info:
+  title: Agri OS Core API
+  summary: Deterministic core API for Agri OS
+  version: 0.1.0
+paths:
+  /health:
+    get:
+      tags:
+      - Health
+      summary: Get Health
+      operationId: get_health_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Get Health Health Get
+  /api/v1/customers:
+    post:
+      tags:
+      - Customers
+      summary: Create Customer
+      operationId: create_customer_api_v1_customers_post
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCustomerRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - Customers
+      summary: List Customers
+      operationId: list_customers_api_v1_customers_get
+      parameters:
+      - name: phone
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Phone
+      - name: q
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Q
+      - name: tag
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Tag
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response List Customers Api V1 Customers Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/customers/{customer_id}:
+    get:
+      tags:
+      - Customers
+      summary: Get Customer
+      operationId: get_customer_api_v1_customers__customer_id__get
+      parameters:
+      - name: customer_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Customer Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerDetail'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/customers/{customer_id}/preferences:
+    post:
+      tags:
+      - Customers
+      summary: Upsert Customer Preference
+      operationId: upsert_customer_preference_api_v1_customers__customer_id__preferences_post
+      parameters:
+      - name: customer_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Customer Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertPreferenceRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreferenceResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/preorders:
+    post:
+      tags:
+      - Preorders
+      summary: Create Preorder
+      operationId: create_preorder_api_v1_preorders_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePreorderRequest'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreorderResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/preorders/{preorder_id}:
+    get:
+      tags:
+      - Preorders
+      summary: Get Preorder
+      operationId: get_preorder_api_v1_preorders__preorder_id__get
+      parameters:
+      - name: preorder_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Preorder Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreorderDetail'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/preorders/{preorder_id}/adjust:
+    post:
+      tags:
+      - Preorders
+      summary: Adjust Preorder
+      operationId: adjust_preorder_api_v1_preorders__preorder_id__adjust_post
+      parameters:
+      - name: preorder_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Preorder Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdjustPreorderRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreorderResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/orders:
+    post:
+      tags:
+      - Orders
+      - Allocations
+      summary: Create Order
+      operationId: create_order_api_v1_orders_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/orders/{order_id}:
+    get:
+      tags:
+      - Orders
+      - Allocations
+      summary: Get Order
+      operationId: get_order_api_v1_orders__order_id__get
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Order Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDetail'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/orders/{order_id}/confirm:
+    post:
+      tags:
+      - Orders
+      - Allocations
+      summary: Confirm Order
+      operationId: confirm_order_api_v1_orders__order_id__confirm_post
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Order Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/orders/{order_id}/allocate:
+    post:
+      tags:
+      - Orders
+      - Allocations
+      summary: Allocate Order
+      operationId: allocate_order_api_v1_orders__order_id__allocate_post
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Order Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AllocateOrderRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AllocationResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/orders/{order_id}/pack:
+    post:
+      tags:
+      - Orders
+      - Allocations
+      summary: Pack Order
+      operationId: pack_order_api_v1_orders__order_id__pack_post
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Order Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PackOrderRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/orders/{order_id}/ship:
+    post:
+      tags:
+      - Orders
+      - Allocations
+      summary: Ship Order
+      operationId: ship_order_api_v1_orders__order_id__ship_post
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Order Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShipOrderRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/orders/{order_id}/deliver:
+    post:
+      tags:
+      - Orders
+      - Allocations
+      summary: Deliver Order
+      operationId: deliver_order_api_v1_orders__order_id__deliver_post
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Order Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeliverOrderRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/orders/{order_id}/request-cancel:
+    post:
+      tags:
+      - Orders
+      - Allocations
+      summary: Request Cancel Order
+      operationId: request_cancel_order_api_v1_orders__order_id__request_cancel_post
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Order Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestCancelOrderRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/orders/{order_id}/cancel:
+    post:
+      tags:
+      - Orders
+      - Allocations
+      summary: Cancel Order
+      operationId: cancel_order_api_v1_orders__order_id__cancel_post
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Order Id
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/CancelOrderRequest'
+              - type: 'null'
+              title: Payload
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/lots:
+    post:
+      tags:
+      - Lots
+      summary: Create Harvested Lot
+      operationId: create_harvested_lot_api_v1_lots_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateHarvestedLotRequest'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LotResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/lots/{lot_id}:
+    get:
+      tags:
+      - Lots
+      summary: Get Lot
+      operationId: get_lot_api_v1_lots__lot_id__get
+      parameters:
+      - name: lot_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Lot Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LotDetail'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/lots/{lot_id}/release:
+    post:
+      tags:
+      - Lots
+      summary: Release Lot
+      operationId: release_lot_api_v1_lots__lot_id__release_post
+      parameters:
+      - name: lot_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Lot Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReleaseLotRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LotResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/lots/{lot_id}/block:
+    post:
+      tags:
+      - Lots
+      summary: Block Lot
+      operationId: block_lot_api_v1_lots__lot_id__block_post
+      parameters:
+      - name: lot_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Lot Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlockLotRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LotResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/farm/plots:
+    get:
+      tags:
+      - Farm
+      summary: List Plots
+      operationId: list_plots_api_v1_farm_plots_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response List Plots Api V1 Farm Plots Get
+  /api/v1/farm/crop-cycles:
+    get:
+      tags:
+      - Farm
+      summary: List Crop Cycles
+      operationId: list_crop_cycles_api_v1_farm_crop_cycles_get
+      parameters:
+      - name: plotId
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Plotid
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response List Crop Cycles Api V1 Farm Crop Cycles Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/views/customer-360/{customer_id}:
+    get:
+      tags:
+      - Views
+      summary: Get Customer 360
+      operationId: get_customer_360_api_v1_views_customer_360__customer_id__get
+      parameters:
+      - name: customer_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Customer Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer360View'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/views/available-lots:
+    get:
+      tags:
+      - Views
+      summary: Get Available Lots Board
+      operationId: get_available_lots_board_api_v1_views_available_lots_get
+      parameters:
+      - name: skuId
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Skuid
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Available Lots Board Api V1 Views Available Lots
+                  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/views/pending-fulfillment:
+    get:
+      tags:
+      - Views
+      summary: Get Pending Fulfillment
+      operationId: get_pending_fulfillment_api_v1_views_pending_fulfillment_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Get Pending Fulfillment Api V1 Views Pending Fulfillment
+                  Get
+  /api/v1/views/farm:
+    get:
+      tags:
+      - Views
+      summary: Get Farm View
+      operationId: get_farm_view_api_v1_views_farm_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Get Farm View Api V1 Views Farm Get
+  /api/v1/events:
+    get:
+      tags:
+      - Events
+      summary: List Events
+      operationId: list_events_api_v1_events_get
+      parameters:
+      - name: aggregateType
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Aggregatetype
+      - name: aggregateId
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Aggregateid
+      - name: eventName
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Eventname
+      - name: correlationId
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Correlationid
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response List Events Api V1 Events Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+components:
+  schemas:
+    AdjustPreorderRequest:
+      properties:
+        newCommittedQty:
+          type: number
+          title: Newcommittedqty
+        reason:
+          type: string
+          title: Reason
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - newCommittedQty
+      - reason
+      title: AdjustPreorderRequest
+    AllocateItem:
+      properties:
+        orderLineId:
+          type: string
+          title: Orderlineid
+        lotId:
+          type: string
+          title: Lotid
+        allocatedQty:
+          type: number
+          title: Allocatedqty
+      type: object
+      required:
+      - orderLineId
+      - lotId
+      - allocatedQty
+      title: AllocateItem
+    AllocateOrderRequest:
+      properties:
+        allocationPolicy:
+          type: string
+          title: Allocationpolicy
+          default: manual
+        allocations:
+          items:
+            $ref: '#/components/schemas/AllocateItem'
+          type: array
+          title: Allocations
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - allocations
+      title: AllocateOrderRequest
+    AllocationItemResponse:
+      properties:
+        allocationId:
+          type: string
+          title: Allocationid
+        orderLineId:
+          type: string
+          title: Orderlineid
+        lotId:
+          type: string
+          title: Lotid
+        allocatedQty:
+          type: number
+          title: Allocatedqty
+        allocatedAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Allocatedat
+        status:
+          $ref: '#/components/schemas/AllocationStatus'
+      type: object
+      required:
+      - allocationId
+      - orderLineId
+      - lotId
+      - allocatedQty
+      - status
+      title: AllocationItemResponse
+    AllocationResponse:
+      properties:
+        orderId:
+          type: string
+          title: Orderid
+        allocations:
+          items:
+            $ref: '#/components/schemas/AllocationItemResponse'
+          type: array
+          title: Allocations
+      type: object
+      required:
+      - orderId
+      - allocations
+      title: AllocationResponse
+    AllocationStatus:
+      type: string
+      enum:
+      - active
+      - released
+      - consumed
+      - cancelled
+      title: AllocationStatus
+    BlockLotRequest:
+      properties:
+        reason:
+          type: string
+          title: Reason
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - reason
+      title: BlockLotRequest
+    CancelOrderRequest:
+      properties:
+        reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reason
+        approvalRef:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Approvalref
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      title: CancelOrderRequest
+    CreateCustomerRequest:
+      properties:
+        fullName:
+          type: string
+          title: Fullname
+        phone:
+          type: string
+          title: Phone
+        channelSource:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Channelsource
+        defaultAddress:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Defaultaddress
+        district:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: District
+        province:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Province
+        tags:
+          items:
+            type: string
+          type: array
+          title: Tags
+          default: []
+        notes:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Notes
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - fullName
+      - phone
+      title: CreateCustomerRequest
+    CreateHarvestedLotRequest:
+      properties:
+        productSkuId:
+          type: string
+          title: Productskuid
+        sourceType:
+          type: string
+          title: Sourcetype
+        sourceRefId:
+          type: string
+          title: Sourcerefid
+        actualQty:
+          type: number
+          title: Actualqty
+        harvestOrProductionDate:
+          type: string
+          title: Harvestorproductiondate
+        qualityNote:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Qualitynote
+        attachments:
+          items:
+            type: string
+          type: array
+          title: Attachments
+          default: []
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - productSkuId
+      - sourceType
+      - sourceRefId
+      - actualQty
+      - harvestOrProductionDate
+      title: CreateHarvestedLotRequest
+    CreateOrderLineRequest:
+      properties:
+        productSkuId:
+          type: string
+          title: Productskuid
+        orderedQty:
+          type: number
+          title: Orderedqty
+        unit:
+          type: string
+          title: Unit
+        sourcePreorderId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sourcepreorderid
+      type: object
+      required:
+      - productSkuId
+      - orderedQty
+      - unit
+      title: CreateOrderLineRequest
+    CreateOrderRequest:
+      properties:
+        customerId:
+          type: string
+          title: Customerid
+        channel:
+          type: string
+          title: Channel
+        deliveryDateExpected:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Deliverydateexpected
+        shippingAddress:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Shippingaddress
+        paymentIntent:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Paymentintent
+        lines:
+          items:
+            $ref: '#/components/schemas/CreateOrderLineRequest'
+          type: array
+          title: Lines
+        note:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Note
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - customerId
+      - channel
+      - lines
+      title: CreateOrderRequest
+    CreatePreorderRequest:
+      properties:
+        customerId:
+          type: string
+          title: Customerid
+        productSkuId:
+          type: string
+          title: Productskuid
+        committedQty:
+          type: number
+          title: Committedqty
+        startDate:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Startdate
+        deliveryCadence:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Deliverycadence
+        depositAmount:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Depositamount
+        notes:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Notes
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - customerId
+      - productSkuId
+      - committedQty
+      title: CreatePreorderRequest
+    Customer360View:
+      properties:
+        customer:
+          $ref: '#/components/schemas/CustomerDetail'
+        activePreorders:
+          items:
+            $ref: '#/components/schemas/PreorderDetail'
+          type: array
+          title: Activepreorders
+        recentOrders:
+          items:
+            $ref: '#/components/schemas/OrderDetail'
+          type: array
+          title: Recentorders
+        preferences:
+          items:
+            $ref: '#/components/schemas/CustomerPreferenceItem'
+          type: array
+          title: Preferences
+      type: object
+      required:
+      - customer
+      - activePreorders
+      - recentOrders
+      - preferences
+      title: Customer360View
+    CustomerDetail:
+      properties:
+        customerId:
+          type: string
+          title: Customerid
+        customerCode:
+          type: string
+          title: Customercode
+        fullName:
+          type: string
+          title: Fullname
+        phone:
+          type: string
+          title: Phone
+        status:
+          $ref: '#/components/schemas/CustomerStatus'
+        createdAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdat
+        tags:
+          items:
+            type: string
+          type: array
+          title: Tags
+          default: []
+        channelSource:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Channelsource
+        defaultAddress:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Defaultaddress
+        district:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: District
+        province:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Province
+        notes:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Notes
+        lastOrderAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Lastorderat
+      type: object
+      required:
+      - customerId
+      - customerCode
+      - fullName
+      - phone
+      - status
+      title: CustomerDetail
+    CustomerPreferenceItem:
+      properties:
+        preferenceType:
+          type: string
+          title: Preferencetype
+        preferenceValue:
+          type: string
+          title: Preferencevalue
+        confidenceLevel:
+          type: number
+          title: Confidencelevel
+      type: object
+      required:
+      - preferenceType
+      - preferenceValue
+      - confidenceLevel
+      title: CustomerPreferenceItem
+    CustomerResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/CustomerSummary'
+      type: object
+      required:
+      - data
+      title: CustomerResponse
+    CustomerStatus:
+      type: string
+      enum:
+      - active
+      - inactive
+      - blocked
+      title: CustomerStatus
+    CustomerSummary:
+      properties:
+        customerId:
+          type: string
+          title: Customerid
+        customerCode:
+          type: string
+          title: Customercode
+        fullName:
+          type: string
+          title: Fullname
+        phone:
+          type: string
+          title: Phone
+        status:
+          $ref: '#/components/schemas/CustomerStatus'
+        createdAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdat
+        tags:
+          items:
+            type: string
+          type: array
+          title: Tags
+          default: []
+      type: object
+      required:
+      - customerId
+      - customerCode
+      - fullName
+      - phone
+      - status
+      title: CustomerSummary
+    DeliverOrderRequest:
+      properties:
+        deliveredAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Deliveredat
+        proofRef:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Proofref
+        note:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Note
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      title: DeliverOrderRequest
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    LotDetail:
+      properties:
+        lotId:
+          type: string
+          title: Lotid
+        lotCode:
+          type: string
+          title: Lotcode
+        productSkuId:
+          type: string
+          title: Productskuid
+        sourceType:
+          type: string
+          title: Sourcetype
+        sourceRefId:
+          type: string
+          title: Sourcerefid
+        harvestOrProductionDate:
+          type: string
+          title: Harvestorproductiondate
+        actualQty:
+          type: number
+          title: Actualqty
+        releasedQty:
+          type: number
+          title: Releasedqty
+        availableQty:
+          type: number
+          title: Availableqty
+        reservedQty:
+          type: number
+          title: Reservedqty
+        unit:
+          type: string
+          title: Unit
+          default: kg
+        status:
+          $ref: '#/components/schemas/LotStatus'
+      type: object
+      required:
+      - lotId
+      - lotCode
+      - productSkuId
+      - sourceType
+      - sourceRefId
+      - harvestOrProductionDate
+      - actualQty
+      - releasedQty
+      - availableQty
+      - reservedQty
+      - status
+      title: LotDetail
+    LotResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/LotDetail'
+      type: object
+      required:
+      - data
+      title: LotResponse
+    LotStatus:
+      type: string
+      enum:
+      - draft
+      - harvested
+      - qc_pending
+      - released
+      - blocked
+      - depleted
+      - closed
+      title: LotStatus
+    Meta:
+      properties:
+        correlationId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Correlationid
+        actorId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Actorid
+        actorRole:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Actorrole
+        idempotencyKey:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotencykey
+        externalRef:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Externalref
+      type: object
+      title: Meta
+    OrderDetail:
+      properties:
+        orderId:
+          type: string
+          title: Orderid
+        orderCode:
+          type: string
+          title: Ordercode
+        customerId:
+          type: string
+          title: Customerid
+        orderDate:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Orderdate
+        channel:
+          type: string
+          title: Channel
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        paymentStatus:
+          $ref: '#/components/schemas/PaymentStatus'
+        deliveryDateExpected:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Deliverydateexpected
+        shippingAddress:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Shippingaddress
+        note:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Note
+        createdBy:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdby
+        sourcePreorderFlag:
+          type: boolean
+          title: Sourcepreorderflag
+          default: false
+        lines:
+          items:
+            $ref: '#/components/schemas/OrderLine'
+          type: array
+          title: Lines
+      type: object
+      required:
+      - orderId
+      - orderCode
+      - customerId
+      - channel
+      - status
+      - paymentStatus
+      - lines
+      title: OrderDetail
+    OrderLine:
+      properties:
+        orderLineId:
+          type: string
+          title: Orderlineid
+        productSkuId:
+          type: string
+          title: Productskuid
+        orderedQty:
+          type: number
+          title: Orderedqty
+        allocatedQty:
+          type: number
+          title: Allocatedqty
+          default: 0
+        packedQty:
+          type: number
+          title: Packedqty
+          default: 0
+        deliveredQty:
+          type: number
+          title: Deliveredqty
+          default: 0
+        unit:
+          type: string
+          title: Unit
+        status:
+          $ref: '#/components/schemas/OrderLineStatus'
+          default: open
+        sourcePreorderId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sourcepreorderid
+      type: object
+      required:
+      - orderLineId
+      - productSkuId
+      - orderedQty
+      - unit
+      title: OrderLine
+    OrderLineStatus:
+      type: string
+      enum:
+      - open
+      - allocated
+      - packed
+      - delivered
+      - cancelled
+      title: OrderLineStatus
+    OrderResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/OrderDetail'
+      type: object
+      required:
+      - data
+      title: OrderResponse
+    OrderStatus:
+      type: string
+      enum:
+      - draft
+      - confirmed
+      - allocated
+      - partially_allocated
+      - packed
+      - partially_packed
+      - shipped
+      - delivered
+      - partially_delivered
+      - cancel_requested
+      - cancelled
+      - failed
+      title: OrderStatus
+    PackOrderRequest:
+      properties:
+        packedQtySummary:
+          items:
+            $ref: '#/components/schemas/PackQtyItem'
+          type: array
+          title: Packedqtysummary
+          default: []
+        note:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Note
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      title: PackOrderRequest
+    PackQtyItem:
+      properties:
+        orderLineId:
+          type: string
+          title: Orderlineid
+        packedQty:
+          type: number
+          title: Packedqty
+      type: object
+      required:
+      - orderLineId
+      - packedQty
+      title: PackQtyItem
+    PaymentStatus:
+      type: string
+      enum:
+      - unpaid
+      - partially_paid
+      - paid
+      - refunded
+      - writeoff
+      title: PaymentStatus
+    PreferenceResponse:
+      properties:
+        customerId:
+          type: string
+          title: Customerid
+        preferenceType:
+          type: string
+          title: Preferencetype
+        preferenceValue:
+          type: string
+          title: Preferencevalue
+        confidenceLevel:
+          type: number
+          title: Confidencelevel
+      type: object
+      required:
+      - customerId
+      - preferenceType
+      - preferenceValue
+      - confidenceLevel
+      title: PreferenceResponse
+    PreorderDetail:
+      properties:
+        preorderId:
+          type: string
+          title: Preorderid
+        preorderCode:
+          type: string
+          title: Preordercode
+        customerId:
+          type: string
+          title: Customerid
+        productSkuId:
+          type: string
+          title: Productskuid
+        committedQty:
+          type: number
+          title: Committedqty
+        allocatedQty:
+          type: number
+          title: Allocatedqty
+        deliveredQty:
+          type: number
+          title: Deliveredqty
+        remainingQty:
+          type: number
+          title: Remainingqty
+        cancelledQty:
+          type: number
+          title: Cancelledqty
+          default: 0
+        status:
+          $ref: '#/components/schemas/PreorderStatus'
+        startDate:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Startdate
+      type: object
+      required:
+      - preorderId
+      - preorderCode
+      - customerId
+      - productSkuId
+      - committedQty
+      - allocatedQty
+      - deliveredQty
+      - remainingQty
+      - status
+      title: PreorderDetail
+    PreorderResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/PreorderDetail'
+      type: object
+      required:
+      - data
+      title: PreorderResponse
+    PreorderStatus:
+      type: string
+      enum:
+      - draft
+      - confirmed
+      - active
+      - completed
+      - cancelled
+      title: PreorderStatus
+    ReleaseLotRequest:
+      properties:
+        releasedQty:
+          type: number
+          title: Releasedqty
+        qualityStatus:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Qualitystatus
+        note:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Note
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - releasedQty
+      title: ReleaseLotRequest
+    RequestCancelOrderRequest:
+      properties:
+        reason:
+          type: string
+          title: Reason
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - reason
+      title: RequestCancelOrderRequest
+    ShipOrderRequest:
+      properties:
+        carrier:
+          type: string
+          title: Carrier
+        trackingRef:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Trackingref
+        shippedAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Shippedat
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - carrier
+      title: ShipOrderRequest
+    UpsertPreferenceRequest:
+      properties:
+        preferenceType:
+          type: string
+          title: Preferencetype
+        preferenceValue:
+          type: string
+          title: Preferencevalue
+        source:
+          type: string
+          title: Source
+          default: human
+        confidenceLevel:
+          type: number
+          title: Confidencelevel
+          default: 1.0
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - preferenceType
+      - preferenceValue
+      title: UpsertPreferenceRequest
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError

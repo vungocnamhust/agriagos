@@ -4,6 +4,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from app.core import events
+from app.core.codegen import generate_customer_code
 from app.core.gateway import check_idempotency, record_idempotency
 from app.models.customers import (
     CreateCustomerRequest,
@@ -17,7 +18,7 @@ from app.store import memory as store
 
 
 def _new_customer_code() -> str:
-    return f"CUST-{str(uuid.uuid4())[:8].upper()}"
+    return generate_customer_code()
 
 
 def create_customer(payload: CreateCustomerRequest) -> CustomerResponse:
