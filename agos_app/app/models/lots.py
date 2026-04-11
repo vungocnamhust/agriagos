@@ -38,3 +38,54 @@ class ReleaseLotRequest(BaseModel):
 class BlockLotRequest(BaseModel):
     reason: str
     meta: Meta | None = None
+
+
+class AddLotEvidenceRequest(BaseModel):
+    evidenceType: str
+    objectStorageKey: str | None = None
+    textValue: str | None = None
+    meta: Meta | None = None
+
+
+class LotEvidenceItem(BaseModel):
+    lotEvidenceId: str
+    lotId: str
+    evidenceType: str
+    objectStorageKey: str | None = None
+    textValue: str | None = None
+    capturedAt: str
+    actorId: str | None = None
+    status: str
+
+
+class LotEvidenceResponse(BaseModel):
+    data: LotEvidenceItem
+
+
+class LotEvidenceListResponse(BaseModel):
+    items: list[LotEvidenceItem]
+
+
+class CreateQCReviewRequest(BaseModel):
+    checklistVersion: str
+    result: str
+    notes: str | None = None
+    meta: Meta | None = None
+
+
+class QCReviewItem(BaseModel):
+    qcReviewId: str
+    lotId: str
+    checklistVersion: str
+    result: str
+    reviewerId: str | None = None
+    reviewedAt: str
+    notes: str | None = None
+
+
+class QCReviewResponse(BaseModel):
+    data: QCReviewItem
+
+
+class QCReviewListResponse(BaseModel):
+    items: list[QCReviewItem]

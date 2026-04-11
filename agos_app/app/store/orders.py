@@ -146,6 +146,7 @@ def fetch_order(order_id: str) -> dict[str, Any] | None:
                 """
                 SELECT
                     order_id,
+                    tenant_id,
                     order_code,
                     customer_id,
                     channel,
@@ -189,6 +190,7 @@ def fetch_order(order_id: str) -> dict[str, Any] | None:
 
     return {
         "orderId": str(order_row["order_id"]),
+        "tenantId": order_row["tenant_id"],
         "orderCode": order_row["order_code"],
         "customerId": str(order_row["customer_id"]),
         "channel": order_row["channel"],

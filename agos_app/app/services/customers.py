@@ -1,4 +1,5 @@
 import uuid
+import re
 from typing import Any
 
 from fastapi import HTTPException
@@ -14,11 +15,19 @@ from app.models.customers import (
     PreferenceResponse,
     UpsertPreferenceRequest,
 )
-from app.store import memory as store
+from app.store import customers as customer_store
+from app.store import memory as memory_store
+from app.store._db import is_enabled as postgres_enabled
 
 
 def _new_customer_code() -> str:
-    return generate_customer_code()
+    customer_code = generate_customer_code()
+    if not postgres_enabled():
+        return customer_code
+
+    while customer_store.customer_code_exists(customer_code):
+        customer_code = generate_customer_code()
+    return customer_code
 
 
 def create_customer(payload: CreateCustomerRequest) -> CustomerResponse:
@@ -26,9 +35,11 @@ def create_customer(payload: CreateCustomerRequest) -> CustomerResponse:
     if cached := check_idempotency(key):
         return CustomerResponse(**cached)
 
-    # Uniqueness check on phone
-    for c in store._customers.values():
-        if c["phone"] == payload.phone:
+    if postgres_enabled():
+        if customer_store.phone_exists(payload.phone):
+            raise HTTPException(status_code=409, detail="Customer with this phone already exists.")
+    else:
+        if memory_store.customer_phone_exists(payload.phone):
             raise HTTPException(status_code=409, detail="Customer with this phone already exists.")
 
     customer_id = str(uuid.uuid4())
@@ -38,6 +49,7 @@ def create_customer(payload: CreateCustomerRequest) -> CustomerResponse:
 
     record: dict[str, Any] = {
         "customerId": customer_id,
+        "tenantId": "default",
         "customerCode": customer_code,
         "fullName": payload.fullName,
         "phone": payload.phone,
@@ -49,7 +61,8 @@ def create_customer(payload: CreateCustomerRequest) -> CustomerResponse:
         "notes": payload.notes,
         "status": "active",
     }
-    store._customers[customer_id] = record
+    customer_store.upsert_customer(record)
+    memory_store.save_customer(customer_id, record)
 
     events.emit(
         event_name="customer.created",
@@ -65,6 +78,7 @@ def create_customer(payload: CreateCustomerRequest) -> CustomerResponse:
         customerCode=customer_code,
         fullName=payload.fullName,
         phone=payload.phone,
+        status=record["status"],
         tags=list(payload.tags),
     )
     result = CustomerResponse(data=summary)
@@ -77,7 +91,13 @@ def list_customers(
     q: str | None,
     tag: str | None,
 ) -> list[dict[str, Any]]:
-    items = list(store._customers.values())
+    if tag and not re.fullmatch(r"[A-Za-z0-9_-]+", tag):
+        raise HTTPException(status_code=422, detail="Invalid tag format.")
+
+    if postgres_enabled():
+        return customer_store.list_customers(phone, q, tag)
+
+    items = memory_store.list_customers()
     if phone:
         items = [c for c in items if c["phone"] == phone]
     if q:
@@ -89,40 +109,53 @@ def list_customers(
 
 
 def get_customer(customer_id: str) -> CustomerDetail:
-    record = store._customers.get(customer_id)
+    record = customer_store.fetch_customer(customer_id) if postgres_enabled() else None
+    if record is None:
+        record = memory_store.get_customer(customer_id)
     if not record:
         raise HTTPException(status_code=404, detail="Customer not found.")
     return CustomerDetail(**record)
 
 
 def upsert_preference(customer_id: str, payload: UpsertPreferenceRequest) -> PreferenceResponse:
-    if customer_id not in store._customers:
+    customer = customer_store.fetch_customer(customer_id) if postgres_enabled() else None
+    if customer is None:
+        customer = memory_store.get_customer(customer_id)
+    if customer is None:
         raise HTTPException(status_code=404, detail="Customer not found.")
 
     key = payload.meta.idempotencyKey if payload.meta else None
     if cached := check_idempotency(key):
         return PreferenceResponse(**cached)
 
-    prefs = store._preferences[customer_id]
+    preference_record = {
+        "tenantId": customer.get("tenantId", "default"),
+        "preferenceType": payload.preferenceType,
+        "preferenceValue": payload.preferenceValue,
+        "source": payload.source,
+        "confidenceLevel": payload.confidenceLevel,
+    }
+
+    existing_preferences = (
+        customer_store.fetch_customer_preferences(customer_id)
+        if postgres_enabled()
+        else memory_store.get_customer_preferences(customer_id)
+    )
+
+    prefs = list(existing_preferences)
     # Replace existing preference of the same type if present
     updated = False
-    for i, p in enumerate(prefs):
-        if p["preferenceType"] == payload.preferenceType:
-            prefs[i] = {
-                "preferenceType": payload.preferenceType,
-                "preferenceValue": payload.preferenceValue,
-                "source": payload.source,
-                "confidenceLevel": payload.confidenceLevel,
-            }
+    for index, preference in enumerate(prefs):
+        if preference["preferenceType"] == payload.preferenceType:
+            prefs[index] = preference_record
             updated = True
             break
     if not updated:
-        prefs.append({
-            "preferenceType": payload.preferenceType,
-            "preferenceValue": payload.preferenceValue,
-            "source": payload.source,
-            "confidenceLevel": payload.confidenceLevel,
-        })
+        prefs.append(preference_record)
+
+    if postgres_enabled():
+        customer_store.upsert_customer_preference(customer_id, preference_record)
+    memory_store.save_customer_preferences(customer_id, prefs)
 
     correlation_id = payload.meta.correlationId if payload.meta else None
     actor_id = payload.meta.actorId if payload.meta else None

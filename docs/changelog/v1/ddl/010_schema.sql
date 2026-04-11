@@ -6,6 +6,7 @@ BEGIN;
 
 CREATE TABLE IF NOT EXISTS customers (
     customer_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     customer_code TEXT NOT NULL UNIQUE,
     full_name TEXT NOT NULL,
     phone TEXT NOT NULL,
@@ -23,6 +24,7 @@ CREATE TABLE IF NOT EXISTS customers (
 
 CREATE TABLE IF NOT EXISTS customer_preferences (
     preference_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     customer_id UUID NOT NULL REFERENCES customers(customer_id) ON DELETE CASCADE,
     preference_type TEXT NOT NULL,
     preference_value TEXT NOT NULL,
@@ -34,6 +36,7 @@ CREATE TABLE IF NOT EXISTS customer_preferences (
 
 CREATE TABLE IF NOT EXISTS product_skus (
     product_sku_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     sku_code TEXT NOT NULL UNIQUE,
     sku_name TEXT NOT NULL,
     category TEXT,
@@ -48,6 +51,7 @@ CREATE TABLE IF NOT EXISTS product_skus (
 
 CREATE TABLE IF NOT EXISTS preorders (
     preorder_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     preorder_code TEXT NOT NULL UNIQUE,
     customer_id UUID NOT NULL REFERENCES customers(customer_id),
     product_sku_id UUID NOT NULL REFERENCES product_skus(product_sku_id),
@@ -66,6 +70,7 @@ CREATE TABLE IF NOT EXISTS preorders (
 
 CREATE TABLE IF NOT EXISTS plots (
     plot_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     plot_code TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL,
     location_text TEXT,
@@ -83,6 +88,7 @@ CREATE TABLE IF NOT EXISTS plots (
 
 CREATE TABLE IF NOT EXISTS crop_cycles (
     crop_cycle_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     plot_id UUID NOT NULL REFERENCES plots(plot_id),
     crop_name TEXT NOT NULL,
     start_date DATE NOT NULL,
@@ -98,6 +104,7 @@ CREATE TABLE IF NOT EXISTS crop_cycles (
 
 CREATE TABLE IF NOT EXISTS lots (
     lot_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     lot_code TEXT NOT NULL UNIQUE,
     product_sku_id UUID NOT NULL REFERENCES product_skus(product_sku_id),
     source_type TEXT NOT NULL CHECK (source_type IN ('crop_cycle','processing_batch','purchase_inbound')),
@@ -115,6 +122,7 @@ CREATE TABLE IF NOT EXISTS lots (
 
 CREATE TABLE IF NOT EXISTS lot_evidence (
     lot_evidence_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     lot_id UUID NOT NULL REFERENCES lots(lot_id) ON DELETE CASCADE,
     evidence_type TEXT NOT NULL CHECK (evidence_type IN ('photo','video','checklist','note','document','measurement')),
     object_storage_key TEXT,
@@ -128,6 +136,7 @@ CREATE TABLE IF NOT EXISTS lot_evidence (
 
 CREATE TABLE IF NOT EXISTS qc_reviews (
     qc_review_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     lot_id UUID NOT NULL REFERENCES lots(lot_id) ON DELETE CASCADE,
     checklist_version TEXT NOT NULL,
     result TEXT NOT NULL CHECK (result IN ('pending','passed','failed','needs_more_evidence')),
@@ -139,6 +148,7 @@ CREATE TABLE IF NOT EXISTS qc_reviews (
 
 CREATE TABLE IF NOT EXISTS sales_orders (
     order_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     order_code TEXT NOT NULL UNIQUE,
     customer_id UUID NOT NULL REFERENCES customers(customer_id),
     channel TEXT NOT NULL CHECK (channel IN ('web','admin','zalo','facebook','phone')),
@@ -155,6 +165,7 @@ CREATE TABLE IF NOT EXISTS sales_orders (
 
 CREATE TABLE IF NOT EXISTS sales_order_lines (
     order_line_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     order_id UUID NOT NULL REFERENCES sales_orders(order_id) ON DELETE CASCADE,
     product_sku_id UUID NOT NULL REFERENCES product_skus(product_sku_id),
     ordered_qty NUMERIC(18,3) NOT NULL CHECK (ordered_qty > 0),
@@ -168,6 +179,7 @@ CREATE TABLE IF NOT EXISTS sales_order_lines (
 
 CREATE TABLE IF NOT EXISTS allocations (
     allocation_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     order_line_id UUID NOT NULL REFERENCES sales_order_lines(order_line_id) ON DELETE CASCADE,
     lot_id UUID NOT NULL REFERENCES lots(lot_id),
     allocated_qty NUMERIC(18,3) NOT NULL CHECK (allocated_qty > 0),
@@ -177,6 +189,7 @@ CREATE TABLE IF NOT EXISTS allocations (
 
 CREATE TABLE IF NOT EXISTS inventory_movements (
     inventory_movement_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     lot_id UUID NOT NULL REFERENCES lots(lot_id),
     movement_type TEXT NOT NULL CHECK (
         movement_type IN (
@@ -192,6 +205,7 @@ CREATE TABLE IF NOT EXISTS inventory_movements (
 
 CREATE TABLE IF NOT EXISTS external_mappings (
     external_mapping_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     external_system TEXT NOT NULL,
     external_object_type TEXT NOT NULL,
     external_object_id TEXT NOT NULL,
@@ -205,6 +219,7 @@ CREATE TABLE IF NOT EXISTS external_mappings (
 
 CREATE TABLE IF NOT EXISTS channel_identity_bindings (
     binding_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     channel_type TEXT NOT NULL CHECK (channel_type IN ('phone','zalo','facebook','email')),
     channel_value TEXT NOT NULL,
     customer_id UUID REFERENCES customers(customer_id) ON DELETE CASCADE,
@@ -215,6 +230,7 @@ CREATE TABLE IF NOT EXISTS channel_identity_bindings (
 
 CREATE TABLE IF NOT EXISTS domain_events (
     event_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     event_name TEXT NOT NULL,
     event_version INTEGER NOT NULL DEFAULT 1,
     aggregate_type TEXT NOT NULL,
@@ -231,6 +247,7 @@ CREATE TABLE IF NOT EXISTS domain_events (
 
 CREATE TABLE IF NOT EXISTS audit_logs (
     audit_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     actor_id TEXT,
     actor_role TEXT,
     action_name TEXT NOT NULL,
@@ -247,6 +264,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 
 CREATE TABLE IF NOT EXISTS idempotency_records (
     idempotency_key TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     operation_name TEXT NOT NULL,
     request_hash TEXT NOT NULL,
     response_snapshot JSONB,

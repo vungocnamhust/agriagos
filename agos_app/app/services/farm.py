@@ -1,14 +1,20 @@
 import uuid
 from typing import Any
 
+from app.store import farm as farm_store
+from app.store import postgres_sync
 from app.store import memory as store
 
 
 def list_plots() -> list[dict[str, Any]]:
+    if postgres_sync.is_enabled():
+        return farm_store.fetch_plots()
     return list(store._plots.values())
 
 
 def list_crop_cycles(plot_id: str | None, status: str | None) -> list[dict[str, Any]]:
+    if postgres_sync.is_enabled():
+        return farm_store.fetch_crop_cycles(plot_id, status)
     items = list(store._crop_cycles.values())
     if plot_id:
         items = [c for c in items if c.get("plotId") == plot_id]

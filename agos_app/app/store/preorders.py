@@ -97,6 +97,7 @@ def fetch_preorder(preorder_id: str) -> dict[str, Any] | None:
                 """
                 SELECT
                     preorder_id,
+                    tenant_id,
                     preorder_code,
                     customer_id,
                     product_sku_id,
@@ -121,6 +122,7 @@ def fetch_preorder(preorder_id: str) -> dict[str, Any] | None:
 
     return {
         "preorderId": str(row["preorder_id"]),
+        "tenantId": row["tenant_id"],
         "preorderCode": row["preorder_code"],
         "customerId": str(row["customer_id"]),
         "productSkuId": str(row["product_sku_id"]),

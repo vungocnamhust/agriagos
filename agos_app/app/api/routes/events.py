@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.store import memory as store
+from app.store import events as store
 
 router = APIRouter()
 

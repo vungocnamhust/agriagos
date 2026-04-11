@@ -67,6 +67,7 @@ def create_preorder(payload: CreatePreorderRequest) -> PreorderResponse:
 
     record: dict[str, Any] = {
         "preorderId": preorder_id,
+        "tenantId": "default",
         "preorderCode": preorder_code,
         "customerId": payload.customerId,
         "productSkuId": payload.productSkuId,

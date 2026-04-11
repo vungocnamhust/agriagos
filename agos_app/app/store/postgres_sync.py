@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from app.store._db import is_enabled
 from app.store.customers import customer_exists, fetch_customer, upsert_customer
-from app.store.lots import fetch_lot, upsert_lot
+from app.store.lots import append_lot_evidence, fetch_lot, upsert_lot
 from app.store.orders import (
     allocate_order_atomic,
     cancel_order_atomic,
@@ -38,6 +38,7 @@ __all__ = [
     "increment_delivered_qty_atomic",
     "increment_preorder_delivered_qty_atomic",
     "upsert_lot",
+    "append_lot_evidence",
     "fetch_lot",
     "upsert_order",
     "fetch_order",

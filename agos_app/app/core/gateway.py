@@ -10,7 +10,9 @@ from typing import Any
 from fastapi import HTTPException
 
 from app.models.enums import LotStatus, OrderStatus, PreorderStatus
+from app.store import idempotency as idempotency_store
 from app.store import memory as store
+from app.store._db import is_enabled as postgres_enabled
 
 # ── State machines ────────────────────────────────────────────────────────────
 
@@ -30,6 +32,7 @@ LOT_TRANSITIONS: dict[str, dict[str, str]] = {
     # Phase 1: lots are created directly in "harvested" state by the service layer.
     # "draft" state exists in LotStatus enum but is not used until Phase 2 (lot creation workflow).
     LotStatus.harvested.value: {"release": LotStatus.released.value, "block": LotStatus.blocked.value},
+    LotStatus.qc_pending.value: {"release": LotStatus.released.value, "block": LotStatus.blocked.value},
     LotStatus.released.value: {"block": LotStatus.blocked.value},
     LotStatus.blocked.value: {},
     # Phase 2 states — not reachable via gateway in Phase 1:
@@ -70,13 +73,21 @@ def _normalize_legacy_preorder_state(current: str) -> str:
 
 def check_idempotency(idempotency_key: str | None) -> Any | None:
     """Return cached result if this key was already processed, else None."""
-    if idempotency_key and store.is_idempotent(idempotency_key):
+    if not idempotency_key:
+        return None
+
+    if postgres_enabled():
+        return idempotency_store.fetch_response(idempotency_key)
+
+    if store.is_idempotent(idempotency_key):
         return store.get_idempotent_result(idempotency_key)
     return None
 
 
 def record_idempotency(idempotency_key: str | None, result: Any) -> None:
     if idempotency_key:
+        if postgres_enabled():
+            idempotency_store.save_response(idempotency_key, result)
         store.set_idempotent_result(idempotency_key, result)
 
 

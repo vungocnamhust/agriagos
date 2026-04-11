@@ -108,6 +108,7 @@ def create_order(payload: CreateOrderRequest) -> OrderResponse:
 
     record: dict[str, Any] = {
         "orderId": order_id,
+        "tenantId": "default",
         "orderCode": order_code,
         "customerId": payload.customerId,
         "channel": payload.channel,

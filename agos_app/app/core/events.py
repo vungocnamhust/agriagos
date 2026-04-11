@@ -14,7 +14,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from app.store import memory as store
+from app.store import events as store
 
 
 def _now() -> str:
@@ -64,6 +64,7 @@ def emit(
         "actorId": actor_id,
         "correlationId": correlation_id,
         "source": "core",
+        "tenantId": "default",
         "payload": payload,
     }
     store.append_event(event)

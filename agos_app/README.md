@@ -30,8 +30,13 @@ alembic upgrade head
 ```
 
 ## DB-first mode (mặc định)
-Mặc định app đang chạy DB-first cho các luồng `orders` / `preorders` và đồng bộ
-`lots` / `allocations` trong các bước allocate/cancel.
+Mặc định app đang chạy DB-first trên PostgreSQL cho các luồng chính:
+
+- `customers` và `customer_preferences`
+- `preorders`
+- `orders` / `allocations`
+- `lots`, `lot_evidence`, `qc_reviews`
+- `events`, `views`, và durable `idempotency_records`
 
 ```bash
 export POSTGRES_WRITE_PATH_ENABLED=true
@@ -46,4 +51,11 @@ export POSTGRES_WRITE_PATH_ENABLED=false
 ```
 
 Các revision đầu tiên đã bao gồm customer, preorder, order, lot, lot_evidence, qc_reviews,
-allocation, inventory movement, event/audit log, external mapping, và các view đọc sớm.
+allocation, inventory movement, event/audit log, external mapping, durable idempotency,
+và các view đọc sớm.
+
+## Runtime reality
+
+- Phase 1 hiện dùng direct PostgreSQL reads/writes trong service/store layer và vẫn append domain events vào `domain_events`.
+- Projection workers vẫn là hướng kiến trúc tài liệu hóa cho phase sau, chưa phải runtime mặc định.
+- `POSTGRES_WRITE_PATH_ENABLED=false` chỉ nên dùng cho mô phỏng local hoặc test thủ công.
