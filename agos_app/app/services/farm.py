@@ -37,8 +37,8 @@ def seed_demo_farm() -> None:
         "cropCycleId": cycle_id,
         "plotId": plot_id,
         "cropName": "Dâu tây",
-        "growthStage": "flowering",
-        "status": "active",
+        "growthStage": "maturing",   # GrowthStage.maturing — closest valid enum to "flowering"
+        "status": "active",          # CropCycleStatus.active
         "expectedHarvestFrom": "2026-05-01",
         "expectedHarvestTo": "2026-05-15",
     }

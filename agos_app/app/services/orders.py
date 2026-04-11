@@ -119,10 +119,11 @@ def create_order(payload: CreateOrderRequest) -> OrderResponse:
         "lines": lines,
     }
     postgres_sync.upsert_order(record)
-    store._orders[order_id] = record
+    if not postgres_sync.is_enabled():
+        store._orders[order_id] = record
 
     events.emit(
-        event_name="OrderCreated",
+        event_name="order.created",
         aggregate_type="Order",
         aggregate_id=order_id,
         payload=record,
@@ -146,7 +147,7 @@ def confirm_order(order_id: str) -> OrderResponse:
     next_status = assert_order_transition(record, "confirm")
     record["status"] = next_status
     postgres_sync.upsert_order(record)
-    events.emit("OrderConfirmed", "Order", order_id, {"orderId": order_id, "status": next_status})
+    events.emit("order.confirmed", "Order", order_id, {"orderId": order_id, "status": next_status})
     return OrderResponse(data=_build_order_detail(record))
 
 
@@ -209,7 +210,7 @@ def allocate_order(order_id: str, payload: AllocateOrderRequest) -> AllocationRe
         store._allocations[order_id] = all_allocations
 
     events.emit(
-        "OrderAllocated",
+        "order.allocated",
         "Order",
         order_id,
         {"orderId": order_id, "allocations": new_allocations},
@@ -240,7 +241,7 @@ def pack_order(order_id: str, payload: PackOrderRequest) -> OrderResponse:
 
     record["status"] = next_status
     postgres_sync.upsert_order(record)
-    events.emit("OrderPacked", "Order", order_id, {"orderId": order_id, "status": next_status})
+    events.emit("order.packed", "Order", order_id, {"orderId": order_id, "status": next_status})
 
     result = OrderResponse(data=_build_order_detail(record))
     record_idempotency(key, result.model_dump())
@@ -262,7 +263,7 @@ def ship_order(order_id: str, payload: ShipOrderRequest) -> OrderResponse:
     postgres_sync.upsert_order(record)
 
     events.emit(
-        "OrderShipped",
+        "order.shipped",
         "Order",
         order_id,
         {"orderId": order_id, "carrier": payload.carrier, "trackingRef": payload.trackingRef},
@@ -290,13 +291,14 @@ def deliver_order(order_id: str, payload: DeliverOrderRequest) -> OrderResponse:
     for line in record["lines"]:
         if line.get("sourcePreorderId"):
             if postgres_sync.is_enabled():
-                preorder = postgres_sync.fetch_preorder(line["sourcePreorderId"])
-                if preorder:
-                    store._preorders[line["sourcePreorderId"]] = preorder
+                preorder = None
             else:
                 preorder = store._preorders.get(line["sourcePreorderId"])
-            if preorder:
-                qty = line.get("deliveredQty", 0.0) or line.get("allocatedQty", 0.0)
+
+            qty = line.get("deliveredQty", 0.0) or line.get("allocatedQty", 0.0)
+            if postgres_sync.is_enabled():
+                postgres_sync.increment_preorder_delivered_qty_atomic(line["sourcePreorderId"], qty)
+            elif preorder:
                 preorder["deliveredQty"] = preorder.get("deliveredQty", 0.0) + qty
                 preorder["remainingQty"] = max(
                     0.0,
@@ -307,7 +309,7 @@ def deliver_order(order_id: str, payload: DeliverOrderRequest) -> OrderResponse:
                 postgres_sync.upsert_preorder(preorder)
 
     events.emit(
-        "OrderDelivered",
+        "order.delivered",
         "Order",
         order_id,
         {"orderId": order_id, "deliveredAt": payload.deliveredAt},
@@ -331,7 +333,7 @@ def request_cancel_order(order_id: str, payload: RequestCancelOrderRequest) -> O
     postgres_sync.upsert_order(record)
 
     events.emit(
-        "OrderCancelRequested",
+        "order.cancel_requested",
         "Order",
         order_id,
         {"orderId": order_id, "reason": payload.reason},
@@ -373,7 +375,7 @@ def cancel_order(order_id: str, payload: CancelOrderRequest | None) -> OrderResp
         postgres_sync.replace_allocations_for_order(order_id, allocations)
         store._allocations[order_id] = allocations
     events.emit(
-        "OrderCancelled",
+        "order.cancelled",
         "Order",
         order_id,
         {"orderId": order_id, "reason": payload.reason if payload else None},

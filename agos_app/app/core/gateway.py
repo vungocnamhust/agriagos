@@ -27,15 +27,28 @@ ORDER_TRANSITIONS: dict[str, dict[str, str]] = {
 }
 
 LOT_TRANSITIONS: dict[str, dict[str, str]] = {
+    # Phase 1: lots are created directly in "harvested" state by the service layer.
+    # "draft" state exists in LotStatus enum but is not used until Phase 2 (lot creation workflow).
     LotStatus.harvested.value: {"release": LotStatus.released.value, "block": LotStatus.blocked.value},
     LotStatus.released.value: {"block": LotStatus.blocked.value},
     LotStatus.blocked.value: {},
+    # Phase 2 states — not reachable via gateway in Phase 1:
+    # LotStatus.draft.value: {"harvest": LotStatus.harvested.value}
+    # LotStatus.qc_pending.value: transitions handled by QC workflow module
+    # LotStatus.depleted.value: {}  — terminal, set by allocation consumption
+    # LotStatus.closed.value: {}    — terminal, set by admin
 }
 
 PREORDER_TRANSITIONS: dict[str, dict[str, str]] = {
+    # Phase 1: preorders are created directly in "active" state.
+    # "draft" and "confirmed" states exist in PreorderStatus enum but the
+    # full draft→confirmed→active lifecycle is deferred to Phase 1.5.
     PreorderStatus.active.value: {"adjust": PreorderStatus.active.value, "cancel": PreorderStatus.cancelled.value},
     PreorderStatus.completed.value: {},
     PreorderStatus.cancelled.value: {},
+    # Phase 1.5 states — not reachable via gateway in Phase 1:
+    # PreorderStatus.draft.value: {"confirm": PreorderStatus.confirmed.value, "cancel": PreorderStatus.cancelled.value}
+    # PreorderStatus.confirmed.value: {"activate": PreorderStatus.active.value, "cancel": PreorderStatus.cancelled.value}
 }
 
 LEGACY_ORDER_STATES: dict[str, str] = {

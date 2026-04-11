@@ -80,10 +80,11 @@ def create_preorder(payload: CreatePreorderRequest) -> PreorderResponse:
         "startDate": payload.startDate,
     }
     postgres_sync.upsert_preorder(record)
-    store._preorders[preorder_id] = record
+    if not postgres_sync.is_enabled():
+        store._preorders[preorder_id] = record
 
     events.emit(
-        "PreorderPlaced",
+        "preorder.placed",
         "Preorder",
         preorder_id,
         payload=record,
@@ -127,7 +128,7 @@ def adjust_preorder(preorder_id: str, payload: AdjustPreorderRequest) -> Preorde
     actor_id = payload.meta.actorId if payload.meta else None
     correlation_id = payload.meta.correlationId if payload.meta else None
     events.emit(
-        "PreorderAdjusted",
+        "preorder.adjusted",
         "Preorder",
         preorder_id,
         payload={

@@ -51,7 +51,7 @@ def create_customer(payload: CreateCustomerRequest) -> CustomerResponse:
     store._customers[customer_id] = record
 
     events.emit(
-        event_name="CustomerCreated",
+        event_name="customer.created",
         aggregate_type="Customer",
         aggregate_id=customer_id,
         payload=record,
@@ -126,7 +126,7 @@ def upsert_preference(customer_id: str, payload: UpsertPreferenceRequest) -> Pre
     correlation_id = payload.meta.correlationId if payload.meta else None
     actor_id = payload.meta.actorId if payload.meta else None
     events.emit(
-        event_name="CustomerPreferenceUpdated",
+        event_name="customer.preference_updated",
         aggregate_type="Customer",
         aggregate_id=customer_id,
         payload={

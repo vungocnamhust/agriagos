@@ -752,3 +752,33 @@ def cancel_order_atomic(order_id: str, next_status: str) -> None:
         )
 
         session.commit()
+
+
+def increment_preorder_delivered_qty_atomic(preorder_id: str, qty_increment: float) -> dict[str, Any] | None:
+    if not is_enabled():
+        return None
+
+    with SessionLocal() as session:
+        session.execute(
+            text(
+                """
+                UPDATE preorders
+                SET
+                    delivered_qty = delivered_qty + :qty_increment,
+                    remaining_qty = GREATEST(0, committed_qty - (delivered_qty + :qty_increment)),
+                    status = CASE
+                        WHEN committed_qty <= (delivered_qty + :qty_increment) THEN 'completed'
+                        ELSE status
+                    END,
+                    updated_at = now()
+                WHERE preorder_id = :preorder_id
+                """
+            ),
+            {
+                "preorder_id": preorder_id,
+                "qty_increment": qty_increment,
+            },
+        )
+        session.commit()
+
+    return fetch_preorder(preorder_id)

@@ -64,7 +64,7 @@ def create_harvested_lot(payload: CreateHarvestedLotRequest) -> LotResponse:
     store._lots[lot_id] = record
 
     events.emit(
-        "HarvestedLotCreated",
+        "lot.harvest.created",
         "Lot",
         lot_id,
         payload=record,
@@ -110,7 +110,7 @@ def release_lot(lot_id: str, payload: ReleaseLotRequest) -> LotResponse:
     actor_id = payload.meta.actorId if payload.meta else None
     correlation_id = payload.meta.correlationId if payload.meta else None
     events.emit(
-        "LotReleased",
+        "lot.released",
         "Lot",
         lot_id,
         payload={"lotId": lot_id, "releasedQty": payload.releasedQty, "status": next_status},
@@ -139,7 +139,7 @@ def block_lot(lot_id: str, payload: BlockLotRequest) -> LotResponse:
     actor_id = payload.meta.actorId if payload.meta else None
     correlation_id = payload.meta.correlationId if payload.meta else None
     events.emit(
-        "LotBlocked",
+        "lot.blocked",
         "Lot",
         lot_id,
         payload={"lotId": lot_id, "reason": payload.reason, "status": next_status},

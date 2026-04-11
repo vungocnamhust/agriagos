@@ -29,5 +29,21 @@ export DATABASE_URL=postgresql+psycopg://agriagos:agriagos@127.0.0.1:5436/agriag
 alembic upgrade head
 ```
 
+## DB-first mode (mặc định)
+Mặc định app đang chạy DB-first cho các luồng `orders` / `preorders` và đồng bộ
+`lots` / `allocations` trong các bước allocate/cancel.
+
+```bash
+export POSTGRES_WRITE_PATH_ENABLED=true
+export DATABASE_URL=postgresql+psycopg://agriagos:agriagos@127.0.0.1:5436/agriagos
+uvicorn app.main:app --reload
+```
+
+Nếu cần chạy chế độ mô phỏng in-memory cho test/dev cục bộ, có thể tắt:
+
+```bash
+export POSTGRES_WRITE_PATH_ENABLED=false
+```
+
 Các revision đầu tiên đã bao gồm customer, preorder, order, lot, lot_evidence, qc_reviews,
 allocation, inventory movement, event/audit log, external mapping, và các view đọc sớm.
