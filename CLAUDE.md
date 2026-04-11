@@ -123,8 +123,36 @@ Core narrative docs live in two layers:
 | `docs/changelog/v1/architecture/` | phase-1 architecture set: vision, workflows, canonical data model, integration contracts, AI boundaries, migration path, and baseline sign-off |
 | `docs/changelog/v1/architecture/naming-conventions.md` | frozen naming rules: entities, events, states, endpoints, DTOs, commands, modules |
 | `docs/changelog/v1/architecture/coding-guardrails.md` | what must be correct from day 1 vs what can be stubbed in Phase 1 |
-| `docs/changelog/v1/adrs/` | 6 ADRs (ADR-001 to ADR-006) covering core architectural decisions |
+| `docs/changelog/v1/adrs/` | 11 ADRs (ADR-001 to ADR-011) covering core architectural decisions |
 | `docs/changelog/v1/openapi/agros-api-v1.0.yaml` | committed OpenAPI baseline (27 endpoints) — update in same commit as any API change |
+| `docs/changelog/v1/diagram/` | 11 Mermaid diagrams — verified baseline, see table below |
+
+### Diagram Baseline (`docs/changelog/v1/diagram/`)
+
+All diagrams use `[Phase 1 ✅]` / `[Phase 2 🔜]` labels to distinguish implemented vs. planned.
+
+| File | What it covers |
+|---|---|
+| `01-system-context-diagram.md` | Actors, channels, external systems, Core, future AI layer |
+| `02-domain-ownership-context-map.md` | SSoT boundaries — integration target architecture; Phase 1 note added |
+| `03-canonical-data-model-erd.md` | All canonical entities incl. `PREORDER` and `PRODUCT_SKU`; Phase 1/2 legend |
+| `04-event-storming-event-map.md` | Commands → Events with runtime dotted names; Phase 2 events labeled |
+| `05-state-machines-croptask-lot-order.md` | All 4 state machines; Phase 1 actual vs. Phase 2 planned split |
+| `06-command-policy-event-projection-flow.md` | Generic write path sequence |
+| `07-integration-flow-litefarm-erp-crm-core.md` | Integration target; DLQ/SyncBack marked Phase 2 |
+| `08-role-based-view-permission-diagram.md` | 7 roles, views, commands; Phase 1 `/views/*` endpoints table added |
+| `09-sequence-preorder-placed.md` | End-to-end preorder placed sequence |
+| `10-sequence-harvestedlot-to-lotreleased.md` | Lot harvest → release sequence |
+| `11-sequence-orderallocated-to-orderdelivered.md` | Order allocation → delivery sequence |
+
+**Key Phase 1 state machine facts** (source: `core/gateway.py`):
+- Order: `draft → confirmed → allocated → packed → shipped → delivered`; cancel path from `draft`/`confirmed` directly; `cancel_requested` only from `allocated`/`packed`
+- Lot: `harvested → released → blocked` (QC workflow is Phase 2)
+- Preorder: created in `active`; `adjust` stays `active`; `cancel → cancelled`
+
+**Key Phase 1 event names** (source: `core/events.py` + `services/`):
+- Use dotted lowercase at runtime: `order.created`, `order.confirmed`, `lot.harvest.created`, `preorder.placed`
+- `eventType` is auto-derived PascalCase: `OrderCreated`, `OrderConfirmed`, `LotHarvestCreated`, `PreorderPlaced`
 
 When repo-root docs and `docs/changelog/v1/architecture/` overlap, treat the `docs/changelog/v1/architecture/` set as the working baseline for current deterministic-core decisions.
 

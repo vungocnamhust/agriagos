@@ -3,6 +3,15 @@
 ## Mục đích
 Sơ đồ này mô tả hướng sync dữ liệu giữa 3 hệ nghiệp vụ và Agri OS Core.
 
+> **Phase note:**
+> - Sơ đồ này mô tả **kiến trúc integration target** cho Phase 2+.
+> - **Phase 1:** Live integration với LiteFarm/ERP/CRM chưa có. Core hoạt động standalone.
+>   Connector và canonicalization layer được thiết kế nhưng chưa wire vào external systems.
+> - `EVQ` (Event Queue), `DLQ` (Dead Letter Queue), và `SyncBack` là **Phase 2 🔜**.
+>   Phase 1 chỉ có in-memory event log (`app/store/memory.py`).
+> - Hướng dữ liệu đúng: External systems → Core (push/pull) → Read Models.
+>   Core không bị phụ thuộc vào external system để hoạt động.
+
 ## Mermaid
 ```mermaid
 flowchart TB
