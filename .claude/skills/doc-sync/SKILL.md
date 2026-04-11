@@ -133,12 +133,13 @@ Do not improve prose, fix grammar, or reformat — only correct what is wrong.
 
 **Ordering:** Apply patches in this sequence to avoid inconsistency:
 1. `docs/changelog/v1/architecture/00-source-of-truth-registry.md` when authority ownership itself changes
-2. the owning changelog architecture doc resolved through the registry
-3. `event_desc.md` and `deterministic_core_diagram.md` when the owning changelog doc makes them stale
-4. `determistic_layer_spec_v1.md` and `system_v1.md` when higher-authority docs make them stale
-5. `CLAUDE.md` (developer guide, reflects everything above)
-6. Route docstrings / Pydantic Field descriptions (inline, apply last)
-7. `README.md` (user-facing, most stable)
+2. `docs/changelog/v1/divergence-ledger.md` when code intentionally diverges from the current doc baseline
+3. the owning changelog architecture doc resolved through the registry
+4. `event_desc.md` and `deterministic_core_diagram.md` when the owning changelog doc makes them stale
+5. `determistic_layer_spec_v1.md` and `system_v1.md` when higher-authority docs make them stale
+6. `CLAUDE.md` (developer guide, reflects everything above)
+7. Route docstrings / Pydantic Field descriptions (inline, apply last)
+8. `README.md` (user-facing, most stable)
 
 ---
 

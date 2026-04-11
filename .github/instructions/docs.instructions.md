@@ -11,5 +11,5 @@ applyTo: "docs/**/*.md,CLAUDE.md,system_v1.md,determistic_layer_spec_v1.md,event
 - Resolve mutable fact questions through the registry first. Do not treat `docs/architecture/CLAUDE.md`, repo-root summaries, or nearby code comments as primary authority when the changelog docs already own the concern.
 - If architecture behavior, state flow, ownership, or event contracts change, update the relevant diagrams and ADRs in the same change.
 - Prefer the smallest documentation correction that restores accuracy.
-- If code and docs intentionally diverge, record the divergence explicitly instead of hiding it.
+- If code and docs intentionally diverge, record the divergence explicitly in `docs/changelog/v1/divergence-ledger.md` instead of hiding it.
 - Cross-check event names, domain ownership, and route/module descriptions against current code before editing prose.

@@ -1,0 +1,25 @@
+# Divergence Ledger
+
+Use this ledger when code intentionally diverges from the current documentation baseline.
+
+This file is the central register for code-doc mismatches in Agri OS v1.
+
+Do not keep divergence tracking only in local TODOs, comments, prompts, or instruction files.
+
+## Entry Format
+
+| ID | Concern | Code Surface | Doc Surface | Divergence | Why | Status | Exit Condition |
+|---|---|---|---|---|---|---|---|
+| DL-YYYYMMDD-01 | `<event/state/api/domain>` | `path/to/code.py` | `path/to/doc.md` | short description of what differs | why the divergence exists | `open` / `resolved` / `accepted` | condition, linked task, or date |
+
+## Rules
+
+1. Add an entry in the same change that introduces the divergence.
+2. Update the status when the divergence is resolved or explicitly accepted.
+3. Keep entries short and factual.
+4. If the divergence affects a public contract or architecture baseline, also add a local note in the owning doc that points back to the ledger entry.
+5. Do not use this file as a substitute for docs updates that should already move in the same change.
+
+## Active Entries
+
+None.

@@ -56,6 +56,10 @@ Do not update prose only and leave boundary or flow diagrams stale.
 If code intentionally diverges from the current documentation, the divergence
 must be called out explicitly in the same change.
 
+Record every such divergence in `docs/changelog/v1/divergence-ledger.md`.
+Local notes in doc sections or TODOs may add context, but the ledger is the
+central index.
+
 **A valid divergence note must state:**
 - what is intentionally different in the code
 - which document or diagram is temporarily inaccurate
@@ -65,7 +69,7 @@ must be called out explicitly in the same change.
 
 Put this note in the most visible local place for the affected audience:
 - the relevant doc section
-- a changelog note
+- `docs/changelog/v1/divergence-ledger.md`
 - a TODO with a linked tracking item when the docs cannot yet be updated fully
 
 Silent drift is prohibited. If the docs are knowingly wrong, say so plainly.
@@ -75,6 +79,7 @@ Silent drift is prohibited. If the docs are knowingly wrong, say so plainly.
 When one of the triggers above applies, review at least these artifacts:
 
 - `docs/changelog/v1/architecture/00-source-of-truth-registry.md`
+- `docs/changelog/v1/divergence-ledger.md`
 - `CLAUDE.md`
 - `README.md` and module-level README files
 - `system_v1.md`
@@ -118,5 +123,6 @@ or changelog entries.
 - [ ] Architecture-impacting changes have a new or superseding ADR
 - [ ] Domain-boundary or state-flow changes have refreshed diagrams
 - [ ] Any intentional code-doc mismatch is documented explicitly
+- [ ] Every intentional mismatch is recorded in `docs/changelog/v1/divergence-ledger.md`
 - [ ] Core architecture docs were reviewed for drift
 - [ ] No stale diagram or ADR remains that contradicts the implemented behavior

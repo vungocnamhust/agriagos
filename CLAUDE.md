@@ -58,12 +58,12 @@ Phase 2 target: Events → Projection Workers → Role-specific Read Models (BFF
 ```
 agos_app/
 ├── app/
-│   ├── main.py           # FastAPI entrypoint, CORS, router mount
+│   ├── main.py           # FastAPI entrypoint: CorrelationIdMiddleware, ErrorResponse handlers, router mount
 │   ├── api/
 │   │   ├── router.py     # Aggregates 8 route groups under /api/v1/
 │   │   └── routes/       # One file per domain (customers, orders, lots, farm, preorders, views, events, health)
 │   ├── models/           # Pydantic v2 schemas (DTOs, not ORM models)
-│   │   ├── common.py     # Shared: Meta, ErrorResponse, DomainEvent (includes tenantId placeholder)
+│   │   ├── common.py     # Shared: Meta, ErrorResponse, DomainEvent, HealthResponse, DomainEventListResponse
 │   │   └── *.py          # Per-domain schemas
 │   ├── core/
 │   │   ├── codegen.py    # Centralized human-readable code generation (KH-, DT-, ORD-, LOT- formats)
@@ -111,6 +111,13 @@ All endpoints are under `/api/v1/`. The route groups are:
 - **DB-first Phase 1 runtime** — state changes persist to PostgreSQL state tables and append domain events in the same service flow.
 - **One truth, many views** — a single canonical data model; each consumer role sees a different projection.
 - **Idempotency** — the Command Gateway must deduplicate commands before processing, backed by `idempotency_records` in PostgreSQL.
+
+## HTTP Infrastructure (wired in Phase 1)
+
+- **Correlation ID** — `CorrelationIdMiddleware` in `main.py` reads `X-Correlation-ID` from the request header (or generates a UUID) and writes it to `request.state.correlation_id`; echoed in every response header.
+- **Error envelope** — all non-2xx responses use `ErrorResponse { code, message, correlationId }`. Two exception handlers in `main.py` cover `StarletteHTTPException` and `RequestValidationError`. Semantic codes (`CUSTOMER_*`, `ORDER_*`, `LOT_*`, `PREORDER_*`, `FARM_*`, `INVALID_*`) in the HTTPException detail are promoted directly; others map via `_STATUS_CODE_MAP`.
+- **Typed routes** — every route declares an explicit `response_model`. Do not add a route without one.
+- **Health** — `GET /health` returns `HealthResponse { status, service, version, checks }`. When `POSTGRES_WRITE_PATH_ENABLED=true`, `checks.db` reports a live `SELECT 1` result; otherwise `"disabled"`.
 
 ## Design Documentation
 

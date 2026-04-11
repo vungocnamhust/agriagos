@@ -12,11 +12,13 @@ Use this skill after behavior, contract, or architecture changes.
 1. Resolve the owning authority doc through `docs/changelog/v1/architecture/00-source-of-truth-registry.md` before trusting repo-level summaries or code comments.
 2. Classify what changed: route, DTO, event, state machine, schema, or architecture.
 3. Audit only the documents those changes can invalidate.
-4. Prepare the minimum patch set needed to restore accuracy.
-5. Flag when the change should be recorded as an ADR.
+4. If code and docs intentionally diverge, add or update an entry in `docs/changelog/v1/divergence-ledger.md`.
+5. Prepare the minimum patch set needed to restore accuracy.
+6. Flag when the change should be recorded as an ADR.
 
 ## Agri OS Surfaces To Review
 - `docs/changelog/v1/architecture/00-source-of-truth-registry.md`
+- `docs/changelog/v1/divergence-ledger.md`
 - `CLAUDE.md`
 - `system_v1.md`
 - `determistic_layer_spec_v1.md`

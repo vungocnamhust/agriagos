@@ -9,8 +9,11 @@ Audit documentation drift for the described change.
 
 Start by resolving the owning authority doc through `docs/changelog/v1/architecture/00-source-of-truth-registry.md`. Treat repo-level summaries as secondary references only.
 
+If the code intentionally diverges from the current docs, record or update the matching entry in `docs/changelog/v1/divergence-ledger.md` as part of the patch set.
+
 Check at least:
 - `docs/changelog/v1/architecture/00-source-of-truth-registry.md`
+- `docs/changelog/v1/divergence-ledger.md`
 - `CLAUDE.md`
 - `system_v1.md`
 - `determistic_layer_spec_v1.md`

@@ -8,6 +8,8 @@ Use it when writing or updating:
 - architecture docs and ADRs
 - route, DTO, migration, and integration guidance
 
+Use `docs/changelog/v1/divergence-ledger.md` as the central register for intentional code-doc mismatches.
+
 ## Core Rule
 
 Mutable product and architecture facts must come from the changelog documentation set, not from duplicated summaries in instruction files.

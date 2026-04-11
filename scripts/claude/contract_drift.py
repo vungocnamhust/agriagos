@@ -14,10 +14,14 @@ from typing import Any
 MAX_STDIN = 1024 * 1024
 EXIT_BLOCKING_DRIFT = 2
 SOURCE_REGISTRY = Path("docs/changelog/v1/architecture/00-source-of-truth-registry.md")
+DIFFERENCE_LEDGER = Path("docs/changelog/v1/divergence-ledger.md")
+DIFFERENCE_LEDGER_TEXT = str(DIFFERENCE_LEDGER).replace("\\", "/")
 ROUTES_DIR = Path("agos_app/app/api/routes")
 MODELS_DIR = Path("agos_app/app/models")
+CORE_DIR = Path("agos_app/app/core")
 DDL_DIR = Path("docs/changelog/v1/ddl")
 ARCHITECTURE_DIR = Path("docs/changelog/v1/architecture")
+DIAGRAM_DIR = Path("docs/changelog/v1/diagram")
 OPENAPI_DIR = Path("docs/changelog/v1/openapi")
 INSTRUCTIONS_DIR = Path(".github/instructions")
 PROMPTS_DIR = Path(".github/prompts")
@@ -31,7 +35,7 @@ GOVERNANCE_FILES = {
 }
 FORBIDDEN_GOVERNANCE_PATTERNS = (
     re.compile(r"docs[/\\]architecture[/\\]CLAUDE\.md"),
-    re.compile(r"primary source of truth", re.IGNORECASE),
+    re.compile(r"this\s+(?:file|document|page)\s+(?:is|serves as)\s+(?:the\s+)?primary source of truth", re.IGNORECASE),
 )
 REGISTRY_REFERENCE_PATTERNS = (
     re.compile(re.escape(str(SOURCE_REGISTRY))),
@@ -50,6 +54,41 @@ REGISTRY_REQUIRED_SURFACES = (
     Path(".claude/contexts/dev.md"),
     Path(".claude/skills/doc-sync/SKILL.md"),
 )
+DOC_SYNC_LEDGER_SURFACES = (
+    Path(".claude/rules/docs-sync.md"),
+    Path(".github/instructions/docs.instructions.md"),
+    Path(".github/prompts/docs-sync.prompt.md"),
+    Path(".github/skills/docs-sync/SKILL.md"),
+    Path(".claude/skills/doc-sync/SKILL.md"),
+)
+
+CORE_CONTRACT_TARGETS = {
+    "gateway.py": [
+        ARCHITECTURE_DIR / "06-state-transitions.md",
+        ARCHITECTURE_DIR / "05-event-catalog.md",
+        DIAGRAM_DIR / "05-state-machines-croptask-lot-order.md",
+    ],
+    "events.py": [
+        ARCHITECTURE_DIR / "05-event-catalog.md",
+        ARCHITECTURE_DIR / "naming-conventions.md",
+        DIAGRAM_DIR / "04-event-storming-event-map.md",
+    ],
+}
+
+CORE_CONTRACT_DIFF_PATTERNS = {
+    "gateway.py": (
+        re.compile(r"\b(?:ORDER_TRANSITIONS|LOT_TRANSITIONS|PREORDER_TRANSITIONS)\b"),
+        re.compile(r"\b(?:LEGACY_ORDER_STATES|LEGACY_PREORDER_STATES)\b"),
+        re.compile(r"\b(?:OrderStatus|LotStatus|PreorderStatus)\."),
+        re.compile(r"\b(?:assert_order_transition|assert_lot_transition|assert_preorder_transition)\b"),
+        re.compile(r"\b(?:_normalize_legacy_order_state|_normalize_legacy_preorder_state)\b"),
+    ),
+    "events.py": (
+        re.compile(r"\b(?:emit|_to_event_type)\b"),
+        re.compile(r"\b(?:eventName|eventType|aggregateType|aggregateId|occurredAt|actorType|actorId|correlationId|source|tenantId|payload)\b"),
+        re.compile(r"\b(?:dotted lowercase|PascalCase)\b", re.IGNORECASE),
+    ),
+}
 
 ARCHITECTURE_TARGETS = {
     "routes": [
@@ -69,6 +108,7 @@ ARCHITECTURE_TARGETS = {
 }
 
 ROUTE_TO_MODEL = {
+    "health": None,
     "customers": "customers.py",
     "preorders": "preorders.py",
     "orders": "orders.py",
@@ -132,10 +172,13 @@ def normalize_path(value: str | None, repo_root: Path) -> Path | None:
     if candidate.is_absolute():
         try:
             return candidate.resolve().relative_to(repo_root)
-        except ValueError:
+        except (OSError, ValueError):
             return None
 
-    return Path(str(candidate).replace("\\", "/"))
+    normalized = Path(str(candidate).replace("\\", "/"))
+    if ".." in normalized.parts:
+        return None
+    return normalized
 
 
 def classify(relative_path: Path | None) -> Surface | None:
@@ -158,7 +201,18 @@ def classify(relative_path: Path | None) -> Surface | None:
     if model_tail and model_tail.suffix == ".py":
         return Surface("schema", normalized, model_tail.stem)
 
-    if normalized.match("alembic/versions/*.py"):
+    try:
+        core_tail = normalized.relative_to(CORE_DIR)
+    except ValueError:
+        core_tail = None
+    if core_tail and core_tail.name in CORE_CONTRACT_TARGETS:
+        return Surface("core-contract", normalized, core_tail.name)
+
+    try:
+        alembic_tail = normalized.relative_to(Path("alembic/versions"))
+    except ValueError:
+        alembic_tail = None
+    if alembic_tail and alembic_tail.suffix == ".py":
         return Surface("migration", normalized)
 
     try:
@@ -167,6 +221,9 @@ def classify(relative_path: Path | None) -> Surface | None:
         ddl_tail = None
     if ddl_tail and ddl_tail.suffix == ".sql":
         return Surface("migration", normalized)
+
+    if normalized == SOURCE_REGISTRY:
+        return Surface("governance-registry", normalized)
 
     try:
         architecture_tail = normalized.relative_to(ARCHITECTURE_DIR)
@@ -184,9 +241,6 @@ def classify(relative_path: Path | None) -> Surface | None:
 
     if normalized in GOVERNANCE_FILES:
         return Surface("governance", normalized)
-
-    if normalized == SOURCE_REGISTRY:
-        return Surface("governance-registry", normalized)
 
     for base in (INSTRUCTIONS_DIR, PROMPTS_DIR, SKILLS_DIR, CLAUDE_RULES_DIR, CLAUDE_CONTEXTS_DIR):
         try:
@@ -232,7 +286,7 @@ def list_changed_paths(repo_root: Path) -> set[Path]:
             index += 1
 
         if path_text:
-            changed.add(Path(path_text))
+            changed.add(Path(str(Path(path_text)).replace("\\", "/")))
 
     return changed
 
@@ -262,6 +316,54 @@ def openapi_targets(repo_root: Path) -> list[Path]:
     return [OPENAPI_DIR / "openapi.yaml"]
 
 
+def changed_diff_lines(repo_root: Path, relative_path: Path) -> list[str]:
+    result = subprocess.run(
+        ["git", "diff", "--no-ext-diff", "--unified=0", "--", str(relative_path)],
+        cwd=repo_root,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode not in {0, 1}:
+        print(
+            f"[contract-drift] WARNING: git diff failed for {relative_path} with exit code {result.returncode}; assuming contract-sensitive change.",
+            file=sys.stderr,
+        )
+        return ["<diff-unavailable>"]
+
+    changed_lines: list[str] = []
+    for line in result.stdout.decode("utf-8", errors="replace").splitlines():
+        if not line or line.startswith(("diff ", "index ", "@@", "+++", "---")):
+            continue
+        if line[0] not in {"+", "-"}:
+            continue
+        content = line[1:].strip()
+        if not content or content.startswith("#"):
+            continue
+        if content in {'"""', "'''"}:
+            continue
+        if content.startswith(('"""', "'''")):
+            continue
+        changed_lines.append(content)
+    return changed_lines
+
+
+def core_contract_requires_sync(surface: Surface, repo_root: Path) -> bool:
+    if not surface.domain:
+        return True
+
+    patterns = CORE_CONTRACT_DIFF_PATTERNS.get(surface.domain)
+    if not patterns:
+        return True
+
+    for line in changed_diff_lines(repo_root, surface.relative_path):
+        if line == "<diff-unavailable>":
+            return True
+        if any(pattern.search(line) for pattern in patterns):
+            return True
+
+    return False
+
+
 def route_model_path(domain: str | None) -> Path | None:
     if not domain:
         return None
@@ -280,7 +382,7 @@ def route_path(domain: str | None) -> Path | None:
 def code_surfaces_changed(changed_paths: set[Path]) -> bool:
     for candidate in changed_paths:
         surface = classify(candidate)
-        if surface and surface.kind in {"route", "schema", "migration"}:
+        if surface and surface.kind in {"route", "schema", "migration", "core-contract"}:
             return True
     return False
 
@@ -290,7 +392,7 @@ def read_text_file(path: Path) -> str:
         return path.read_text(encoding="utf-8")
     except FileNotFoundError:
         return ""
-    except OSError as error:
+    except (OSError, UnicodeDecodeError) as error:
         print(f"[contract-drift] WARNING: failed to read {path}: {error}", file=sys.stderr)
         return ""
 
@@ -306,6 +408,9 @@ def governance_missing_items(surface: Surface, repo_root: Path) -> list[str]:
 
     if surface.relative_path in REGISTRY_REQUIRED_SURFACES and not has_registry_reference(normalized_content):
         missing.append(f"add reference to {SOURCE_REGISTRY}")
+
+    if surface.relative_path in DOC_SYNC_LEDGER_SURFACES and DIFFERENCE_LEDGER_TEXT not in normalized_content:
+        missing.append(f"add reference to {DIFFERENCE_LEDGER}")
 
     for forbidden in FORBIDDEN_GOVERNANCE_PATTERNS:
         if forbidden.search(normalized_content):
@@ -365,6 +470,15 @@ def missing_items(surface: Surface, changed_paths: set[Path], repo_root: Path) -
             missing.append(str(MODELS_DIR))
         return missing
 
+    if surface.kind == "core-contract":
+        if not core_contract_requires_sync(surface, repo_root):
+            return missing
+        for path in CORE_CONTRACT_TARGETS.get(surface.domain or "", []):
+            if path in changed_paths:
+                continue
+            missing.append(str(path))
+        return missing
+
     if surface.kind == "architecture":
         if not code_surfaces_changed(changed_paths):
             return []
@@ -374,6 +488,8 @@ def missing_items(surface: Surface, changed_paths: set[Path], repo_root: Path) -
             missing.append(str(MODELS_DIR))
         if not changed_in_directory(changed_paths, DDL_DIR):
             missing.append(str(DDL_DIR))
+        if not changed_in_directory(changed_paths, CORE_DIR):
+            missing.append(str(CORE_DIR))
         return missing
 
     if surface.kind == "governance":
@@ -403,6 +519,7 @@ def build_warning(surface: Surface, missing: list[str]) -> str:
     titles = {
         "route": "Route changed without synced contract artifacts",
         "schema": "DTO changed without synced contract artifacts",
+        "core-contract": "Core contract surface changed without synced docs artifacts",
         "migration": "Migration changed without synced contract artifacts",
         "architecture": "Architecture docs changed without synced code artifacts",
         "governance": "Governance surface changed without docs-first authority guardrails",
@@ -432,7 +549,10 @@ def main() -> int:
     file_path = tool_input.get("file_path") or tool_input.get("file")
     surface = classify(normalize_path(str(file_path) if file_path else None, repo_root))
 
-    if surface is None or surface.kind not in {"route", "schema", "migration", "architecture", "governance", "governance-registry"}:
+    if surface and surface.kind == "openapi":
+        return 0
+
+    if surface is None or surface.kind not in {"route", "schema", "core-contract", "migration", "architecture", "governance", "governance-registry"}:
         return 0
 
     changed_paths = list_changed_paths(repo_root)
