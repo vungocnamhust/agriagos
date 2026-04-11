@@ -22,7 +22,7 @@ Nếu frontend hoặc agent query raw tables trực tiếp, hệ sẽ khó kiể
 - customer_360_view
 - available_lots_board
 - pending_fulfillment_board
-- farm_summary_view
+- farm_summary_board
 - qc_board_view (khi có)
 
 Frontend và agent nên dùng views hoặc query APIs tương ứng thay vì đọc bảng thô.

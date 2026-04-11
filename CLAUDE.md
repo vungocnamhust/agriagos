@@ -13,14 +13,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 cd agos_app
 pip install -r requirements.txt
 
+# Install test/dev dependencies when working on pytest or TestClient coverage
+pip install -r requirements-dev.txt
+
 # Run the API server
 uvicorn app.main:app --reload
+
+# Run the PostgreSQL-backed customer_360 projection test
+DATABASE_URL=postgresql+psycopg://agriagos:agriagos@127.0.0.1:5436/agriagos \
+pytest tests/test_customer_360_view_integration.py -m postgres_integration
 
 # API is available at http://localhost:8000
 # Swagger UI at http://localhost:8000/docs
 ```
 
-Ruff is used for linting (`PYENV_VERSION=agos_3.10.14 ruff check agos_app/`). No test framework is configured yet. PostgreSQL migration scaffolding lives under `agos_app/alembic/`. The service layer now defaults to PostgreSQL when `POSTGRES_WRITE_PATH_ENABLED=true` and falls back to in-memory only for local simulation or tests.
+Ruff is used for linting (`PYENV_VERSION=agos_3.10.14 ruff check agos_app/`). Runtime dependencies stay in `agos_app/requirements.txt`; pytest/TestClient dependencies now live in `agos_app/requirements-dev.txt`. Focused pytest coverage for deterministic-core write flows and `/views` read-model slices lives under `agos_app/tests/`, including a PostgreSQL-backed integration test for `customer_360_view`. PostgreSQL migration scaffolding lives under `agos_app/alembic/`. The service layer now defaults to PostgreSQL when `POSTGRES_WRITE_PATH_ENABLED=true` and falls back to in-memory only for local simulation or tests.
 
 ## Architecture
 
@@ -46,12 +53,17 @@ Command → Command Gateway (validate, RBAC, idempotency check)
         → Audit / future projections
 ```
 
-Phase 1 runtime uses direct PostgreSQL writes plus event append. Projection workers remain a documented target architecture, not the default execution path.
+Phase 1 runtime uses direct PostgreSQL writes plus event append. For write commands on the PostgreSQL path, state persistence, domain event append, audit decision logging, and idempotency snapshotting now share one transaction boundary. Projection workers remain a documented target architecture, not the default execution path.
 
 ### Read Path
 
 Phase 1: direct PostgreSQL reads, SQL views, and service-shaped responses.
 Phase 2 target: Events → Projection Workers → Role-specific Read Models (BFF views)
+
+Current Phase 1 read-model reality:
+- `available_lots_board`, `pending_fulfillment_board`, and `farm_summary_board` are direct PostgreSQL views exposed through `/api/v1/views/*`
+- `customer_360_view` is now a nested JSON detail projection that matches the live `Customer360View` contract on the PostgreSQL path
+- projection workers are still deferred; request-time freshness comes from direct SQL/view reads
 
 ### Code Layout
 

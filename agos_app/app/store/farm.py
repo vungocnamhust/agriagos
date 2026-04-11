@@ -5,9 +5,13 @@ from typing import Any
 
 from sqlalchemy import text
 
-from app.store._db import SessionLocal, _to_float, is_enabled
+from app.store import _db
 
-__all__ = ["fetch_plots", "fetch_crop_cycles"]
+__all__ = ["fetch_plots", "fetch_crop_cycles", "is_enabled"]
+
+
+def is_enabled() -> bool:
+    return _db.is_enabled()
 
 
 def _normalize_growth_stage(value: str | None) -> str | None:
@@ -20,7 +24,7 @@ def fetch_plots() -> list[dict[str, Any]]:
     if not is_enabled():
         return []
 
-    with SessionLocal() as session:
+    with _db.read_session() as session:
         rows = session.execute(
             text(
                 """
@@ -44,7 +48,7 @@ def fetch_plots() -> list[dict[str, Any]]:
             "plotCode": row["plot_code"],
             "name": row["name"],
             "locationText": row["location_text"],
-            "areaValue": _to_float(row["area_value"]),
+            "areaValue": _db.to_float(row["area_value"]),
             "areaUnit": row["area_unit"],
             "status": row["status"],
         }
@@ -69,7 +73,7 @@ def fetch_crop_cycles(plot_id: str | None, status: str | None) -> list[dict[str,
     if where_clauses:
         where_sql = "WHERE " + " AND ".join(where_clauses)
 
-    with SessionLocal() as session:
+    with _db.read_session() as session:
         rows = session.execute(
             text(
                 f"""

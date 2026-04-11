@@ -530,8 +530,13 @@ Phase đầu nên có:
 - `customer_360_view`
 - `available_lots_board`
 - `pending_fulfillment_board`
-- `farm_summary_view`
+- `farm_summary_board`
 - `preorder_balance_view`
+
+Current Phase 1 runtime đã kéo lane này lên sớm theo hướng SQL-views-first:
+- `customer_360_view` là detail projection dạng nested JSON để match `Customer360View` trên PostgreSQL path
+- `available_lots_board`, `pending_fulfillment_board`, và `farm_summary_board` đang là operational boards trực tiếp phục vụ `/api/v1/views/*`
+- projection workers vẫn chưa là runtime mặc định; freshness hiện tại đến từ read trực tiếp vào SQL view và canonical tables
 
 Phase sau có thể thêm:
 - `ops_metrics_view`

@@ -7,7 +7,7 @@ from typing import Any
 
 from sqlalchemy import text
 
-from app.store._db import SessionLocal, is_enabled
+from app.store import _db
 
 
 def _json_default(value: Any) -> Any:
@@ -20,10 +20,10 @@ def _json_default(value: Any) -> Any:
 
 
 def fetch_response(idempotency_key: str) -> Any | None:
-    if not is_enabled():
+    if not _db.is_enabled():
         return None
 
-    with SessionLocal() as session:
+    with _db.read_session() as session:
         row = session.execute(
             text(
                 """
@@ -41,39 +41,42 @@ def fetch_response(idempotency_key: str) -> Any | None:
     return row["response_snapshot"]
 
 
-def save_response(idempotency_key: str, result: Any) -> None:
-    if not is_enabled():
+def save_response(
+    idempotency_key: str,
+    result: Any,
+    *,
+    operation_name: str = "core.write",
+    request_hash: str | None = None,
+) -> None:
+    if not _db.is_enabled():
         return
 
-    with SessionLocal() as session:
-        try:
-            session.execute(
-                text(
-                    """
-                    INSERT INTO idempotency_records (
-                        idempotency_key,
-                        operation_name,
-                        request_hash,
-                        response_snapshot,
-                        expires_at
-                    ) VALUES (
-                        :idempotency_key,
-                        :operation_name,
-                        :request_hash,
-                        CAST(:response_snapshot AS jsonb),
-                        now() + interval '24 hours'
-                    )
-                    ON CONFLICT (idempotency_key) DO NOTHING
-                    """
-                ),
-                {
-                    "idempotency_key": idempotency_key,
-                    "operation_name": "core.write",
-                    "request_hash": idempotency_key,
-                    "response_snapshot": json.dumps(result, default=_json_default),
-                },
-            )
+    with _db.write_session() as (session, should_commit):
+        session.execute(
+            text(
+                """
+                INSERT INTO idempotency_records (
+                    idempotency_key,
+                    operation_name,
+                    request_hash,
+                    response_snapshot,
+                    expires_at
+                ) VALUES (
+                    :idempotency_key,
+                    :operation_name,
+                    :request_hash,
+                    CAST(:response_snapshot AS jsonb),
+                    now() + interval '24 hours'
+                )
+                ON CONFLICT (idempotency_key) DO NOTHING
+                """
+            ),
+            {
+                "idempotency_key": idempotency_key,
+                "operation_name": operation_name,
+                "request_hash": request_hash or idempotency_key,
+                "response_snapshot": json.dumps(result, default=_json_default),
+            },
+        )
+        if should_commit:
             session.commit()
-        except Exception:
-            session.rollback()
-            raise

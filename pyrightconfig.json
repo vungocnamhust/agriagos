@@ -1,0 +1,16 @@
+{
+  "include": [
+    "agos_app/app",
+    "agos_app/tests"
+  ],
+  "executionEnvironments": [
+    {
+      "root": "agos_app",
+      "extraPaths": [
+        "agos_app"
+      ]
+    }
+  ],
+  "venvPath": ".",
+  "venv": ".venv"
+}

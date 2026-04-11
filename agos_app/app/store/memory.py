@@ -6,9 +6,11 @@ Replace with a real DB + event store in Phase 2.
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any
+import uuid
 
 # ── Event store (append-only) ─────────────────────────────────────────────────
 _event_log: list[dict[str, Any]] = []
+_audit_log: list[dict[str, Any]] = []
 
 # ── Read model projections ────────────────────────────────────────────────────
 _customers: dict[str, dict[str, Any]] = {}
@@ -32,8 +34,36 @@ def append_event(event: dict[str, Any]) -> None:
     _event_log.append(event)
 
 
+def list_events() -> list[dict[str, Any]]:
+    return list(_event_log)
+
+
 def list_customers() -> list[dict[str, Any]]:
     return list(_customers.values())
+
+
+def list_customer_preferences(customer_id: str) -> list[dict[str, Any]]:
+    return list(_preferences.get(customer_id, []))
+
+
+def list_preorders() -> list[dict[str, Any]]:
+    return list(_preorders.values())
+
+
+def list_orders() -> list[dict[str, Any]]:
+    return list(_orders.values())
+
+
+def list_lots() -> list[dict[str, Any]]:
+    return list(_lots.values())
+
+
+def list_plots() -> list[dict[str, Any]]:
+    return list(_plots.values())
+
+
+def list_crop_cycles() -> list[dict[str, Any]]:
+    return list(_crop_cycles.values())
 
 
 def get_customer(customer_id: str) -> dict[str, Any] | None:
@@ -70,6 +100,42 @@ def get_or_create_lot(lot_id: str, fallback: dict[str, Any]) -> dict[str, Any]:
     return _lots[lot_id]
 
 
+def get_order(order_id: str) -> dict[str, Any] | None:
+    return _orders.get(order_id)
+
+
+def save_order(order_id: str, record: dict[str, Any]) -> None:
+    _orders[order_id] = record
+
+
+def get_preorder(preorder_id: str) -> dict[str, Any] | None:
+    return _preorders.get(preorder_id)
+
+
+def save_preorder(preorder_id: str, record: dict[str, Any]) -> None:
+    _preorders[preorder_id] = record
+
+
+def has_customer(customer_id: str) -> bool:
+    return customer_id in _customers
+
+
+def get_allocations(order_id: str) -> list[dict[str, Any]]:
+    return list(_allocations.get(order_id, []))
+
+
+def save_allocations(order_id: str, allocations: list[dict[str, Any]]) -> None:
+    _allocations[order_id] = list(allocations)
+
+
+def save_plot(plot_id: str, record: dict[str, Any]) -> None:
+    _plots[plot_id] = record
+
+
+def save_crop_cycle(crop_cycle_id: str, record: dict[str, Any]) -> None:
+    _crop_cycles[crop_cycle_id] = record
+
+
 def get_lot_evidence(lot_id: str) -> list[dict[str, Any]]:
     return list(_lots.get(lot_id, {}).get("evidence", []))
 
@@ -97,6 +163,8 @@ def query_events(
     aggregate_id: str | None = None,
     event_name: str | None = None,
     correlation_id: str | None = None,
+    causation_id: str | None = None,
+    idempotency_key: str | None = None,
 ) -> list[dict[str, Any]]:
     result = _event_log
     if aggregate_type:
@@ -107,7 +175,35 @@ def query_events(
         result = [e for e in result if e.get("eventName") == event_name]
     if correlation_id:
         result = [e for e in result if e.get("correlationId") == correlation_id]
+    if causation_id:
+        result = [e for e in result if e.get("causationId") == causation_id]
+    if idempotency_key:
+        result = [e for e in result if e.get("idempotencyKey") == idempotency_key]
     return result
+
+
+def append_audit_log(entry: dict[str, Any]) -> dict[str, Any]:
+    audit_entry = {
+        "auditId": entry.get("auditId", str(uuid.uuid4())),
+        "actorId": entry.get("actorId"),
+        "actorRole": entry.get("actorRole"),
+        "actionName": entry["actionName"],
+        "targetType": entry["targetType"],
+        "targetId": entry["targetId"],
+        "decision": entry["decision"],
+        "reasonCode": entry.get("reasonCode"),
+        "beforeSnapshot": entry.get("beforeSnapshot"),
+        "afterSnapshot": entry.get("afterSnapshot"),
+        "metadata": dict(entry.get("metadata", {})),
+        "correlationId": entry.get("correlationId"),
+        "createdAt": entry.get("createdAt", now_iso()),
+    }
+    _audit_log.append(audit_entry)
+    return audit_entry
+
+
+def list_audit_logs() -> list[dict[str, Any]]:
+    return list(_audit_log)
 
 
 def is_idempotent(key: str) -> bool:
@@ -120,3 +216,17 @@ def get_idempotent_result(key: str) -> Any:
 
 def set_idempotent_result(key: str, result: Any) -> None:
     _idempotency_cache[key] = result
+
+
+def reset_state() -> None:
+    _event_log.clear()
+    _audit_log.clear()
+    _customers.clear()
+    _preferences.clear()
+    _preorders.clear()
+    _orders.clear()
+    _allocations.clear()
+    _lots.clear()
+    _plots.clear()
+    _crop_cycles.clear()
+    _idempotency_cache.clear()

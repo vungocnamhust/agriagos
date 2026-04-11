@@ -5,7 +5,7 @@ from typing import Any
 
 from sqlalchemy import text
 
-from app.store._db import SessionLocal, _to_float, is_enabled
+from app.store import _db
 
 __all__ = [
     "upsert_preorder",
@@ -14,11 +14,36 @@ __all__ = [
 ]
 
 
+def _float_value(value: Any) -> float:
+    if value is None:
+        return 0.0
+    return float(value)
+
+
+def _preorder_record_from_row(row: Any) -> dict[str, Any]:
+    return {
+        "preorderId": str(row["preorder_id"]),
+        "tenantId": row["tenant_id"],
+        "preorderCode": row["preorder_code"],
+        "customerId": str(row["customer_id"]),
+        "productSkuId": str(row["product_sku_id"]),
+        "committedQty": _float_value(row["committed_qty"]),
+        "allocatedQty": _float_value(row["allocated_qty"]),
+        "deliveredQty": _float_value(row["delivered_qty"]),
+        "remainingQty": _float_value(row["remaining_qty"]),
+        "deliveryCadence": row["delivery_cadence"],
+        "depositAmount": _float_value(row["deposit_amount"]) if row["deposit_amount"] is not None else None,
+        "notes": row["notes"],
+        "status": row["status"],
+        "startDate": row["start_date"].isoformat() if row["start_date"] else None,
+    }
+
+
 def upsert_preorder(record: dict[str, Any]) -> None:
-    if not is_enabled():
+    if not _db.is_enabled():
         return
 
-    with SessionLocal() as session:
+    with _db.write_session() as (session, should_commit):
         session.execute(
             text(
                 """
@@ -84,14 +109,15 @@ def upsert_preorder(record: dict[str, Any]) -> None:
                 "tenant_id": record.get("tenantId", "default"),
             },
         )
-        session.commit()
+        if should_commit:
+            session.commit()
 
 
 def fetch_preorder(preorder_id: str) -> dict[str, Any] | None:
-    if not is_enabled():
+    if not _db.is_enabled():
         return None
 
-    with SessionLocal() as session:
+    with _db.read_session() as session:
         row = session.execute(
             text(
                 """
@@ -120,22 +146,7 @@ def fetch_preorder(preorder_id: str) -> dict[str, Any] | None:
     if row is None:
         return None
 
-    return {
-        "preorderId": str(row["preorder_id"]),
-        "tenantId": row["tenant_id"],
-        "preorderCode": row["preorder_code"],
-        "customerId": str(row["customer_id"]),
-        "productSkuId": str(row["product_sku_id"]),
-        "committedQty": _to_float(row["committed_qty"]),
-        "allocatedQty": _to_float(row["allocated_qty"]),
-        "deliveredQty": _to_float(row["delivered_qty"]),
-        "remainingQty": _to_float(row["remaining_qty"]),
-        "deliveryCadence": row["delivery_cadence"],
-        "depositAmount": _to_float(row["deposit_amount"]) if row["deposit_amount"] is not None else None,
-        "notes": row["notes"],
-        "status": row["status"],
-        "startDate": row["start_date"].isoformat() if row["start_date"] else None,
-    }
+    return _preorder_record_from_row(row)
 
 
 def increment_delivered_qty_atomic(preorder_id: str, qty_increment: float) -> dict[str, Any] | None:
@@ -144,11 +155,11 @@ def increment_delivered_qty_atomic(preorder_id: str, qty_increment: float) -> di
     This is the single SSoT path for updating preorder delivered quantity.
     Do NOT update preorder quantities directly from orders.py — always use this function.
     """
-    if not is_enabled():
+    if not _db.is_enabled():
         return None
 
-    with SessionLocal() as session:
-        session.execute(
+    with _db.write_session() as (session, should_commit):
+        row = session.execute(
             text(
                 """
                 UPDATE preorders
@@ -161,13 +172,31 @@ def increment_delivered_qty_atomic(preorder_id: str, qty_increment: float) -> di
                     END,
                     updated_at = now()
                 WHERE preorder_id = :preorder_id
+                RETURNING
+                    preorder_id,
+                    tenant_id,
+                    preorder_code,
+                    customer_id,
+                    product_sku_id,
+                    committed_qty,
+                    allocated_qty,
+                    delivered_qty,
+                    remaining_qty,
+                    delivery_cadence,
+                    deposit_amount,
+                    notes,
+                    status,
+                    start_date
                 """
             ),
             {
                 "preorder_id": preorder_id,
                 "qty_increment": qty_increment,
             },
-        )
-        session.commit()
+        ).mappings().first()
+        if should_commit:
+            session.commit()
 
-    return fetch_preorder(preorder_id)
+    if row is None:
+        return None
+    return _preorder_record_from_row(row)

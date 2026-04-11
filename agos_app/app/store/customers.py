@@ -7,7 +7,7 @@ from typing import Any
 
 from sqlalchemy import text
 
-from app.store._db import SessionLocal, _to_float, is_enabled
+from app.store import _db
 
 __all__ = [
     "customer_code_exists",
@@ -22,10 +22,10 @@ __all__ = [
 
 
 def customer_exists(customer_id: str) -> bool:
-    if not is_enabled():
+    if not _db.is_enabled():
         return False
 
-    with SessionLocal() as session:
+    with _db.read_session() as session:
         row = session.execute(
             text("SELECT 1 FROM customers WHERE customer_id = :customer_id"),
             {"customer_id": customer_id},
@@ -34,10 +34,10 @@ def customer_exists(customer_id: str) -> bool:
 
 
 def customer_code_exists(customer_code: str) -> bool:
-    if not is_enabled():
+    if not _db.is_enabled():
         return False
 
-    with SessionLocal() as session:
+    with _db.read_session() as session:
         row = session.execute(
             text("SELECT 1 FROM customers WHERE customer_code = :customer_code"),
             {"customer_code": customer_code},
@@ -46,10 +46,10 @@ def customer_code_exists(customer_code: str) -> bool:
 
 
 def phone_exists(phone: str) -> bool:
-    if not is_enabled():
+    if not _db.is_enabled():
         return False
 
-    with SessionLocal() as session:
+    with _db.read_session() as session:
         row = session.execute(
             text("SELECT 1 FROM customers WHERE phone = :phone"),
             {"phone": phone},
@@ -57,78 +57,81 @@ def phone_exists(phone: str) -> bool:
     return row is not None
 
 
+def _float_value(value: Any) -> float:
+    if value is None:
+        return 0.0
+    return float(value)
+
+
 def upsert_customer(record: dict[str, Any]) -> None:
     """Upsert a customer record. No-op if postgres is disabled."""
-    if not is_enabled():
+    if not _db.is_enabled():
         return
 
-    with SessionLocal() as session:
-        try:
-            session.execute(
-                text(
-                    """
-                    INSERT INTO customers (
-                        customer_id,
-                        customer_code,
-                        full_name,
-                        phone,
-                        channel_source,
-                        default_address,
-                        district,
-                        province,
-                        tags,
-                        notes,
-                        status,
-                        tenant_id,
-                        updated_at
-                    ) VALUES (
-                        :customer_id,
-                        :customer_code,
-                        :full_name,
-                        :phone,
-                        :channel_source,
-                        :default_address,
-                        :district,
-                        :province,
-                        CAST(:tags AS jsonb),
-                        :notes,
-                        :status,
-                        :tenant_id,
-                        now()
-                    )
-                    ON CONFLICT (customer_id) DO UPDATE SET
-                        customer_code = EXCLUDED.customer_code,
-                        full_name = EXCLUDED.full_name,
-                        phone = EXCLUDED.phone,
-                        channel_source = EXCLUDED.channel_source,
-                        default_address = EXCLUDED.default_address,
-                        district = EXCLUDED.district,
-                        province = EXCLUDED.province,
-                        tags = EXCLUDED.tags,
-                        notes = EXCLUDED.notes,
-                        status = EXCLUDED.status,
-                        updated_at = now()
-                    """
-                ),
-                {
-                    "customer_id": record["customerId"],
-                    "customer_code": record["customerCode"],
-                    "full_name": record["fullName"],
-                    "phone": record["phone"],
-                    "channel_source": record.get("channelSource"),
-                    "default_address": record.get("defaultAddress"),
-                    "district": record.get("district"),
-                    "province": record.get("province"),
-                    "tags": json.dumps(record.get("tags", [])),
-                    "notes": record.get("notes"),
-                    "status": record["status"],
-                    "tenant_id": record.get("tenantId", "default"),
-                },
-            )
+    with _db.write_session() as (session, should_commit):
+        session.execute(
+            text(
+                """
+                INSERT INTO customers (
+                    customer_id,
+                    customer_code,
+                    full_name,
+                    phone,
+                    channel_source,
+                    default_address,
+                    district,
+                    province,
+                    tags,
+                    notes,
+                    status,
+                    tenant_id,
+                    updated_at
+                ) VALUES (
+                    :customer_id,
+                    :customer_code,
+                    :full_name,
+                    :phone,
+                    :channel_source,
+                    :default_address,
+                    :district,
+                    :province,
+                    CAST(:tags AS jsonb),
+                    :notes,
+                    :status,
+                    :tenant_id,
+                    now()
+                )
+                ON CONFLICT (customer_id) DO UPDATE SET
+                    customer_code = EXCLUDED.customer_code,
+                    full_name = EXCLUDED.full_name,
+                    phone = EXCLUDED.phone,
+                    channel_source = EXCLUDED.channel_source,
+                    default_address = EXCLUDED.default_address,
+                    district = EXCLUDED.district,
+                    province = EXCLUDED.province,
+                    tags = EXCLUDED.tags,
+                    notes = EXCLUDED.notes,
+                    status = EXCLUDED.status,
+                    updated_at = now()
+                """
+            ),
+            {
+                "customer_id": record["customerId"],
+                "customer_code": record["customerCode"],
+                "full_name": record["fullName"],
+                "phone": record["phone"],
+                "channel_source": record.get("channelSource"),
+                "default_address": record.get("defaultAddress"),
+                "district": record.get("district"),
+                "province": record.get("province"),
+                "tags": json.dumps(record.get("tags", [])),
+                "notes": record.get("notes"),
+                "status": record["status"],
+                "tenant_id": record.get("tenantId", "default"),
+            },
+        )
+        if should_commit:
             session.commit()
-        except Exception:
-            session.rollback()
-            raise
 
 
 def list_customers(
@@ -136,7 +139,7 @@ def list_customers(
     q: str | None,
     tag: str | None,
 ) -> list[dict[str, Any]]:
-    if not is_enabled():
+    if not _db.is_enabled():
         return []
 
     conditions: list[str] = []
@@ -155,7 +158,7 @@ def list_customers(
     if conditions:
         where_clause = "WHERE " + " AND ".join(conditions)
 
-    with SessionLocal() as session:
+    with _db.read_session() as session:
         rows = session.execute(
             text(
                 f"""
@@ -190,10 +193,10 @@ def list_customers(
 
 
 def fetch_customer(customer_id: str) -> dict[str, Any] | None:
-    if not is_enabled():
+    if not _db.is_enabled():
         return None
 
-    with SessionLocal() as session:
+    with _db.read_session() as session:
         row = session.execute(
             text(
                 """
@@ -230,10 +233,10 @@ def fetch_customer(customer_id: str) -> dict[str, Any] | None:
 
 
 def fetch_customer_preferences(customer_id: str) -> list[dict[str, Any]]:
-    if not is_enabled():
+    if not _db.is_enabled():
         return []
 
-    with SessionLocal() as session:
+    with _db.read_session() as session:
         rows = session.execute(
             text(
                 """
@@ -251,14 +254,14 @@ def fetch_customer_preferences(customer_id: str) -> list[dict[str, Any]]:
             "preferenceType": row["preference_type"],
             "preferenceValue": row["preference_value"],
             "source": row["source"],
-            "confidenceLevel": _to_float(row["confidence_level"]),
+            "confidenceLevel": _float_value(row["confidence_level"]),
         }
         for row in rows
     ]
 
 
 def upsert_customer_preference(customer_id: str, preference: dict[str, Any]) -> None:
-    if not is_enabled():
+    if not _db.is_enabled():
         return
 
     params = {
@@ -271,55 +274,50 @@ def upsert_customer_preference(customer_id: str, preference: dict[str, Any]) -> 
         "confidence_level": preference.get("confidenceLevel", 1.0),
     }
 
-    with SessionLocal() as session:
-        try:
-            updated = session.execute(
+    with _db.write_session() as (session, should_commit):
+        updated = session.execute(
+            text(
+                """
+                UPDATE customer_preferences
+                SET
+                    preference_value = :preference_value,
+                    source = :source,
+                    confidence_level = :confidence_level,
+                    updated_at = now()
+                WHERE customer_id = :customer_id
+                  AND preference_type = :preference_type
+                """
+            ),
+            params,
+        )
+        if getattr(updated, "rowcount", 0) == 0:
+            session.execute(
                 text(
                     """
-                    UPDATE customer_preferences
-                    SET
-                        preference_value = :preference_value,
-                        source = :source,
-                        confidence_level = :confidence_level,
-                        updated_at = now()
-                    WHERE customer_id = :customer_id
-                      AND preference_type = :preference_type
+                    INSERT INTO customer_preferences (
+                        preference_id,
+                        tenant_id,
+                        customer_id,
+                        preference_type,
+                        preference_value,
+                        source,
+                        confidence_level,
+                        updated_at
+                    ) VALUES (
+                        :preference_id,
+                        :tenant_id,
+                        :customer_id,
+                        :preference_type,
+                        :preference_value,
+                        :source,
+                        :confidence_level,
+                        now()
+                    )
                     """
                 ),
                 params,
             )
-            if updated.rowcount == 0:
-                session.execute(
-                    text(
-                        """
-                        INSERT INTO customer_preferences (
-                            preference_id,
-                            tenant_id,
-                            customer_id,
-                            preference_type,
-                            preference_value,
-                            source,
-                            confidence_level,
-                            updated_at
-                        ) VALUES (
-                            :preference_id,
-                            :tenant_id,
-                            :customer_id,
-                            :preference_type,
-                            :preference_value,
-                            :source,
-                            :confidence_level,
-                            now()
-                        )
-                        """
-                    ),
-                    params,
-                )
+        if should_commit:
             session.commit()
-        except Exception:
-            session.rollback()
-            raise
 
 
-# Suppress unused import warning — _to_float imported for consistency across store modules
-_ = _to_float

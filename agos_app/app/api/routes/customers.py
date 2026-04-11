@@ -1,5 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
+from app.api.routes._meta import apply_request_correlation
 from app.models.customers import (
     CreateCustomerRequest,
     CustomerDetail,
@@ -14,8 +15,8 @@ router = APIRouter()
 
 
 @router.post("", response_model=CustomerResponse, status_code=201)
-def create_customer(payload: CreateCustomerRequest) -> CustomerResponse:
-    return svc.create_customer(payload)
+def create_customer(request: Request, payload: CreateCustomerRequest) -> CustomerResponse:
+    return svc.create_customer(apply_request_correlation(request, payload))
 
 
 @router.get("", response_model=CustomerListResponse)
@@ -35,6 +36,7 @@ def get_customer(customer_id: str) -> CustomerDetail:
 @router.post("/{customer_id}/preferences", response_model=PreferenceResponse)
 def upsert_customer_preference(
     customer_id: str,
+    request: Request,
     payload: UpsertPreferenceRequest,
 ) -> PreferenceResponse:
-    return svc.upsert_preference(customer_id, payload)
+    return svc.upsert_preference(customer_id, apply_request_correlation(request, payload))

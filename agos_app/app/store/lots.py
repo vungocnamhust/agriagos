@@ -6,7 +6,7 @@ from typing import Any
 
 from sqlalchemy import text
 
-from app.store._db import SessionLocal, _to_float, is_enabled
+from app.store import _db
 
 __all__ = [
     "append_lot_evidence",
@@ -20,8 +20,14 @@ __all__ = [
 ]
 
 
+def _float_value(value: Any) -> float:
+    if value is None:
+        return 0.0
+    return float(value)
+
+
 def append_lot_evidence(lot_id: str, attachments: list[str], actor_id: str | None = None) -> None:
-    if not is_enabled() or not attachments:
+    if not _db.is_enabled() or not attachments:
         return
 
     for attachment in attachments:
@@ -38,52 +44,49 @@ def append_lot_evidence(lot_id: str, attachments: list[str], actor_id: str | Non
 
 
 def create_lot_evidence(lot_id: str, evidence: dict[str, Any]) -> dict[str, Any] | None:
-    if not is_enabled():
+    if not _db.is_enabled():
         return None
 
     evidence_id = str(uuid.uuid4())
-    with SessionLocal() as session:
-        try:
-            row = session.execute(
-                text(
-                    """
-                    INSERT INTO lot_evidence (
-                        lot_evidence_id,
-                        tenant_id,
-                        lot_id,
-                        evidence_type,
-                        object_storage_key,
-                        text_value,
-                        actor_id,
-                        status
-                    ) VALUES (
-                        :lot_evidence_id,
-                        :tenant_id,
-                        :lot_id,
-                        :evidence_type,
-                        :object_storage_key,
-                        :text_value,
-                        :actor_id,
-                        :status
-                    )
-                    RETURNING lot_evidence_id, lot_id, evidence_type, object_storage_key, text_value, captured_at, actor_id, status
-                    """
-                ),
-                {
-                    "lot_evidence_id": evidence_id,
-                    "tenant_id": evidence.get("tenantId", "default"),
-                    "lot_id": lot_id,
-                    "evidence_type": evidence["evidenceType"],
-                    "object_storage_key": evidence.get("objectStorageKey"),
-                    "text_value": evidence.get("textValue"),
-                    "actor_id": evidence.get("actorId"),
-                    "status": evidence.get("status", "active"),
-                },
-            ).mappings().first()
+    with _db.write_session() as (session, should_commit):
+        row = session.execute(
+            text(
+                """
+                INSERT INTO lot_evidence (
+                    lot_evidence_id,
+                    tenant_id,
+                    lot_id,
+                    evidence_type,
+                    object_storage_key,
+                    text_value,
+                    actor_id,
+                    status
+                ) VALUES (
+                    :lot_evidence_id,
+                    :tenant_id,
+                    :lot_id,
+                    :evidence_type,
+                    :object_storage_key,
+                    :text_value,
+                    :actor_id,
+                    :status
+                )
+                RETURNING lot_evidence_id, lot_id, evidence_type, object_storage_key, text_value, captured_at, actor_id, status
+                """
+            ),
+            {
+                "lot_evidence_id": evidence_id,
+                "tenant_id": evidence.get("tenantId", "default"),
+                "lot_id": lot_id,
+                "evidence_type": evidence["evidenceType"],
+                "object_storage_key": evidence.get("objectStorageKey"),
+                "text_value": evidence.get("textValue"),
+                "actor_id": evidence.get("actorId"),
+                "status": evidence.get("status", "active"),
+            },
+        ).mappings().first()
+        if should_commit:
             session.commit()
-        except Exception:
-            session.rollback()
-            raise
 
     if row is None:
         return None
@@ -101,10 +104,10 @@ def create_lot_evidence(lot_id: str, evidence: dict[str, Any]) -> dict[str, Any]
 
 
 def list_lot_evidence(lot_id: str) -> list[dict[str, Any]]:
-    if not is_enabled():
+    if not _db.is_enabled():
         return []
 
-    with SessionLocal() as session:
+    with _db.read_session() as session:
         rows = session.execute(
             text(
                 """
@@ -141,49 +144,46 @@ def list_lot_evidence(lot_id: str) -> list[dict[str, Any]]:
 
 
 def create_qc_review(lot_id: str, review: dict[str, Any]) -> dict[str, Any] | None:
-    if not is_enabled():
+    if not _db.is_enabled():
         return None
 
     review_id = str(uuid.uuid4())
-    with SessionLocal() as session:
-        try:
-            row = session.execute(
-                text(
-                    """
-                    INSERT INTO qc_reviews (
-                        qc_review_id,
-                        tenant_id,
-                        lot_id,
-                        checklist_version,
-                        result,
-                        reviewer_id,
-                        notes
-                    ) VALUES (
-                        :qc_review_id,
-                        :tenant_id,
-                        :lot_id,
-                        :checklist_version,
-                        :result,
-                        :reviewer_id,
-                        :notes
-                    )
-                    RETURNING qc_review_id, lot_id, checklist_version, result, reviewer_id, reviewed_at, notes
-                    """
-                ),
-                {
-                    "qc_review_id": review_id,
-                    "tenant_id": review.get("tenantId", "default"),
-                    "lot_id": lot_id,
-                    "checklist_version": review["checklistVersion"],
-                    "result": review["result"],
-                    "reviewer_id": review.get("reviewerId"),
-                    "notes": review.get("notes"),
-                },
-            ).mappings().first()
+    with _db.write_session() as (session, should_commit):
+        row = session.execute(
+            text(
+                """
+                INSERT INTO qc_reviews (
+                    qc_review_id,
+                    tenant_id,
+                    lot_id,
+                    checklist_version,
+                    result,
+                    reviewer_id,
+                    notes
+                ) VALUES (
+                    :qc_review_id,
+                    :tenant_id,
+                    :lot_id,
+                    :checklist_version,
+                    :result,
+                    :reviewer_id,
+                    :notes
+                )
+                RETURNING qc_review_id, lot_id, checklist_version, result, reviewer_id, reviewed_at, notes
+                """
+            ),
+            {
+                "qc_review_id": review_id,
+                "tenant_id": review.get("tenantId", "default"),
+                "lot_id": lot_id,
+                "checklist_version": review["checklistVersion"],
+                "result": review["result"],
+                "reviewer_id": review.get("reviewerId"),
+                "notes": review.get("notes"),
+            },
+        ).mappings().first()
+        if should_commit:
             session.commit()
-        except Exception:
-            session.rollback()
-            raise
 
     if row is None:
         return None
@@ -204,63 +204,60 @@ def create_qc_review_with_lot_status(
     next_status: str,
     review: dict[str, Any],
 ) -> dict[str, Any] | None:
-    if not is_enabled():
+    if not _db.is_enabled():
         return None
 
     review_id = str(uuid.uuid4())
-    with SessionLocal() as session:
-        try:
-            session.execute(
-                text("SELECT lot_id FROM lots WHERE lot_id = :lot_id FOR UPDATE"),
-                {"lot_id": lot_id},
-            ).first()
-            session.execute(
-                text(
-                    """
-                    UPDATE lots
-                    SET status = :status, updated_at = now()
-                    WHERE lot_id = :lot_id
-                    """
-                ),
-                {"lot_id": lot_id, "status": next_status},
-            )
-            row = session.execute(
-                text(
-                    """
-                    INSERT INTO qc_reviews (
-                        qc_review_id,
-                        tenant_id,
-                        lot_id,
-                        checklist_version,
-                        result,
-                        reviewer_id,
-                        notes
-                    ) VALUES (
-                        :qc_review_id,
-                        :tenant_id,
-                        :lot_id,
-                        :checklist_version,
-                        :result,
-                        :reviewer_id,
-                        :notes
-                    )
-                    RETURNING qc_review_id, lot_id, checklist_version, result, reviewer_id, reviewed_at, notes
-                    """
-                ),
-                {
-                    "qc_review_id": review_id,
-                    "tenant_id": review.get("tenantId", "default"),
-                    "lot_id": lot_id,
-                    "checklist_version": review["checklistVersion"],
-                    "result": review["result"],
-                    "reviewer_id": review.get("reviewerId"),
-                    "notes": review.get("notes"),
-                },
-            ).mappings().first()
+    with _db.write_session() as (session, should_commit):
+        session.execute(
+            text("SELECT lot_id FROM lots WHERE lot_id = :lot_id FOR UPDATE"),
+            {"lot_id": lot_id},
+        ).first()
+        session.execute(
+            text(
+                """
+                UPDATE lots
+                SET status = :status, updated_at = now()
+                WHERE lot_id = :lot_id
+                """
+            ),
+            {"lot_id": lot_id, "status": next_status},
+        )
+        row = session.execute(
+            text(
+                """
+                INSERT INTO qc_reviews (
+                    qc_review_id,
+                    tenant_id,
+                    lot_id,
+                    checklist_version,
+                    result,
+                    reviewer_id,
+                    notes
+                ) VALUES (
+                    :qc_review_id,
+                    :tenant_id,
+                    :lot_id,
+                    :checklist_version,
+                    :result,
+                    :reviewer_id,
+                    :notes
+                )
+                RETURNING qc_review_id, lot_id, checklist_version, result, reviewer_id, reviewed_at, notes
+                """
+            ),
+            {
+                "qc_review_id": review_id,
+                "tenant_id": review.get("tenantId", "default"),
+                "lot_id": lot_id,
+                "checklist_version": review["checklistVersion"],
+                "result": review["result"],
+                "reviewer_id": review.get("reviewerId"),
+                "notes": review.get("notes"),
+            },
+        ).mappings().first()
+        if should_commit:
             session.commit()
-        except Exception:
-            session.rollback()
-            raise
 
     if row is None:
         return None
@@ -277,10 +274,10 @@ def create_qc_review_with_lot_status(
 
 
 def list_qc_reviews(lot_id: str) -> list[dict[str, Any]]:
-    if not is_enabled():
+    if not _db.is_enabled():
         return []
 
-    with SessionLocal() as session:
+    with _db.read_session() as session:
         rows = session.execute(
             text(
                 """
@@ -315,87 +312,84 @@ def list_qc_reviews(lot_id: str) -> list[dict[str, Any]]:
 
 
 def upsert_lot(record: dict[str, Any]) -> None:
-    if not is_enabled():
+    if not _db.is_enabled():
         return
 
-    with SessionLocal() as session:
-        try:
-            session.execute(
-                text(
-                    """
-                    INSERT INTO lots (
-                        lot_id,
-                        tenant_id,
-                        lot_code,
-                        product_sku_id,
-                        source_type,
-                        source_ref_id,
-                        harvest_or_production_date,
-                        actual_qty,
-                        available_qty,
-                        reserved_qty,
-                        released_qty,
-                        quality_note,
-                        status,
-                        updated_at
-                    ) VALUES (
-                        :lot_id,
-                        :tenant_id,
-                        :lot_code,
-                        :product_sku_id,
-                        :source_type,
-                        :source_ref_id,
-                        :harvest_or_production_date,
-                        :actual_qty,
-                        :available_qty,
-                        :reserved_qty,
-                        :released_qty,
-                        :quality_note,
-                        :status,
-                        now()
-                    )
-                    ON CONFLICT (lot_id) DO UPDATE SET
-                        lot_code = EXCLUDED.lot_code,
-                        product_sku_id = EXCLUDED.product_sku_id,
-                        source_type = EXCLUDED.source_type,
-                        source_ref_id = EXCLUDED.source_ref_id,
-                        harvest_or_production_date = EXCLUDED.harvest_or_production_date,
-                        actual_qty = EXCLUDED.actual_qty,
-                        available_qty = EXCLUDED.available_qty,
-                        reserved_qty = EXCLUDED.reserved_qty,
-                        released_qty = EXCLUDED.released_qty,
-                        quality_note = EXCLUDED.quality_note,
-                        status = EXCLUDED.status,
-                        updated_at = now()
-                    """
-                ),
-                {
-                    "lot_id": record["lotId"],
-                    "tenant_id": record.get("tenantId", "default"),
-                    "lot_code": record["lotCode"],
-                    "product_sku_id": record["productSkuId"],
-                    "source_type": record["sourceType"],
-                    "source_ref_id": record["sourceRefId"],
-                    "harvest_or_production_date": record["harvestOrProductionDate"],
-                    "actual_qty": record["actualQty"],
-                    "available_qty": record.get("availableQty", 0),
-                    "reserved_qty": record.get("reservedQty", 0),
-                    "released_qty": record.get("releasedQty", 0),
-                    "quality_note": record.get("qualityNote"),
-                    "status": record["status"],
-                },
-            )
+    with _db.write_session() as (session, should_commit):
+        session.execute(
+            text(
+                """
+                INSERT INTO lots (
+                    lot_id,
+                    tenant_id,
+                    lot_code,
+                    product_sku_id,
+                    source_type,
+                    source_ref_id,
+                    harvest_or_production_date,
+                    actual_qty,
+                    available_qty,
+                    reserved_qty,
+                    released_qty,
+                    quality_note,
+                    status,
+                    updated_at
+                ) VALUES (
+                    :lot_id,
+                    :tenant_id,
+                    :lot_code,
+                    :product_sku_id,
+                    :source_type,
+                    :source_ref_id,
+                    :harvest_or_production_date,
+                    :actual_qty,
+                    :available_qty,
+                    :reserved_qty,
+                    :released_qty,
+                    :quality_note,
+                    :status,
+                    now()
+                )
+                ON CONFLICT (lot_id) DO UPDATE SET
+                    lot_code = EXCLUDED.lot_code,
+                    product_sku_id = EXCLUDED.product_sku_id,
+                    source_type = EXCLUDED.source_type,
+                    source_ref_id = EXCLUDED.source_ref_id,
+                    harvest_or_production_date = EXCLUDED.harvest_or_production_date,
+                    actual_qty = EXCLUDED.actual_qty,
+                    available_qty = EXCLUDED.available_qty,
+                    reserved_qty = EXCLUDED.reserved_qty,
+                    released_qty = EXCLUDED.released_qty,
+                    quality_note = EXCLUDED.quality_note,
+                    status = EXCLUDED.status,
+                    updated_at = now()
+                """
+            ),
+            {
+                "lot_id": record["lotId"],
+                "tenant_id": record.get("tenantId", "default"),
+                "lot_code": record["lotCode"],
+                "product_sku_id": record["productSkuId"],
+                "source_type": record["sourceType"],
+                "source_ref_id": record["sourceRefId"],
+                "harvest_or_production_date": record["harvestOrProductionDate"],
+                "actual_qty": record["actualQty"],
+                "available_qty": record.get("availableQty", 0),
+                "reserved_qty": record.get("reservedQty", 0),
+                "released_qty": record.get("releasedQty", 0),
+                "quality_note": record.get("qualityNote"),
+                "status": record["status"],
+            },
+        )
+        if should_commit:
             session.commit()
-        except Exception:
-            session.rollback()
-            raise
 
 
 def fetch_lot(lot_id: str) -> dict[str, Any] | None:
-    if not is_enabled():
+    if not _db.is_enabled():
         return None
 
-    with SessionLocal() as session:
+    with _db.read_session() as session:
         row = session.execute(
             text(
                 """
@@ -434,10 +428,10 @@ def fetch_lot(lot_id: str) -> dict[str, Any] | None:
             row["harvest_or_production_date"].isoformat()
             if row["harvest_or_production_date"] else None
         ),
-        "actualQty": _to_float(row["actual_qty"]),
-        "availableQty": _to_float(row["available_qty"]),
-        "reservedQty": _to_float(row["reserved_qty"]),
-        "releasedQty": _to_float(row["released_qty"]),
+        "actualQty": _float_value(row["actual_qty"]),
+        "availableQty": _float_value(row["available_qty"]),
+        "reservedQty": _float_value(row["reserved_qty"]),
+        "releasedQty": _float_value(row["released_qty"]),
         "qualityNote": row["quality_note"],
         "status": row["status"],
     }

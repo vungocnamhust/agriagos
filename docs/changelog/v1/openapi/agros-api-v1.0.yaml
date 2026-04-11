@@ -101,6 +101,7 @@ paths:
         required: true
         schema:
           type: string
+          format: uuid
           title: Customer Id
       responses:
         '200':
@@ -297,6 +298,13 @@ paths:
         schema:
           type: string
           title: Order Id
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/ConfirmOrderRequest'
+              - type: 'null'
       responses:
         '200':
           description: Successful Response
@@ -812,6 +820,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Customer360View'
+        '404':
+          description: Customer Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Validation Error
           content:
@@ -839,10 +853,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
-                title: Response Get Available Lots Board Api V1 Views Available Lots
-                  Get
+                $ref: '#/components/schemas/AvailableLotListResponse'
         '422':
           description: Validation Error
           content:
@@ -861,10 +872,7 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
-                type: object
-                title: Response Get Pending Fulfillment Api V1 Views Pending Fulfillment
-                  Get
+                $ref: '#/components/schemas/PendingFulfillmentListResponse'
   /api/v1/views/farm:
     get:
       tags:
@@ -877,9 +885,20 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
-                type: object
-                title: Response Get Farm View Api V1 Views Farm Get
+                $ref: '#/components/schemas/FarmView'
+  /api/v1/views/farm-summary-board:
+    get:
+      tags:
+      - Views
+      summary: Get Farm Summary Board
+      operationId: get_farm_summary_board_api_v1_views_farm_summary_board_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FarmSummaryBoardResponse'
   /api/v1/events:
     get:
       tags:
@@ -919,15 +938,29 @@ paths:
           - type: string
           - type: 'null'
           title: Correlationid
+      - name: causationId
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Causationid
+      - name: idempotencyKey
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotencykey
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
-                title: Response List Events Api V1 Events Get
+                $ref: '#/components/schemas/DomainEventListResponse'
         '422':
           description: Validation Error
           content:
@@ -1041,6 +1074,45 @@ components:
       - consumed
       - cancelled
       title: AllocationStatus
+    AvailableLotListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/AvailableLotView'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: AvailableLotListResponse
+    AvailableLotView:
+      properties:
+        lotId:
+          type: string
+          title: Lotid
+        lotCode:
+          type: string
+          title: Lotcode
+        productSkuId:
+          type: string
+          title: Productskuid
+        releasedQty:
+          type: number
+          title: Releasedqty
+        availableQty:
+          type: number
+          title: Availableqty
+        status:
+          $ref: '#/components/schemas/LotStatus'
+      type: object
+      required:
+      - lotId
+      - lotCode
+      - productSkuId
+      - releasedQty
+      - availableQty
+      - status
+      title: AvailableLotView
     AddLotEvidenceRequest:
       properties:
         evidenceType:
@@ -1205,6 +1277,14 @@ components:
       - orderedQty
       - unit
       title: CreateOrderLineRequest
+    ConfirmOrderRequest:
+      properties:
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      title: ConfirmOrderRequest
     CreateOrderRequest:
       properties:
         customerId:
@@ -1492,6 +1572,108 @@ components:
           - type: 'null'
       type: object
       title: DeliverOrderRequest
+    ErrorResponse:
+      properties:
+        code:
+          type: string
+          title: Code
+        message:
+          type: string
+          title: Message
+        correlationId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Correlationid
+        details:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Details
+      type: object
+      required:
+      - code
+      - message
+      title: ErrorResponse
+    FarmSummaryBoardItem:
+      properties:
+        plotId:
+          type: string
+          title: Plotid
+        plotCode:
+          type: string
+          title: Plotcode
+        plotName:
+          type: string
+          title: Plotname
+        locationText:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Locationtext
+        areaValue:
+          type: number
+          title: Areavalue
+        areaUnit:
+          type: string
+          title: Areaunit
+        plotStatus:
+          type: string
+          title: Plotstatus
+        cropCycleId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cropcycleid
+        cropName:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cropname
+        growthStage:
+          anyOf:
+          - $ref: '#/components/schemas/GrowthStage'
+          - type: 'null'
+        cropCycleStatus:
+          anyOf:
+          - $ref: '#/components/schemas/CropCycleStatus'
+          - type: 'null'
+        expectedHarvestFrom:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Expectedharvestfrom
+        expectedHarvestTo:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Expectedharvestto
+        estimatedYieldQty:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Estimatedyieldqty
+      type: object
+      required:
+      - plotId
+      - plotCode
+      - plotName
+      - areaValue
+      - areaUnit
+      - plotStatus
+      title: FarmSummaryBoardItem
+    FarmSummaryBoardResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/FarmSummaryBoardItem'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: FarmSummaryBoardResponse
     HTTPValidationError:
       properties:
         detail:
@@ -1638,6 +1820,11 @@ components:
           - type: string
           - type: 'null'
           title: Correlationid
+        causationId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Causationid
         actorId:
           anyOf:
           - type: string
@@ -1660,6 +1847,100 @@ components:
           title: Externalref
       type: object
       title: Meta
+    DomainEvent:
+      properties:
+        eventId:
+          type: string
+          title: Eventid
+        eventName:
+          type: string
+          title: Eventname
+        eventType:
+          type: string
+          title: Eventtype
+        eventVersion:
+          type: integer
+          title: Eventversion
+          default: 1
+        aggregateType:
+          type: string
+          title: Aggregatetype
+        aggregateId:
+          type: string
+          title: Aggregateid
+        occurredAt:
+          type: string
+          title: Occurredat
+        actorType:
+          type: string
+          enum:
+          - user
+          - system
+          - agent
+          - integration
+          title: Actortype
+        actorId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Actorid
+        correlationId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Correlationid
+        causationId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Causationid
+        idempotencyKey:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotencykey
+        source:
+          type: string
+          enum:
+          - core
+          - integration
+          - system_job
+          - agent
+          title: Source
+        tenantId:
+          type: string
+          title: Tenantid
+          default: default
+        payload:
+          type: object
+          additionalProperties: true
+          title: Payload
+      type: object
+      required:
+      - eventId
+      - eventName
+      - eventType
+      - aggregateType
+      - aggregateId
+      - occurredAt
+      - actorType
+      - source
+      title: DomainEvent
+    DomainEventListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/DomainEvent'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+      type: object
+      required:
+      - items
+      - total
+      title: DomainEventListResponse
     OrderDetail:
       properties:
         orderId:
@@ -1796,6 +2077,51 @@ components:
       - cancelled
       - failed
       title: OrderStatus
+    PendingFulfillmentStatus:
+      type: string
+      enum:
+      - confirmed
+      - allocated
+      - packed
+      - shipped
+      title: PendingFulfillmentStatus
+    PendingFulfillmentListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/PendingFulfillmentView'
+          type: array
+          title: Items
+          description: Orders sorted by shipping deadline with null deadlines last, then by order code.
+      type: object
+      required:
+      - items
+      title: PendingFulfillmentListResponse
+    PendingFulfillmentView:
+      properties:
+        orderId:
+          type: string
+          title: Orderid
+        orderCode:
+          type: string
+          title: Ordercode
+        customerName:
+          type: string
+          title: Customername
+        status:
+          $ref: '#/components/schemas/PendingFulfillmentStatus'
+        shippingDeadline:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Shippingdeadline
+      type: object
+      required:
+      - orderId
+      - orderCode
+      - customerName
+      - status
+      title: PendingFulfillmentView
     PackOrderRequest:
       properties:
         packedQtySummary:

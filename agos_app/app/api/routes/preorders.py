@@ -1,5 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
+from app.api.routes._meta import apply_request_correlation
 from app.models.preorders import (
     AdjustPreorderRequest,
     CreatePreorderRequest,
@@ -12,8 +13,8 @@ router = APIRouter()
 
 
 @router.post("", response_model=PreorderResponse, status_code=201)
-def create_preorder(payload: CreatePreorderRequest) -> PreorderResponse:
-    return svc.create_preorder(payload)
+def create_preorder(request: Request, payload: CreatePreorderRequest) -> PreorderResponse:
+    return svc.create_preorder(apply_request_correlation(request, payload))
 
 
 @router.get("/{preorder_id}", response_model=PreorderDetail)
@@ -22,5 +23,5 @@ def get_preorder(preorder_id: str) -> PreorderDetail:
 
 
 @router.post("/{preorder_id}/adjust", response_model=PreorderResponse)
-def adjust_preorder(preorder_id: str, payload: AdjustPreorderRequest) -> PreorderResponse:
-    return svc.adjust_preorder(preorder_id, payload)
+def adjust_preorder(preorder_id: str, request: Request, payload: AdjustPreorderRequest) -> PreorderResponse:
+    return svc.adjust_preorder(preorder_id, apply_request_correlation(request, payload))

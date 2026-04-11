@@ -14,6 +14,11 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
+## Cài dependencies cho test/dev
+```bash
+pip install -r requirements-dev.txt
+```
+
 ## Migration database
 Schema Phase 1 hiện được apply bằng Alembic thay vì chỉ đọc từ bộ SQL docs.
 
@@ -27,6 +32,12 @@ docker run --name agriagos-postgres-dev \
 
 export DATABASE_URL=postgresql+psycopg://agriagos:agriagos@127.0.0.1:5436/agriagos
 alembic upgrade head
+```
+
+## Chạy integration test PostgreSQL
+```bash
+export DATABASE_URL=postgresql+psycopg://agriagos:agriagos@127.0.0.1:5436/agriagos
+pytest tests/test_*integration.py -m postgres_integration
 ```
 
 ## DB-first mode (mặc định)

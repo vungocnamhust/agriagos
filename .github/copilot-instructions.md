@@ -20,7 +20,7 @@ Agri OS is a deterministic-core FastAPI repository for agricultural supply chain
 ## Validation Reality
 
 - There is no confirmed lint pipeline configured in this repo yet.
-- There is no confirmed automated test suite configured in this repo yet.
+- Focused pytest coverage exists under `agos_app/tests/` for deterministic-core write flows.
 - After edits, run the narrowest available validation for the files you touched.
 - If no focused executable validation exists, inspect the diff carefully and call out the gap.
 - If you edit route, DTO, migration, or architecture files, also verify contract and documentation drift.

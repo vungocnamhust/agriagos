@@ -171,6 +171,12 @@ Nó chỉ làm 3 việc:
 - integration adapters production-grade
 - advanced analytics và recommendation layer
 
+### Runtime reality đã được kéo lên sớm trong late Phase 1
+- selected role-based read models đã được ship sớm bằng SQL views thay vì đợi projection workers
+- current shipped set gồm `customer_360_view`, `available_lots_board`, `pending_fulfillment_board`, và `farm_summary_board`
+- `customer_360_view` trên PostgreSQL path đã là nested detail projection; các board còn lại vẫn là operational list views
+- validation lane hiện có một PostgreSQL integration test trực tiếp cho `customer_360_view` để giữ migration + view contract không drift
+
 ### Mặc định khi chưa có quyết định theo tenant
 - Core giữ `plot/crop summary` mức đủ dùng
 - LiteFarm chỉ là nguồn sâu khi snapshot contract đã được chốt rõ
@@ -218,6 +224,10 @@ Mục tiêu:
 - AI canonical intake
 - AI draft / suggest
 - ops summary / CRM summary
+
+Ghi chú cập nhật:
+- một phần read-model lane này đã được pull forward vào late Phase 1 bằng direct SQL views và `/api/v1/views/*`
+- phase này vẫn còn khác Phase 1 ở chỗ projection workers, agent support, và automation chưa trở thành runtime mặc định
 
 Thành công khi:
 - operator tiết kiệm thời gian thật

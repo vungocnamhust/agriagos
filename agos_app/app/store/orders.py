@@ -5,7 +5,7 @@ from typing import Any
 
 from sqlalchemy import text
 
-from app.store._db import SessionLocal, _to_float, is_enabled
+from app.store import _db
 
 __all__ = [
     "upsert_order",
@@ -17,11 +17,17 @@ __all__ = [
 ]
 
 
+def _float_value(value: Any) -> float:
+    if value is None:
+        return 0.0
+    return float(value)
+
+
 def upsert_order(record: dict[str, Any]) -> None:
-    if not is_enabled():
+    if not _db.is_enabled():
         return
 
-    with SessionLocal() as session:
+    with _db.write_session() as (session, should_commit):
         session.execute(
             text(
                 """
@@ -133,14 +139,15 @@ def upsert_order(record: dict[str, Any]) -> None:
                 },
             )
 
-        session.commit()
+        if should_commit:
+            session.commit()
 
 
 def fetch_order(order_id: str) -> dict[str, Any] | None:
-    if not is_enabled():
+    if not _db.is_enabled():
         return None
 
-    with SessionLocal() as session:
+    with _db.read_session() as session:
         order_row = session.execute(
             text(
                 """
@@ -208,10 +215,10 @@ def fetch_order(order_id: str) -> dict[str, Any] | None:
             {
                 "orderLineId": str(row["order_line_id"]),
                 "productSkuId": str(row["product_sku_id"]),
-                "orderedQty": _to_float(row["ordered_qty"]),
-                "allocatedQty": _to_float(row["allocated_qty"]),
-                "packedQty": _to_float(row["packed_qty"]),
-                "deliveredQty": _to_float(row["delivered_qty"]),
+                "orderedQty": _float_value(row["ordered_qty"]),
+                "allocatedQty": _float_value(row["allocated_qty"]),
+                "packedQty": _float_value(row["packed_qty"]),
+                "deliveredQty": _float_value(row["delivered_qty"]),
                 "unit": row["unit"],
                 "sourcePreorderId": (
                     str(row["source_preorder_id"]) if row["source_preorder_id"] is not None else None
@@ -224,10 +231,10 @@ def fetch_order(order_id: str) -> dict[str, Any] | None:
 
 
 def fetch_allocations_for_order(order_id: str) -> list[dict[str, Any]]:
-    if not is_enabled():
+    if not _db.is_enabled():
         return []
 
-    with SessionLocal() as session:
+    with _db.read_session() as session:
         rows = session.execute(
             text(
                 """
@@ -251,7 +258,7 @@ def fetch_allocations_for_order(order_id: str) -> list[dict[str, Any]]:
             "allocationId": str(row["allocation_id"]),
             "orderLineId": str(row["order_line_id"]),
             "lotId": str(row["lot_id"]),
-            "allocatedQty": _to_float(row["allocated_qty"]),
+            "allocatedQty": _float_value(row["allocated_qty"]),
             "status": row["status"],
         }
         for row in rows
@@ -259,10 +266,10 @@ def fetch_allocations_for_order(order_id: str) -> list[dict[str, Any]]:
 
 
 def replace_allocations_for_order(order_id: str, allocations: list[dict[str, Any]]) -> None:
-    if not is_enabled():
+    if not _db.is_enabled():
         return
 
-    with SessionLocal() as session:
+    with _db.write_session() as (session, should_commit):
         session.execute(
             text(
                 """
@@ -307,7 +314,8 @@ def replace_allocations_for_order(order_id: str, allocations: list[dict[str, Any
                 },
             )
 
-        session.commit()
+        if should_commit:
+            session.commit()
 
 
 def allocate_order_atomic(
@@ -315,10 +323,10 @@ def allocate_order_atomic(
     next_status: str,
     allocations: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    if not is_enabled():
+    if not _db.is_enabled():
         return []
 
-    with SessionLocal() as session:
+    with _db.write_session() as (session, should_commit):
         allocation_records: list[dict[str, Any]] = []
 
         for item in allocations:
@@ -343,7 +351,7 @@ def allocate_order_atomic(
                 )
 
             qty = item["allocatedQty"]
-            available = _to_float(lot_row["available_qty"])
+            available = _float_value(lot_row["available_qty"])
             if available < qty:
                 raise ValueError(
                     f"Lot {item['lotId']} has insufficient available qty ({available})."
@@ -439,15 +447,16 @@ def allocate_order_atomic(
             {"order_id": order_id, "status": next_status},
         )
 
-        session.commit()
+        if should_commit:
+            session.commit()
         return allocation_records
 
 
 def cancel_order_atomic(order_id: str, next_status: str) -> None:
-    if not is_enabled():
+    if not _db.is_enabled():
         return
 
-    with SessionLocal() as session:
+    with _db.write_session() as (session, should_commit):
         allocations = session.execute(
             text(
                 """
@@ -474,7 +483,7 @@ def cancel_order_atomic(order_id: str, next_status: str) -> None:
                     WHERE lot_id = :lot_id
                     """
                 ),
-                {"lot_id": alloc["lot_id"], "qty": _to_float(alloc["allocated_qty"])},
+                {"lot_id": alloc["lot_id"], "qty": _float_value(alloc["allocated_qty"])},
             )
 
         session.execute(
@@ -503,4 +512,5 @@ def cancel_order_atomic(order_id: str, next_status: str) -> None:
             {"order_id": order_id, "status": next_status},
         )
 
-        session.commit()
+        if should_commit:
+            session.commit()

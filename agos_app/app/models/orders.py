@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from app.models.common import Meta
+from app.models.common import CommandMetaRequest, Meta
 from app.models.enums import AllocationStatus, OrderLineStatus, OrderStatus, PaymentStatus
 
 class OrderLine(BaseModel):
@@ -46,6 +46,10 @@ class CreateOrderRequest(BaseModel):
 
 class OrderResponse(BaseModel):
     data: OrderDetail
+
+
+class ConfirmOrderRequest(CommandMetaRequest):
+    pass
 
 class AllocateItem(BaseModel):
     orderLineId: str
