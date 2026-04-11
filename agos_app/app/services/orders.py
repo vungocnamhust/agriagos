@@ -45,12 +45,69 @@ def _build_order_detail(record: dict[str, Any]) -> OrderDetail:
         orderId=record["orderId"],
         orderCode=record["orderCode"],
         customerId=record["customerId"],
+        orderDate=record.get("orderDate"),
         channel=record["channel"],
         status=record["status"],
         paymentStatus=record["paymentStatus"],
         deliveryDateExpected=record.get("deliveryDateExpected"),
+        shippingAddress=record.get("shippingAddress"),
+        note=record.get("note"),
+        createdBy=record.get("createdBy"),
+        sourcePreorderFlag=bool(record.get("sourcePreorderFlag", False)),
         lines=lines,
     )
+
+
+def _linked_preorder_ids(lines: list[dict[str, Any]]) -> list[str]:
+    if not lines:
+        return []
+    seen: set[str] = set()
+    linked_ids: list[str] = []
+    for line in lines:
+        source_preorder_id = line.get("sourcePreorderId")
+        if source_preorder_id and source_preorder_id not in seen:
+            seen.add(source_preorder_id)
+            linked_ids.append(source_preorder_id)
+    return linked_ids
+
+
+def _get_preorder_record(preorder_id: str) -> dict[str, Any] | None:
+    if postgres_sync.is_enabled():
+        return postgres_sync.fetch_preorder(preorder_id)
+    return store.get_preorder(preorder_id)
+
+
+def _validate_source_preorder_ids(lines: list[dict[str, Any]], context: dict[str, Any], order_id: str) -> None:
+    allowed_statuses = {PreorderStatus.confirmed.value, PreorderStatus.active.value}
+    for source_preorder_id in _linked_preorder_ids(lines):
+        preorder_record = _get_preorder_record(source_preorder_id)
+        if preorder_record is None:
+            _raise_order_denied(
+                action_name="order.create",
+                order_id=order_id,
+                context=context,
+                detail=f"Preorder {source_preorder_id} not found.",
+                reason_code="source_preorder_not_found",
+                status_code=404,
+                metadata={"sourcePreorderId": source_preorder_id},
+            )
+        assert preorder_record is not None
+        preorder_status = preorder_record.get("status")
+        if preorder_status not in allowed_statuses:
+            _raise_order_denied(
+                action_name="order.create",
+                order_id=order_id,
+                context=context,
+                detail=(
+                    f"Preorder {source_preorder_id} is not linkable from status {preorder_status}."
+                ),
+                reason_code="source_preorder_not_linkable",
+                status_code=422,
+                metadata={
+                    "sourcePreorderId": source_preorder_id,
+                    "preorderStatus": preorder_status,
+                },
+            )
 
 
 def _emit_order_event(
@@ -326,6 +383,9 @@ def create_order(payload: CreateOrderRequest) -> OrderResponse:
         for ln in payload.lines
     ]
 
+    _validate_source_preorder_ids(lines, context, f"pending:{payload.customerId}")
+    linked_preorder_ids = _linked_preorder_ids(lines)
+
     record: dict[str, Any] = {
         "orderId": order_id,
         "tenantId": "default",
@@ -338,6 +398,7 @@ def create_order(payload: CreateOrderRequest) -> OrderResponse:
         "shippingAddress": payload.shippingAddress,
         "paymentIntent": payload.paymentIntent,
         "note": payload.note,
+        "sourcePreorderFlag": bool(linked_preorder_ids),
         "lines": lines,
     }
     result = OrderResponse(data=_build_order_detail(record))
@@ -346,7 +407,10 @@ def create_order(payload: CreateOrderRequest) -> OrderResponse:
         event = _emit_order_event(
             event_name="order.created",
             order_id=order_id,
-            payload=record,
+            payload={
+                **record,
+                "linkedPreorderIds": linked_preorder_ids,
+            },
             context=context,
         )
         _audit_order_decision(
@@ -382,6 +446,8 @@ def confirm_order(order_id: str, payload: ConfirmOrderRequest | None = None) -> 
     if cached := check_idempotency(key):
         return OrderResponse(**cached)
 
+    _validate_source_preorder_ids(record.get("lines", []), context, order_id)
+
     try:
         next_status = assert_order_transition(record, "confirm")
     except HTTPException as exc:
@@ -397,13 +463,19 @@ def confirm_order(order_id: str, payload: ConfirmOrderRequest | None = None) -> 
         raise
 
     record["status"] = next_status
+    linked_preorder_ids = _linked_preorder_ids(record.get("lines", []))
     result = OrderResponse(data=_build_order_detail(record))
     with postgres_transaction() if postgres_sync.is_enabled() else nullcontext():
         postgres_sync.upsert_order(record)
         event = _emit_order_event(
             "order.confirmed",
             order_id,
-            {"orderId": order_id, "status": next_status},
+            {
+                "orderId": order_id,
+                "status": next_status,
+                "sourcePreorderFlag": bool(linked_preorder_ids),
+                "linkedPreorderIds": linked_preorder_ids,
+            },
             context,
         )
         _audit_order_decision(

@@ -1806,6 +1806,7 @@ components:
           - type: string
           - type: 'null'
           title: Sourcepreorderid
+          description: When present, links this order line to a specific preorder. Null means the line was created independently of any preorder.
       type: object
       required:
       - productSkuId
@@ -2682,6 +2683,7 @@ components:
         sourcePreorderFlag:
           type: boolean
           title: Sourcepreorderflag
+          description: Derived summary flag indicating whether any order line carries a sourcePreorderId. This does not replace line-level linkage as the canonical source of truth.
           default: false
         lines:
           items:
@@ -2732,6 +2734,7 @@ components:
           - type: string
           - type: 'null'
           title: Sourcepreorderid
+          description: When present, links this order line to a specific preorder. Null means the line was created independently of any preorder.
       type: object
       required:
       - orderLineId
