@@ -212,7 +212,7 @@ Payload:
 ## 3.4 Lot events
 
 ### `HarvestedLotCreated`
-Khi một lot mới được tạo từ thu hoạch hoặc sơ chế.
+Khi một harvested lot mới được tạo từ crop cycle.
 
 Payload:
 - lot_id
@@ -220,6 +220,16 @@ Payload:
 - sku_id
 - actual_qty
 - harvest_date
+
+### `ProcessedLotCreated`
+Khi một processed lot mới được tạo từ processing batch hoặc process run đã xác định rõ.
+
+Payload:
+- lot_id
+- process_ref_id
+- sku_id
+- actual_qty
+- production_date
 
 ### `HarvestedLotAdjusted`
 Payload:
@@ -579,6 +589,7 @@ Bộ xương sống phase đầu:
 - `PreorderQuotaConsumed`
 - `OrderCreated`
 - `HarvestedLotCreated`
+- `ProcessedLotCreated`
 - `LotReleased`
 - `OrderAllocated`
 - `OrderPacked`

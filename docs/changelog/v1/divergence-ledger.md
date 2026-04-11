@@ -22,4 +22,12 @@ Do not keep divergence tracking only in local TODOs, comments, prompts, or instr
 
 ## Active Entries
 
-None.
+| ID | Concern | Code Surface | Doc Surface | Divergence | Why | Status | Exit Condition |
+|---|---|---|---|---|---|---|---|
+| None | - | - | - | - | - | - | - |
+
+## Resolved Entries
+
+| ID | Concern | Code Surface | Doc Surface | Divergence | Why | Status | Exit Condition |
+|---|---|---|---|---|---|---|---|
+| DL-20260411-03 | event/api/domain | `agos_app/app/models/lots.py`, `agos_app/app/services/lots.py`, `agos_app/app/api/routes/lots.py` | `docs/changelog/v1/openapi/agros-api-v1.0.yaml`, `docs/changelog/v1/architecture/naming-conventions.md`, `docs/changelog/v1/diagram/04-event-storming-event-map.md`, `CLAUDE.md` | `processing_batch` had temporarily shared the harvested-lot create contract and emitted `lot.harvest.created`. | Harvested Lot Core shipped before the dedicated processed-lot command and route were introduced. | resolved | Resolved by adding `CreateProcessedLotRequest`, `POST /api/v1/lots/processed`, and `lot.processed.created`, then syncing the owning docs. |

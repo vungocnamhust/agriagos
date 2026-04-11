@@ -29,8 +29,7 @@ ORDER_TRANSITIONS: dict[str, dict[str, str]] = {
 }
 
 LOT_TRANSITIONS: dict[str, dict[str, str]] = {
-    # Phase 1: lots are created directly in "harvested" state by the service layer.
-    # "draft" state exists in LotStatus enum but is not used until Phase 2 (lot creation workflow).
+    # Phase 1: lots are initialized in harvested or qc_pending by the service layer.
     LotStatus.harvested.value: {"release": LotStatus.released.value, "block": LotStatus.blocked.value},
     LotStatus.qc_pending.value: {"release": LotStatus.released.value, "block": LotStatus.blocked.value},
     LotStatus.released.value: {"block": LotStatus.blocked.value},

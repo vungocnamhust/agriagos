@@ -7,7 +7,7 @@ from sqlalchemy import text
 
 from app.store import _db
 
-__all__ = ["fetch_plots", "fetch_crop_cycles", "is_enabled"]
+__all__ = ["fetch_crop_cycle", "fetch_crop_cycles", "fetch_plots", "is_enabled"]
 
 
 def is_enabled() -> bool:
@@ -111,3 +111,40 @@ def fetch_crop_cycles(plot_id: str | None, status: str | None) -> list[dict[str,
         }
         for row in rows
     ]
+
+
+def fetch_crop_cycle(crop_cycle_id: str) -> dict[str, Any] | None:
+    if not is_enabled():
+        return None
+
+    with _db.read_session() as session:
+        row = session.execute(
+            text(
+                """
+                SELECT
+                    crop_cycle_id,
+                    plot_id,
+                    crop_name,
+                    growth_stage,
+                    status,
+                    expected_harvest_from,
+                    expected_harvest_to
+                FROM crop_cycles
+                WHERE crop_cycle_id = CAST(:crop_cycle_id AS uuid)
+                """
+            ),
+            {"crop_cycle_id": crop_cycle_id},
+        ).mappings().first()
+
+    if row is None:
+        return None
+
+    return {
+        "cropCycleId": str(row["crop_cycle_id"]),
+        "plotId": str(row["plot_id"]),
+        "cropName": row["crop_name"],
+        "growthStage": _normalize_growth_stage(row["growth_stage"]),
+        "status": row["status"],
+        "expectedHarvestFrom": row["expected_harvest_from"].isoformat() if row["expected_harvest_from"] else None,
+        "expectedHarvestTo": row["expected_harvest_to"].isoformat() if row["expected_harvest_to"] else None,
+    }

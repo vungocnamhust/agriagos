@@ -61,6 +61,10 @@ Hai style — cùng semantic, khác format tùy ngữ cảnh:
 | `preorder.placed` | `PreorderPlaced` | `Preorder` |
 | `preorder.adjusted` | `PreorderAdjusted` | `Preorder` |
 | `lot.harvest.created` | `LotHarvestCreated` | `Lot` |
+| `lot.processed.created` | `LotProcessedCreated` | `Lot` |
+| `lot.adjusted` | `LotAdjusted` | `Lot` |
+| `lot.evidence.added` | `LotEvidenceAdded` | `Lot` |
+| `lot.qc.reviewed` | `LotQcReviewed` | `Lot` |
 | `lot.released` | `LotReleased` | `Lot` |
 | `lot.blocked` | `LotBlocked` | `Lot` |
 | `order.created` | `OrderCreated` | `Order` |

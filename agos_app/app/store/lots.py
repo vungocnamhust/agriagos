@@ -18,14 +18,6 @@ __all__ = [
     "list_qc_reviews",
     "upsert_lot",
 ]
-
-
-def _float_value(value: Any) -> float:
-    if value is None:
-        return 0.0
-    return float(value)
-
-
 def append_lot_evidence(lot_id: str, attachments: list[str], actor_id: str | None = None) -> None:
     if not _db.is_enabled() or not attachments:
         return
@@ -331,6 +323,7 @@ def upsert_lot(record: dict[str, Any]) -> None:
                     available_qty,
                     reserved_qty,
                     released_qty,
+                    unit,
                     quality_note,
                     status,
                     updated_at
@@ -346,6 +339,7 @@ def upsert_lot(record: dict[str, Any]) -> None:
                     :available_qty,
                     :reserved_qty,
                     :released_qty,
+                    :unit,
                     :quality_note,
                     :status,
                     now()
@@ -360,6 +354,7 @@ def upsert_lot(record: dict[str, Any]) -> None:
                     available_qty = EXCLUDED.available_qty,
                     reserved_qty = EXCLUDED.reserved_qty,
                     released_qty = EXCLUDED.released_qty,
+                    unit = EXCLUDED.unit,
                     quality_note = EXCLUDED.quality_note,
                     status = EXCLUDED.status,
                     updated_at = now()
@@ -377,6 +372,7 @@ def upsert_lot(record: dict[str, Any]) -> None:
                 "available_qty": record.get("availableQty", 0),
                 "reserved_qty": record.get("reservedQty", 0),
                 "released_qty": record.get("releasedQty", 0),
+                "unit": record.get("unit", "kg"),
                 "quality_note": record.get("qualityNote"),
                 "status": record["status"],
             },
@@ -405,6 +401,7 @@ def fetch_lot(lot_id: str) -> dict[str, Any] | None:
                     available_qty,
                     reserved_qty,
                     released_qty,
+                    unit,
                     quality_note,
                     status
                 FROM lots
@@ -428,10 +425,11 @@ def fetch_lot(lot_id: str) -> dict[str, Any] | None:
             row["harvest_or_production_date"].isoformat()
             if row["harvest_or_production_date"] else None
         ),
-        "actualQty": _float_value(row["actual_qty"]),
-        "availableQty": _float_value(row["available_qty"]),
-        "reservedQty": _float_value(row["reserved_qty"]),
-        "releasedQty": _float_value(row["released_qty"]),
+        "actualQty": _db.to_float(row["actual_qty"]),
+        "availableQty": _db.to_float(row["available_qty"]),
+        "reservedQty": _db.to_float(row["reserved_qty"]),
+        "releasedQty": _db.to_float(row["released_qty"]),
+        "unit": row["unit"],
         "qualityNote": row["quality_note"],
         "status": row["status"],
     }

@@ -71,6 +71,7 @@ def _insert_customer(session: Session, customer_id: str, customer_code: str, ful
                 customer_code,
                 full_name,
                 phone,
+                phone_normalized,
                 status,
                 tags
             ) VALUES (
@@ -78,6 +79,7 @@ def _insert_customer(session: Session, customer_id: str, customer_code: str, ful
                 :customer_code,
                 :full_name,
                 :phone,
+                :phone_normalized,
                 'active',
                 '[]'::jsonb
             )
@@ -88,6 +90,7 @@ def _insert_customer(session: Session, customer_id: str, customer_code: str, ful
             "customer_code": customer_code,
             "full_name": full_name,
             "phone": f"0900{customer_id.replace('-', '')[:6]}",
+            "phone_normalized": f"0900{customer_id.replace('-', '')[:6]}",
         },
     )
 

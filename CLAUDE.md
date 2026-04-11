@@ -177,12 +177,12 @@ All diagrams use `[Phase 1 ✅]` / `[Phase 2 🔜]` labels to distinguish implem
 
 **Key Phase 1 state machine facts** (source: `core/gateway.py`):
 - Order: `draft → confirmed → allocated → packed → shipped → delivered`; cancel path from `draft`/`confirmed` directly; `cancel_requested` only from `allocated`/`packed`
-- Lot: `harvested → released` directly, or `harvested → qc_pending → released` when the QC workflow is used; `block` is allowed from `harvested`, `qc_pending`, or `released`
+- Lot: create path can initialize `harvested` or `qc_pending`; gateway currently supports `harvested/qc_pending → released` and `harvested/qc_pending/released → blocked`
 - Preorder: created in `active`; `adjust` stays `active`; `cancel → cancelled`
 
 **Key Phase 1 event names** (source: `core/events.py` + `services/`):
-- Use dotted lowercase at runtime: `order.created`, `order.confirmed`, `lot.harvest.created`, `preorder.placed`
-- `eventType` is auto-derived PascalCase: `OrderCreated`, `OrderConfirmed`, `LotHarvestCreated`, `PreorderPlaced`
+- Use dotted lowercase at runtime: `order.created`, `order.confirmed`, `lot.harvest.created`, `lot.processed.created`, `lot.adjusted`, `preorder.placed`
+- `eventType` is auto-derived PascalCase: `OrderCreated`, `OrderConfirmed`, `LotHarvestCreated`, `LotProcessedCreated`, `LotAdjusted`, `PreorderPlaced`
 
 When repo-root docs and `docs/changelog/v1/architecture/` overlap, treat the `docs/changelog/v1/architecture/` set as the working baseline for current deterministic-core decisions.
 

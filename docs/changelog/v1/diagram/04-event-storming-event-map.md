@@ -27,13 +27,15 @@ flowchart LR
 
     subgraph FarmDomain["Farm / Production [Phase 1 ✅ partial]"]
         F4["Command: CreateHarvestLot"] --> F5["Event: LotHarvestCreated\nlot.harvest.created → LotHarvestCreated"]
-        F6["Command: AttachLotEvidence [Phase 2 🔜]"] --> F7["Event: LotEvidenceAttached [Phase 2 🔜]"]
+        F10["Command: CreateProcessedLot"] --> F11["Event: LotProcessedCreated\nlot.processed.created → LotProcessedCreated"]
+        F8["Command: AdjustHarvestLot"] --> F9["Event: LotAdjusted\nlot.adjusted → LotAdjusted"]
+        F6["Command: AttachLotEvidence"] --> F7["Event: LotEvidenceAdded\nlot.evidence.added → LotEvidenceAdded"]
         F0["Command: PlanCropTask [Phase 2 🔜]"] --> F1["Event: CropTaskPlanned [Phase 2 🔜]"]
         F2["Command: CompleteCropTask [Phase 2 🔜]"] --> F3["Event: CropTaskCompleted [Phase 2 🔜]"]
     end
 
-    subgraph QCDomain["QC / Release [Phase 2 🔜]"]
-        Q0["Command: SubmitLotForQC"] --> Q1["Event: LotSubmittedForQC"]
+    subgraph QCDomain["QC / Release [Phase 1 ✅ partial]"]
+        Q0["Command: SubmitLotForQC"] --> Q1["Event: LotQcReviewed\nlot.qc.reviewed → LotQcReviewed"]
         Q2["Command: RequestMoreEvidence"] --> Q3["Event: LotQCRequestedMoreEvidence"]
     end
 
@@ -79,6 +81,10 @@ flowchart LR
 | PlacePreorder | PreorderPlaced | `preorder.placed` |
 | AdjustPreorder | PreorderAdjusted | `preorder.adjusted` |
 | CreateHarvestLot | LotHarvestCreated | `lot.harvest.created` |
+| CreateProcessedLot | LotProcessedCreated | `lot.processed.created` |
+| AdjustHarvestLot | LotAdjusted | `lot.adjusted` |
+| AttachLotEvidence | LotEvidenceAdded | `lot.evidence.added` |
+| SubmitLotForQC | LotQcReviewed | `lot.qc.reviewed` |
 | ReleaseLot | LotReleased | `lot.released` |
 | BlockLot | LotBlocked | `lot.blocked` |
 | CreateOrder | OrderCreated | `order.created` |

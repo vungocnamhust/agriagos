@@ -12,8 +12,10 @@ from app.core.gateway import assert_lot_transition, check_idempotency, record_id
 from app.models.enums import LotStatus
 from app.models.lots import (
     AddLotEvidenceRequest,
+    AdjustLotQuantityRequest,
     BlockLotRequest,
     CreateHarvestedLotRequest,
+    CreateProcessedLotRequest,
     CreateQCReviewRequest,
     LotDetail,
     LotEvidenceItem,
@@ -25,6 +27,7 @@ from app.models.lots import (
     QCReviewResponse,
     ReleaseLotRequest,
 )
+from app.store import farm as farm_store
 from app.store.lots import (
     append_lot_evidence,
     create_lot_evidence,
@@ -39,6 +42,7 @@ from app.store._db import transaction as postgres_transaction
 
 VALID_EVIDENCE_TYPES = {"photo", "video", "checklist", "note", "document", "measurement"}
 VALID_QC_RESULTS = {"pending", "passed", "failed", "needs_more_evidence"}
+STANDARD_LOT_UNIT = "kg"
 
 
 def _new_lot_code(product_sku_id: str) -> str:
@@ -59,8 +63,113 @@ def _build_lot_detail(record: dict[str, Any]) -> LotDetail:
         availableQty=record["availableQty"],
         reservedQty=record["reservedQty"],
         releasedQty=record["releasedQty"],
+        unit=record.get("unit", STANDARD_LOT_UNIT),
         status=record["status"],
     )
+
+
+def _normalize_unit(unit: str | None) -> str:
+    normalized = (unit or STANDARD_LOT_UNIT).strip().lower()
+    if normalized != STANDARD_LOT_UNIT:
+        raise HTTPException(status_code=422, detail="Unsupported lot unit.")
+    return normalized
+
+
+def _validate_quantity(value: float) -> None:
+    if value <= 0:
+        raise HTTPException(status_code=422, detail="actualQty must be greater than 0.")
+
+
+def _crop_cycle_exists(crop_cycle_id: str) -> bool:
+    if postgres_sync.is_enabled():
+        return farm_store.fetch_crop_cycle(crop_cycle_id) is not None
+    return any(cycle.get("cropCycleId") == crop_cycle_id for cycle in store.list_crop_cycles())
+
+
+def _validate_harvested_lot_source(source_type: str, source_ref_id: str) -> None:
+    if source_type != "crop_cycle":
+        raise HTTPException(status_code=422, detail="Unsupported sourceType.")
+    if not source_ref_id.strip():
+        raise HTTPException(status_code=422, detail="sourceRefId is required.")
+    if not _crop_cycle_exists(source_ref_id):
+        raise HTTPException(status_code=422, detail="Referenced crop cycle was not found.")
+
+
+def _validate_processed_lot_source(process_ref_id: str) -> None:
+    if not process_ref_id.strip():
+        raise HTTPException(status_code=422, detail="processRefId is required.")
+
+
+def _determine_initial_status(payload: CreateHarvestedLotRequest) -> str:
+    if payload.requiresQc:
+        return LotStatus.qc_pending.value
+    return LotStatus.harvested.value
+
+
+def _create_lot_record(
+    *,
+    product_sku_id: str,
+    source_type: str,
+    source_ref_id: str,
+    actual_qty: float,
+    unit: str,
+    harvest_or_production_date: str,
+    quality_note: str | None,
+    attachments: list[str],
+    status: str,
+) -> dict[str, Any]:
+    lot_id = str(uuid.uuid4())
+    return {
+        "lotId": lot_id,
+        "tenantId": "default",
+        "lotCode": _new_lot_code(product_sku_id),
+        "productSkuId": product_sku_id,
+        "sourceType": source_type,
+        "sourceRefId": source_ref_id,
+        "harvestOrProductionDate": harvest_or_production_date,
+        "actualQty": actual_qty,
+        "availableQty": 0.0,
+        "reservedQty": 0.0,
+        "releasedQty": 0.0,
+        "unit": unit,
+        "qualityNote": quality_note,
+        "attachments": list(attachments),
+        "status": status,
+    }
+
+
+def _persist_created_lot(
+    *,
+    record: dict[str, Any],
+    event_name: str,
+    action_name: str,
+    operation_name: str,
+    context: dict[str, Any],
+    request_payload: Any,
+) -> LotResponse:
+    actor_id = context["actor_id"]
+    result = LotResponse(data=_build_lot_detail(record))
+    with postgres_transaction() if postgres_sync.is_enabled() else nullcontext():
+        if postgres_sync.is_enabled():
+            postgres_sync.upsert_lot(record)
+            append_lot_evidence(record["lotId"], record["attachments"], actor_id)
+        event = _emit_lot_event(
+            event_name,
+            record["lotId"],
+            payload=record,
+            context=context,
+        )
+        _audit_lot(action_name, record["lotId"], "allowed", context, after_snapshot=record, event=event)
+        record_idempotency(
+            context["idempotency_key"],
+            result.model_dump(),
+            operation_name=operation_name,
+            request_hash=build_request_hash(request_payload, extra={"action": operation_name}),
+        )
+
+    if not postgres_sync.is_enabled():
+        store.save_lot(record["lotId"], record)
+    return result
 
 
 def _build_lot_evidence_item(record: dict[str, Any]) -> LotEvidenceItem:
@@ -146,43 +255,161 @@ def create_harvested_lot(payload: CreateHarvestedLotRequest) -> LotResponse:
     if cached := check_idempotency(key):
         return LotResponse(**cached)
 
-    lot_id = str(uuid.uuid4())
-    lot_code = _new_lot_code(payload.productSkuId)
-    actor_id = context["actor_id"]
+    try:
+        _validate_quantity(payload.actualQty)
+        _validate_harvested_lot_source(payload.sourceType, payload.sourceRefId)
+        unit = _normalize_unit(payload.unit)
+        initial_status = _determine_initial_status(payload)
+    except HTTPException as exc:
+        reason_code = "invalid_quantity"
+        if exc.detail == "Unsupported sourceType.":
+            reason_code = "invalid_source_type"
+        elif exc.detail == "sourceRefId is required.":
+            reason_code = "invalid_source_ref"
+        elif exc.detail == "Referenced crop cycle was not found.":
+            reason_code = "source_ref_not_found"
+        elif exc.detail == "Unsupported lot unit.":
+            reason_code = "invalid_unit"
+        _audit_lot(
+            "lot.create",
+            f"pending:{payload.sourceType}:{payload.sourceRefId}",
+            "denied",
+            context,
+            reason_code=reason_code,
+            metadata={"message": str(exc.detail)},
+        )
+        raise
 
-    record: dict[str, Any] = {
-        "lotId": lot_id,
-        "tenantId": "default",
-        "lotCode": lot_code,
-        "productSkuId": payload.productSkuId,
-        "sourceType": payload.sourceType,
-        "sourceRefId": payload.sourceRefId,
-        "harvestOrProductionDate": payload.harvestOrProductionDate,
-        "actualQty": payload.actualQty,
-        "availableQty": 0.0,      # not available until released
-        "reservedQty": 0.0,
-        "releasedQty": 0.0,
-        "qualityNote": payload.qualityNote,
-        "attachments": list(payload.attachments),
-        "status": LotStatus.harvested.value,
-    }
+    record = _create_lot_record(
+        product_sku_id=payload.productSkuId,
+        source_type=payload.sourceType,
+        source_ref_id=payload.sourceRefId,
+        actual_qty=payload.actualQty,
+        unit=unit,
+        harvest_or_production_date=payload.harvestOrProductionDate,
+        quality_note=payload.qualityNote,
+        attachments=payload.attachments,
+        status=initial_status,
+    )
+    return _persist_created_lot(
+        record=record,
+        event_name="lot.harvest.created",
+        action_name="lot.create",
+        operation_name="lot.create",
+        context=context,
+        request_payload=payload,
+    )
+
+
+def create_processed_lot(payload: CreateProcessedLotRequest) -> LotResponse:
+    context = meta_context(payload.meta)
+    if cached := check_idempotency(context["idempotency_key"]):
+        return LotResponse(**cached)
+
+    try:
+        _validate_quantity(payload.actualQty)
+        _validate_processed_lot_source(payload.processRefId)
+        unit = _normalize_unit(payload.unit)
+        status = LotStatus.qc_pending.value if payload.requiresQc else LotStatus.harvested.value
+    except HTTPException as exc:
+        reason_code = "invalid_quantity"
+        if exc.detail == "processRefId is required.":
+            reason_code = "invalid_source_ref"
+        elif exc.detail == "Unsupported lot unit.":
+            reason_code = "invalid_unit"
+        _audit_lot(
+            "lot.processed_create",
+            f"pending:processing_batch:{payload.processRefId}",
+            "denied",
+            context,
+            reason_code=reason_code,
+            metadata={"message": str(exc.detail)},
+        )
+        raise
+
+    record = _create_lot_record(
+        product_sku_id=payload.productSkuId,
+        source_type="processing_batch",
+        source_ref_id=payload.processRefId,
+        actual_qty=payload.actualQty,
+        unit=unit,
+        harvest_or_production_date=payload.harvestOrProductionDate,
+        quality_note=payload.qualityNote,
+        attachments=payload.attachments,
+        status=status,
+    )
+    return _persist_created_lot(
+        record=record,
+        event_name="lot.processed.created",
+        action_name="lot.processed_create",
+        operation_name="lot.processed_create",
+        context=context,
+        request_payload=payload,
+    )
+
+
+def adjust_lot_quantity(lot_id: str, payload: AdjustLotQuantityRequest) -> LotResponse:
+    context = meta_context(payload.meta)
+    record = _get_lot_record_or_404(lot_id, action_name="lot.adjust_quantity", context=context)
+    before_snapshot = copy.deepcopy(record)
+
+    key = context["idempotency_key"]
+    if cached := check_idempotency(key):
+        return LotResponse(**cached)
+
+    if payload.newActualQty <= 0:
+        _audit_lot(
+            "lot.adjust_quantity",
+            lot_id,
+            "denied",
+            context,
+            before_snapshot=before_snapshot,
+            reason_code="invalid_quantity",
+            metadata={"message": "newActualQty must be greater than 0."},
+        )
+        raise HTTPException(status_code=422, detail="newActualQty must be greater than 0.")
+    if payload.newActualQty < record.get("releasedQty", 0):
+        _audit_lot(
+            "lot.adjust_quantity",
+            lot_id,
+            "denied",
+            context,
+            before_snapshot=before_snapshot,
+            reason_code="adjusted_qty_below_released_qty",
+            metadata={"message": "newActualQty cannot be less than releasedQty."},
+        )
+        raise HTTPException(status_code=422, detail="newActualQty cannot be less than releasedQty.")
+
+    record["actualQty"] = payload.newActualQty
     result = LotResponse(data=_build_lot_detail(record))
     with postgres_transaction() if postgres_sync.is_enabled() else nullcontext():
         if postgres_sync.is_enabled():
             postgres_sync.upsert_lot(record)
-            append_lot_evidence(lot_id, record["attachments"], actor_id)
         event = _emit_lot_event(
-            "lot.harvest.created",
+            "lot.adjusted",
             lot_id,
-            payload=record,
+            payload={
+                "lotId": lot_id,
+                "oldActualQty": before_snapshot["actualQty"],
+                "newActualQty": payload.newActualQty,
+                "reason": payload.reason,
+            },
             context=context,
         )
-        _audit_lot("lot.create", lot_id, "allowed", context, after_snapshot=record, event=event)
+        _audit_lot(
+            "lot.adjust_quantity",
+            lot_id,
+            "allowed",
+            context,
+            before_snapshot=before_snapshot,
+            after_snapshot=record,
+            event=event,
+        )
         record_idempotency(
             key,
             result.model_dump(),
-            operation_name="lot.create",
-            request_hash=build_request_hash(payload, extra={"action": "lot.create"}),
+            operation_name="lot.adjust_quantity",
+            request_hash=build_request_hash(payload, extra={"action": "lot.adjust_quantity", "lotId": lot_id}),
         )
 
     if not postgres_sync.is_enabled():
