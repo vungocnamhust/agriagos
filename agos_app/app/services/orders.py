@@ -1,6 +1,7 @@
 import copy
 import uuid
 from contextlib import nullcontext
+from decimal import Decimal
 from typing import Any
 
 from fastapi import HTTPException
@@ -119,6 +120,50 @@ def _raise_order_denied(
     raise HTTPException(status_code=status_code, detail=detail)
 
 
+def _recompute_preorder_remaining(record: dict[str, Any]) -> float:
+    return float(max(
+        Decimal("0"),
+        Decimal(str(record.get("committedQty", 0.0) or 0.0))
+        - Decimal(str(record.get("allocatedQty", 0.0) or 0.0))
+        - Decimal(str(record.get("deliveredQty", 0.0) or 0.0))
+        - Decimal(str(record.get("cancelledQty", 0.0) or 0.0)),
+    ))
+
+
+def _increment_preorder_allocated_qty(preorder_id: str, qty: float) -> None:
+    preorder_record = postgres_sync.fetch_preorder(preorder_id) if postgres_sync.is_enabled() else store.get_preorder(preorder_id)
+    if preorder_record is None:
+        return
+
+    if postgres_sync.is_enabled():
+        updated_preorder = postgres_sync.increment_allocated_qty_atomic(preorder_id, qty)
+        if updated_preorder is not None:
+            store.save_preorder(preorder_id, updated_preorder)
+        return
+
+    updated_preorder = copy.deepcopy(preorder_record)
+    updated_preorder["allocatedQty"] = float(updated_preorder.get("allocatedQty", 0.0) or 0.0) + qty
+    updated_preorder["remainingQty"] = _recompute_preorder_remaining(updated_preorder)
+    store.save_preorder(preorder_id, updated_preorder)
+
+
+def _decrement_preorder_allocated_qty(preorder_id: str, qty: float) -> None:
+    preorder_record = postgres_sync.fetch_preorder(preorder_id) if postgres_sync.is_enabled() else store.get_preorder(preorder_id)
+    if preorder_record is None:
+        return
+
+    if postgres_sync.is_enabled():
+        updated_preorder = postgres_sync.decrement_allocated_qty_atomic(preorder_id, qty)
+        if updated_preorder is not None:
+            store.save_preorder(preorder_id, updated_preorder)
+        return
+
+    updated_preorder = copy.deepcopy(preorder_record)
+    updated_preorder["allocatedQty"] = max(0.0, float(updated_preorder.get("allocatedQty", 0.0) or 0.0) - qty)
+    updated_preorder["remainingQty"] = _recompute_preorder_remaining(updated_preorder)
+    store.save_preorder(preorder_id, updated_preorder)
+
+
 def _record_preorder_delivery(
     preorder_id: str,
     qty: float,
@@ -134,9 +179,15 @@ def _record_preorder_delivery(
         updated_preorder = postgres_sync.increment_preorder_delivered_qty_atomic(preorder_id, qty)
     else:
         updated_preorder = copy.deepcopy(preorder_record)
+        updated_preorder["allocatedQty"] = max(0.0, float(updated_preorder.get("allocatedQty", 0.0) or 0.0) - qty)
         updated_preorder["deliveredQty"] = updated_preorder.get("deliveredQty", 0.0) + qty
-        updated_preorder["remainingQty"] = max(0.0, updated_preorder["committedQty"] - updated_preorder["deliveredQty"])
-        if updated_preorder["remainingQty"] == 0:
+        updated_preorder["remainingQty"] = _recompute_preorder_remaining(updated_preorder)
+        completion_basis = (
+            Decimal(str(updated_preorder.get("committedQty", 0.0) or 0.0))
+            - Decimal(str(updated_preorder.get("deliveredQty", 0.0) or 0.0))
+            - Decimal(str(updated_preorder.get("cancelledQty", 0.0) or 0.0))
+        )
+        if completion_basis <= Decimal("0"):
             updated_preorder["status"] = PreorderStatus.completed.value
         store.save_preorder(preorder_id, updated_preorder)
 
@@ -400,6 +451,7 @@ def allocate_order(order_id: str, payload: AllocateOrderRequest) -> AllocationRe
     all_allocations = list(existing_allocations)
     new_allocations: list[dict[str, Any]] = []
     line_map = {ln["orderLineId"]: ln for ln in record["lines"]}
+    preorder_allocations: list[tuple[str, float]] = []
 
     for item in payload.allocations:
         try:
@@ -459,7 +511,13 @@ def allocate_order(order_id: str, payload: AllocateOrderRequest) -> AllocationRe
         all_allocations.append(alloc_record)
         new_allocations.append(alloc_record)
 
+        source_preorder_id = line_map[item.orderLineId].get("sourcePreorderId")
+        if source_preorder_id:
+            preorder_allocations.append((source_preorder_id, item.allocatedQty))
+
         if not postgres_sync.is_enabled():
+            if source_preorder_id:
+                _increment_preorder_allocated_qty(source_preorder_id, item.allocatedQty)
             lot["availableQty"] -= item.allocatedQty
             lot["reservedQty"] = lot.get("reservedQty", 0.0) + item.allocatedQty
 
@@ -480,6 +538,8 @@ def allocate_order(order_id: str, payload: AllocateOrderRequest) -> AllocationRe
                     reason_code="allocation_atomic_rejected",
                     before_snapshot=before_snapshot,
                 )
+            for source_preorder_id, allocated_qty in preorder_allocations:
+                _increment_preorder_allocated_qty(source_preorder_id, allocated_qty)
             record = _get_order_record_or_404(order_id)
             event = _emit_order_event(
                 "order.allocated",
@@ -774,6 +834,7 @@ def cancel_order(order_id: str, payload: CancelOrderRequest | None) -> OrderResp
         )
         raise
     allocations = _get_allocations_for_order(order_id)
+    preorder_by_line_id = {line["orderLineId"]: line.get("sourcePreorderId") for line in record.get("lines", [])}
 
     # Release reserved inventory back to lots
     result = OrderResponse(data=_build_order_detail(record))
@@ -782,6 +843,10 @@ def cancel_order(order_id: str, payload: CancelOrderRequest | None) -> OrderResp
             postgres_sync.cancel_order_atomic(order_id, next_status)
             record = _get_order_record_or_404(order_id)
             allocations = _get_allocations_for_order(order_id)
+            for alloc in allocations:
+                source_preorder_id = preorder_by_line_id.get(alloc.get("orderLineId"))
+                if source_preorder_id:
+                    _decrement_preorder_allocated_qty(source_preorder_id, alloc.get("allocatedQty", 0.0))
             event = _emit_order_event(
                 "order.cancelled",
                 order_id,
@@ -810,6 +875,9 @@ def cancel_order(order_id: str, payload: CancelOrderRequest | None) -> OrderResp
                 lot["availableQty"] += alloc.get("allocatedQty", 0.0)
                 lot["reservedQty"] = max(0.0, lot.get("reservedQty", 0.0) - alloc.get("allocatedQty", 0.0))
                 postgres_sync.upsert_lot(lot)
+            source_preorder_id = preorder_by_line_id.get(alloc.get("orderLineId"))
+            if source_preorder_id:
+                _decrement_preorder_allocated_qty(source_preorder_id, alloc.get("allocatedQty", 0.0))
 
         record["status"] = next_status
         postgres_sync.upsert_order(record)

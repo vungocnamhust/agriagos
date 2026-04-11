@@ -36,10 +36,11 @@ be reassigned.
 
 **Owns:**
 - preorder identity and its link to `CustomerProfile`
-- the commitment quantities: `committed_qty`, `allocated_qty`, `delivered_qty`, `remaining_qty`
+- the commitment quantities: `committed_qty`, `allocated_qty`, `delivered_qty`, `cancelled_qty`, `remaining_qty`
 - expected delivery schedule
 - deposit or payment notes
-- preorder lifecycle state: `placed → active → partially_fulfilled → completed | cancelled`
+- preorder lifecycle state: `draft → confirmed → active → completed | cancelled`
+- append-only `preorder_adjustments` history for committed quantity changes
 
 **Does not own:**
 - the actual delivery — that belongs to `SalesOrder` + `DeliveryRecord`
@@ -47,8 +48,10 @@ be reassigned.
 - product master data — `ProductSKU` owns that
 
 **Core rule:** Preorder is a commitment contract, not a delivery instruction. `delivered_qty`
-advances only when a linked `SalesOrder` reaches `delivered` state. No silent quantity edits —
-every change emits `PreorderAdjusted`.
+advances only when a linked `SalesOrder` reaches `delivered` state. `remaining_qty` means
+allocatable balance: `committed_qty - allocated_qty - delivered_qty - cancelled_qty`. No silent
+quantity edits — every committed quantity change emits `PreorderAdjusted` and records an append-only
+adjustment entry.
 
 ---
 

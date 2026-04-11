@@ -42,15 +42,21 @@ LOT_TRANSITIONS: dict[str, dict[str, str]] = {
 }
 
 PREORDER_TRANSITIONS: dict[str, dict[str, str]] = {
-    # Phase 1: preorders are created directly in "active" state.
-    # "draft" and "confirmed" states exist in PreorderStatus enum but the
-    # full draft→confirmed→active lifecycle is deferred to Phase 1.5.
-    PreorderStatus.active.value: {"adjust": PreorderStatus.active.value, "cancel": PreorderStatus.cancelled.value},
+    PreorderStatus.draft.value: {
+        "confirm": PreorderStatus.confirmed.value,
+        "cancel": PreorderStatus.cancelled.value,
+    },
+    PreorderStatus.confirmed.value: {
+        "activate": PreorderStatus.active.value,
+        "adjust": PreorderStatus.confirmed.value,
+        "cancel": PreorderStatus.cancelled.value,
+    },
+    PreorderStatus.active.value: {
+        "adjust": PreorderStatus.active.value,
+        "cancel": PreorderStatus.cancelled.value,
+    },
     PreorderStatus.completed.value: {},
     PreorderStatus.cancelled.value: {},
-    # Phase 1.5 states — not reachable via gateway in Phase 1:
-    # PreorderStatus.draft.value: {"confirm": PreorderStatus.confirmed.value, "cancel": PreorderStatus.cancelled.value}
-    # PreorderStatus.confirmed.value: {"activate": PreorderStatus.active.value, "cancel": PreorderStatus.cancelled.value}
 }
 
 LEGACY_ORDER_STATES: dict[str, str] = {

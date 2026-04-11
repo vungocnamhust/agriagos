@@ -134,6 +134,7 @@ def test_customer_360_view_returns_nested_projection_from_real_postgres(
                 committed_qty,
                 allocated_qty,
                 delivered_qty,
+                cancelled_qty,
                 remaining_qty,
                 status
             ) VALUES
@@ -145,7 +146,8 @@ def test_customer_360_view_returns_nested_projection_from_real_postgres(
                 20,
                 5,
                 2,
-                18,
+                0,
+                13,
                 'active'
             ),
             (
@@ -154,6 +156,7 @@ def test_customer_360_view_returns_nested_projection_from_real_postgres(
                 CAST(:customer_id AS uuid),
                 CAST(:product_sku_id AS uuid),
                 10,
+                0,
                 0,
                 0,
                 10,
@@ -270,7 +273,7 @@ def test_customer_360_view_returns_nested_projection_from_real_postgres(
     assert preorder["committedQty"] == 20
     assert preorder["allocatedQty"] == 5
     assert preorder["deliveredQty"] == 2
-    assert preorder["remainingQty"] == 18
+    assert preorder["remainingQty"] == 13
 
     assert [item["orderCode"] for item in row["recent_orders"]] == [f"ORD-IT-{code_suffix}"]
     assert row["recent_orders"][0]["lines"][0]["orderLineId"] == order_line_id

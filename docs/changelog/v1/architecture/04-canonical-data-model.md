@@ -195,7 +195,9 @@ CRM có thể giữ conversation, nhưng customer identity canonical vẫn phả
 - `start_date`
 
 ### Rule quan trọng
-- `remaining_qty` phải tính được rõ
+- `remaining_qty` là quota còn có thể allocate: `committed_qty - allocated_qty - delivered_qty - cancelled_qty`
+- `committed_qty` là current commitment sau các lần adjust hợp lệ
+- `cancelled_qty` phản ánh phần quota bị hủy ở action cancel, không dùng để phản ánh delta adjust
 - mọi điều chỉnh quantity sau confirmed phải có event
 
 ### Nên có thêm
@@ -203,6 +205,7 @@ CRM có thể giữ conversation, nhưng customer identity canonical vẫn phả
 - `delivery_note`
 - `deposit_amount`
 - `cancelled_qty`
+- lịch sử `preorder_adjustments` dạng append-only để audit adjustment riêng với event log
 
 ---
 

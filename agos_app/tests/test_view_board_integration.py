@@ -470,6 +470,7 @@ def test_customer_360_endpoint_reads_real_postgres_projection(
                 committed_qty,
                 allocated_qty,
                 delivered_qty,
+                cancelled_qty,
                 remaining_qty,
                 status
             ) VALUES (
@@ -480,7 +481,8 @@ def test_customer_360_endpoint_reads_real_postgres_projection(
                 12,
                 2,
                 1,
-                11,
+                0,
+                9,
                 'active'
             )
             """
@@ -567,6 +569,7 @@ def test_customer_360_endpoint_reads_real_postgres_projection(
     assert payload["customer"]["customerId"] == customer_id
     assert payload["customer"]["fullName"] == "Endpoint Customer"
     assert [item["preorderCode"] for item in payload["activePreorders"]] == [f"DT-EP-{code_suffix}"]
+    assert payload["activePreorders"][0]["remainingQty"] == 9
     assert [item["orderCode"] for item in payload["recentOrders"]] == [f"ORD-EP-{code_suffix}"]
     assert payload["recentOrders"][0]["lines"][0]["orderLineId"] == order_line_id
     assert payload["preferences"] == [

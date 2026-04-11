@@ -47,7 +47,8 @@ def test_customer_360_returns_customer_preorders_orders_and_preferences() -> Non
             "committedQty": 20.0,
             "allocatedQty": 5.0,
             "deliveredQty": 2.0,
-            "remainingQty": 18.0,
+            "cancelledQty": 0.0,
+            "remainingQty": 13.0,
             "status": "active",
         },
     )
@@ -61,6 +62,7 @@ def test_customer_360_returns_customer_preorders_orders_and_preferences() -> Non
             "committedQty": 10.0,
             "allocatedQty": 0.0,
             "deliveredQty": 0.0,
+            "cancelledQty": 0.0,
             "remainingQty": 10.0,
             "status": "active",
         },
@@ -124,6 +126,7 @@ def test_customer_360_returns_customer_preorders_orders_and_preferences() -> Non
     payload = response.json()
     assert payload["customer"]["fullName"] == "Alice Nguyen"
     assert [item["preorderCode"] for item in payload["activePreorders"]] == ["DT-002", "DT-001"]
+    assert payload["activePreorders"][0]["remainingQty"] == 13.0
     assert [item["orderCode"] for item in payload["recentOrders"]] == ["ORD-202604-0002", "ORD-202604-0001"]
     assert [item["preferenceType"] for item in payload["preferences"]] == ["pack_size", "variety"]
 

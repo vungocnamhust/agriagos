@@ -1,6 +1,14 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from app.models.common import Meta
 from app.models.enums import PreorderStatus
+
+
+class PreorderAdjustmentEntry(BaseModel):
+    oldCommittedQty: float
+    newCommittedQty: float
+    reason: str
+    changedAt: str
+    actorId: str | None = None
 
 class PreorderDetail(BaseModel):
     preorderId: str
@@ -14,6 +22,7 @@ class PreorderDetail(BaseModel):
     cancelledQty: float = 0
     status: PreorderStatus  # required: draft|confirmed|active|completed|cancelled (06-state-transitions.md)
     startDate: str | None = None
+    adjustmentHistory: list[PreorderAdjustmentEntry] = Field(default_factory=list)
 
 class CreatePreorderRequest(BaseModel):
     customerId: str
@@ -27,6 +36,19 @@ class CreatePreorderRequest(BaseModel):
 
 class AdjustPreorderRequest(BaseModel):
     newCommittedQty: float
+    reason: str
+    meta: Meta | None = None
+
+
+class ConfirmPreorderRequest(BaseModel):
+    meta: Meta | None = None
+
+
+class ActivatePreorderRequest(BaseModel):
+    meta: Meta | None = None
+
+
+class CancelPreorderRequest(BaseModel):
     reason: str
     meta: Meta | None = None
 

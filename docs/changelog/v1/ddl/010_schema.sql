@@ -58,14 +58,26 @@ CREATE TABLE IF NOT EXISTS preorders (
     committed_qty NUMERIC(18,3) NOT NULL CHECK (committed_qty > 0),
     allocated_qty NUMERIC(18,3) NOT NULL DEFAULT 0 CHECK (allocated_qty >= 0),
     delivered_qty NUMERIC(18,3) NOT NULL DEFAULT 0 CHECK (delivered_qty >= 0),
+    cancelled_qty NUMERIC(18,3) NOT NULL DEFAULT 0 CHECK (cancelled_qty >= 0),
     remaining_qty NUMERIC(18,3) NOT NULL CHECK (remaining_qty >= 0),
     delivery_cadence TEXT,
     deposit_amount NUMERIC(18,2),
     notes TEXT,
     status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','confirmed','active','completed','cancelled')),
     start_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    CONSTRAINT ck_preorders_total_le_committed CHECK ((allocated_qty + delivered_qty + cancelled_qty) <= committed_qty),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS preorder_adjustments (
+    adjustment_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    preorder_id UUID NOT NULL REFERENCES preorders(preorder_id) ON DELETE CASCADE,
+    old_committed_qty NUMERIC(18,3) NOT NULL,
+    new_committed_qty NUMERIC(18,3) NOT NULL,
+    reason TEXT,
+    actor_id TEXT,
+    changed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS plots (

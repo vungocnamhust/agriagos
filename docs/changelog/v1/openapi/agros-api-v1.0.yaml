@@ -394,6 +394,102 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/preorders/{preorder_id}/confirm:
+    post:
+      tags:
+      - Preorders
+      summary: Confirm Preorder
+      operationId: confirm_preorder_api_v1_preorders__preorder_id__confirm_post
+      parameters:
+      - name: preorder_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Preorder Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmPreorderRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreorderResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/preorders/{preorder_id}/activate:
+    post:
+      tags:
+      - Preorders
+      summary: Activate Preorder
+      operationId: activate_preorder_api_v1_preorders__preorder_id__activate_post
+      parameters:
+      - name: preorder_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Preorder Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivatePreorderRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreorderResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/preorders/{preorder_id}/cancel:
+    post:
+      tags:
+      - Preorders
+      summary: Cancel Preorder
+      operationId: cancel_preorder_api_v1_preorders__preorder_id__cancel_post
+      parameters:
+      - name: preorder_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Preorder Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelPreorderRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreorderResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/orders:
     post:
       tags:
@@ -790,6 +886,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LotResponse'
+        '403':
+          description: Permission or approval required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Aggregate not found
           content:
@@ -1297,6 +1399,35 @@ components:
       - newCommittedQty
       - reason
       title: AdjustPreorderRequest
+    ActivatePreorderRequest:
+      properties:
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      title: ActivatePreorderRequest
+    CancelPreorderRequest:
+      properties:
+        reason:
+          type: string
+          title: Reason
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - reason
+      title: CancelPreorderRequest
+    ConfirmPreorderRequest:
+      properties:
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      title: ConfirmPreorderRequest
     AllocateItem:
       properties:
         orderLineId:
@@ -2742,6 +2873,32 @@ components:
       - preferenceValue
       - confidenceLevel
       title: PreferenceResponse
+    PreorderAdjustmentEntry:
+      properties:
+        oldCommittedQty:
+          type: number
+          title: Oldcommittedqty
+        newCommittedQty:
+          type: number
+          title: Newcommittedqty
+        reason:
+          type: string
+          title: Reason
+        changedAt:
+          type: string
+          title: Changedat
+        actorId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Actorid
+      type: object
+      required:
+      - oldCommittedQty
+      - newCommittedQty
+      - reason
+      - changedAt
+      title: PreorderAdjustmentEntry
     PreorderDetail:
       properties:
         preorderId:
@@ -2779,6 +2936,11 @@ components:
           - type: string
           - type: 'null'
           title: Startdate
+        adjustmentHistory:
+          items:
+            $ref: '#/components/schemas/PreorderAdjustmentEntry'
+          type: array
+          title: Adjustmenthistory
       type: object
       required:
       - preorderId
@@ -2867,6 +3029,12 @@ components:
         releasedQty:
           type: number
           title: Releasedqty
+        approvalRef:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Approvalref
+          description: Required for sensitive harvested-lane releases initiated by Farm Manager or Ops roles.
         qualityStatus:
           anyOf:
           - type: string

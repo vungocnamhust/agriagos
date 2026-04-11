@@ -94,7 +94,7 @@ agos_app/
 │   │   ├── idempotency.py # Durable idempotency_records access
 │   │   ├── lots.py       # Lot store operations
 │   │   ├── orders.py     # Order store operations (atomic cancel/allocate)
-│   │   ├── preorders.py  # Preorder store + increment_delivered_qty_atomic (SSoT for delivered qty)
+│   │   ├── preorders.py  # Preorder store + quantity/history helpers for delivered/allocated/cancelled state
 │   │   ├── postgres_sync.py  # Backward-compat re-export shim (do not add logic here)
 │   │   ├── views.py      # DB-backed read-model queries for `/views`
 │   │   └── memory.py     # In-memory fallback for local dev / unit tests
@@ -177,12 +177,14 @@ All diagrams use `[Phase 1 ✅]` / `[Phase 2 🔜]` labels to distinguish implem
 
 **Key Phase 1 state machine facts** (source: `core/gateway.py`):
 - Order: `draft → confirmed → allocated → packed → shipped → delivered`; cancel path from `draft`/`confirmed` directly; `cancel_requested` only from `allocated`/`packed`
-- Lot: create path can initialize `harvested` or `qc_pending`; gateway currently supports `harvested/qc_pending → released` and `harvested/qc_pending/released → blocked`
-- Preorder: created in `active`; `adjust` stays `active`; `cancel → cancelled`
+- Lot: create path can initialize `harvested` or `qc_pending`; gateway currently supports `harvested/qc_pending → released`, `harvested/qc_pending/released → blocked`, and `blocked → qc_pending` via unblock without reopening inventory
+- Preorder: created in `draft`; `confirm → confirmed`; `activate → active`; `adjust` stays in current `confirmed` or `active` state; `cancel → cancelled`; `remainingQty` is allocatable balance `committedQty - allocatedQty - deliveredQty - cancelledQty`
 
 **Key Phase 1 event names** (source: `core/events.py` + `services/`):
 - Use dotted lowercase at runtime: `order.created`, `order.confirmed`, `lot.harvest.created`, `lot.processed.created`, `lot.adjusted`, `preorder.placed`
+- Preorder runtime events now include `preorder.confirmed`, `preorder.activated`, `preorder.adjusted`, `preorder.cancelled`, `preorder.quota_consumed`, and `preorder.completed`
 - `eventType` is auto-derived PascalCase: `OrderCreated`, `OrderConfirmed`, `LotHarvestCreated`, `LotProcessedCreated`, `LotAdjusted`, `PreorderPlaced`
+- Preorder detail now carries append-only `adjustmentHistory`, backed by the `preorder_adjustments` table on the PostgreSQL path
 
 When repo-root docs and `docs/changelog/v1/architecture/` overlap, treat the `docs/changelog/v1/architecture/` set as the working baseline for current deterministic-core decisions.
 

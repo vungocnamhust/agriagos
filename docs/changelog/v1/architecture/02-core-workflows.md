@@ -236,7 +236,8 @@ Lot đã tồn tại, nhưng chỉ khi đủ điều kiện mới được coi l
 - `released_qty` không được lớn hơn `actual_qty`
 - blocked lot không được allocate
 - release là quyết định nghiệp vụ, không phải chỉ là cập nhật một con số
-- case release nhạy cảm phải đi qua `request -> approval -> release`
+- phase hiện tại đi theo direct action `release -> block -> unblock`; case nhạy cảm vẫn có thể đòi approval theo policy nhưng chưa có command/event tách riêng
+- direct release từ lane `harvested` cho actor như Farm Manager hoặc Ops được coi là case nhạy cảm và phải mang `approval_ref`
 - approval policy tối thiểu xem ở `07-permission-matrix.md`; state guard xem ở `06-state-transitions.md`
 
 ### Output
