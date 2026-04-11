@@ -16,9 +16,7 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
-                type: object
-                title: Response Get Health Health Get
+                $ref: '#/components/schemas/HealthResponse'
   /api/v1/customers:
     post:
       tags:
@@ -38,12 +36,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CustomerResponse'
-        '422':
-          description: Validation Error
+        '409':
+          description: Conflict
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/HTTPValidationError'
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     get:
       tags:
       - Customers
@@ -72,6 +76,7 @@ paths:
         schema:
           anyOf:
           - type: string
+            pattern: '[A-Za-z0-9_-]+'
           - type: 'null'
           title: Tag
       responses:
@@ -80,15 +85,26 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
-                title: Response List Customers Api V1 Customers Get
+                $ref: '#/components/schemas/CustomerListResponse'
         '422':
-          description: Validation Error
+          description: Validation error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/HTTPValidationError'
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/customers/duplicate-candidates:
+    get:
+      tags:
+      - Customers
+      summary: List Duplicate Candidates
+      operationId: list_duplicate_candidates_api_v1_customers_duplicate_candidates_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerDuplicateCandidateListResponse'
   /api/v1/customers/{customer_id}:
     get:
       tags:
@@ -101,7 +117,6 @@ paths:
         required: true
         schema:
           type: string
-          format: uuid
           title: Customer Id
       responses:
         '200':
@@ -110,12 +125,55 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CustomerDetail'
-        '422':
-          description: Validation Error
+        '404':
+          description: Aggregate not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/HTTPValidationError'
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      tags:
+      - Customers
+      summary: Update Customer
+      operationId: update_customer_api_v1_customers__customer_id__patch
+      parameters:
+      - name: customer_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Customer Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCustomerRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerDetail'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/customers/{customer_id}/preferences:
     post:
       tags:
@@ -142,12 +200,88 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PreferenceResponse'
-        '422':
-          description: Validation Error
+        '404':
+          description: Aggregate not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/HTTPValidationError'
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/customers/{customer_id}/duplicate-candidates:
+    get:
+      tags:
+      - Customers
+      summary: List Customer Duplicate Candidates
+      operationId: list_customer_duplicate_candidates_api_v1_customers__customer_id__duplicate_candidates_get
+      parameters:
+      - name: customer_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Customer Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerDuplicateCandidateListResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/customers/duplicate-candidates/{candidate_id}/review:
+    post:
+      tags:
+      - Customers
+      summary: Review Duplicate Candidate
+      operationId: review_duplicate_candidate_api_v1_customers_duplicate_candidates__candidate_id__review_post
+      parameters:
+      - name: candidate_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Candidate Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewDuplicateCandidateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerDuplicateCandidateSummary'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/preorders:
     post:
       tags:
@@ -305,6 +439,7 @@ paths:
               anyOf:
               - $ref: '#/components/schemas/ConfirmOrderRequest'
               - type: 'null'
+              title: Payload
       responses:
         '200':
           description: Successful Response
@@ -759,8 +894,9 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
-                type: object
+                items:
+                  $ref: '#/components/schemas/PlotSummary'
+                type: array
                 title: Response List Plots Api V1 Farm Plots Get
   /api/v1/farm/crop-cycles:
     get:
@@ -791,8 +927,9 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
+                type: array
+                items:
+                  $ref: '#/components/schemas/CropCycleSummary'
                 title: Response List Crop Cycles Api V1 Farm Crop Cycles Get
         '422':
           description: Validation Error
@@ -969,6 +1106,29 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
 components:
   schemas:
+    AddLotEvidenceRequest:
+      properties:
+        evidenceType:
+          type: string
+          title: Evidencetype
+        objectStorageKey:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Objectstoragekey
+        textValue:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Textvalue
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - evidenceType
+      title: AddLotEvidenceRequest
     AdjustPreorderRequest:
       properties:
         newCommittedQty:
@@ -1113,29 +1273,6 @@ components:
       - availableQty
       - status
       title: AvailableLotView
-    AddLotEvidenceRequest:
-      properties:
-        evidenceType:
-          type: string
-          title: Evidencetype
-        objectStorageKey:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Objectstoragekey
-        textValue:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Textvalue
-        meta:
-          anyOf:
-          - $ref: '#/components/schemas/Meta'
-          - type: 'null'
-      type: object
-      required:
-      - evidenceType
-      title: AddLotEvidenceRequest
     BlockLotRequest:
       properties:
         reason:
@@ -1167,6 +1304,14 @@ components:
           - type: 'null'
       type: object
       title: CancelOrderRequest
+    ConfirmOrderRequest:
+      properties:
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      title: ConfirmOrderRequest
     CreateCustomerRequest:
       properties:
         fullName:
@@ -1200,7 +1345,6 @@ components:
             type: string
           type: array
           title: Tags
-          default: []
         notes:
           anyOf:
           - type: string
@@ -1277,14 +1421,6 @@ components:
       - orderedQty
       - unit
       title: CreateOrderLineRequest
-    ConfirmOrderRequest:
-      properties:
-        meta:
-          anyOf:
-          - $ref: '#/components/schemas/Meta'
-          - type: 'null'
-      type: object
-      title: ConfirmOrderRequest
     CreateOrderRequest:
       properties:
         customerId:
@@ -1391,6 +1527,49 @@ components:
       - checklistVersion
       - result
       title: CreateQCReviewRequest
+    CropCycleStatus:
+      type: string
+      enum:
+      - planned
+      - active
+      - near_harvest
+      - harvested
+      - closed
+      - cancelled
+      title: CropCycleStatus
+    CropCycleSummary:
+      properties:
+        cropCycleId:
+          type: string
+          title: Cropcycleid
+        plotId:
+          type: string
+          title: Plotid
+        cropName:
+          type: string
+          title: Cropname
+        growthStage:
+          $ref: '#/components/schemas/GrowthStage'
+        status:
+          $ref: '#/components/schemas/CropCycleStatus'
+        expectedHarvestFrom:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Expectedharvestfrom
+        expectedHarvestTo:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Expectedharvestto
+      type: object
+      required:
+      - cropCycleId
+      - plotId
+      - cropName
+      - growthStage
+      - status
+      title: CropCycleSummary
     Customer360View:
       properties:
         customer:
@@ -1407,7 +1586,7 @@ components:
           title: Recentorders
         preferences:
           items:
-            $ref: '#/components/schemas/CustomerPreferenceItem'
+            $ref: '#/components/schemas/app__models__views__CustomerPreferenceItem'
           type: array
           title: Preferences
       type: object
@@ -1443,7 +1622,6 @@ components:
             type: string
           type: array
           title: Tags
-          default: []
         channelSource:
           anyOf:
           - type: string
@@ -1474,6 +1652,16 @@ components:
           - type: string
           - type: 'null'
           title: Lastorderat
+        preferences:
+          items:
+            $ref: '#/components/schemas/app__models__customers__CustomerPreferenceItem'
+          type: array
+          title: Preferences
+        duplicateCandidates:
+          items:
+            $ref: '#/components/schemas/CustomerDuplicateCandidateSummary'
+          type: array
+          title: Duplicatecandidates
       type: object
       required:
       - customerId
@@ -1482,23 +1670,82 @@ components:
       - phone
       - status
       title: CustomerDetail
-    CustomerPreferenceItem:
+    CustomerDuplicateCandidateListResponse:
       properties:
-        preferenceType:
-          type: string
-          title: Preferencetype
-        preferenceValue:
-          type: string
-          title: Preferencevalue
-        confidenceLevel:
-          type: number
-          title: Confidencelevel
+        items:
+          items:
+            $ref: '#/components/schemas/CustomerDuplicateCandidateSummary'
+          type: array
+          title: Items
       type: object
       required:
-      - preferenceType
-      - preferenceValue
-      - confidenceLevel
-      title: CustomerPreferenceItem
+      - items
+      title: CustomerDuplicateCandidateListResponse
+    CustomerDuplicateCandidateSummary:
+      properties:
+        candidateId:
+          type: string
+          title: Candidateid
+        primaryCustomerId:
+          type: string
+          title: Primarycustomerid
+        suspectedCustomerId:
+          type: string
+          title: Suspectedcustomerid
+        matchReason:
+          type: string
+          title: Matchreason
+        matchScore:
+          type: number
+          title: Matchscore
+        status:
+          type: string
+          enum:
+          - open
+          - reviewed_duplicate
+          - reviewed_distinct
+          - ignored
+          title: Status
+        detectedAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Detectedat
+        reviewedAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reviewedat
+        reviewedBy:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reviewedby
+        note:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Note
+      type: object
+      required:
+      - candidateId
+      - primaryCustomerId
+      - suspectedCustomerId
+      - matchReason
+      - matchScore
+      - status
+      title: CustomerDuplicateCandidateSummary
+    CustomerListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/CustomerSummary'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: CustomerListResponse
     CustomerResponse:
       properties:
         data:
@@ -1540,7 +1787,6 @@ components:
             type: string
           type: array
           title: Tags
-          default: []
       type: object
       required:
       - customerId
@@ -1572,6 +1818,94 @@ components:
           - type: 'null'
       type: object
       title: DeliverOrderRequest
+    DomainEvent:
+      properties:
+        eventId:
+          type: string
+          title: Eventid
+        eventName:
+          type: string
+          title: Eventname
+        eventType:
+          type: string
+          title: Eventtype
+        eventVersion:
+          type: integer
+          title: Eventversion
+          default: 1
+        aggregateType:
+          type: string
+          title: Aggregatetype
+        aggregateId:
+          type: string
+          title: Aggregateid
+        occurredAt:
+          type: string
+          title: Occurredat
+        actorType:
+          type: string
+          enum:
+          - user
+          - system
+          - agent
+          - integration
+          title: Actortype
+        actorId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Actorid
+        correlationId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Correlationid
+        causationId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Causationid
+        idempotencyKey:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotencykey
+        source:
+          $ref: '#/components/schemas/EventSource'
+        tenantId:
+          type: string
+          title: Tenantid
+          default: default
+        payload:
+          additionalProperties: true
+          type: object
+          title: Payload
+      type: object
+      required:
+      - eventId
+      - eventName
+      - eventType
+      - aggregateType
+      - aggregateId
+      - occurredAt
+      - actorType
+      - source
+      title: DomainEvent
+    DomainEventListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/DomainEvent'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+      type: object
+      required:
+      - items
+      - total
+      title: DomainEventListResponse
     ErrorResponse:
       properties:
         code:
@@ -1596,6 +1930,14 @@ components:
       - code
       - message
       title: ErrorResponse
+    EventSource:
+      type: string
+      enum:
+      - core
+      - integration
+      - system_job
+      - agent
+      title: EventSource
     FarmSummaryBoardItem:
       properties:
         plotId:
@@ -1674,6 +2016,32 @@ components:
       required:
       - items
       title: FarmSummaryBoardResponse
+    FarmView:
+      properties:
+        plots:
+          items:
+            $ref: '#/components/schemas/PlotSummary'
+          type: array
+          title: Plots
+        cropCycles:
+          items:
+            $ref: '#/components/schemas/CropCycleSummary'
+          type: array
+          title: Cropcycles
+      type: object
+      required:
+      - plots
+      - cropCycles
+      title: FarmView
+    GrowthStage:
+      type: string
+      enum:
+      - seeded
+      - growing
+      - maturing
+      - harvest_window
+      - harvested
+      title: GrowthStage
     HTTPValidationError:
       properties:
         detail:
@@ -1683,6 +2051,31 @@ components:
           title: Detail
       type: object
       title: HTTPValidationError
+    HealthResponse:
+      properties:
+        status:
+          type: string
+          enum:
+          - ok
+          - degraded
+          title: Status
+        service:
+          type: string
+          title: Service
+        version:
+          type: string
+          title: Version
+        checks:
+          additionalProperties:
+            type: string
+          type: object
+          title: Checks
+      type: object
+      required:
+      - status
+      - service
+      - version
+      title: HealthResponse
     LotDetail:
       properties:
         lotId:
@@ -1847,100 +2240,6 @@ components:
           title: Externalref
       type: object
       title: Meta
-    DomainEvent:
-      properties:
-        eventId:
-          type: string
-          title: Eventid
-        eventName:
-          type: string
-          title: Eventname
-        eventType:
-          type: string
-          title: Eventtype
-        eventVersion:
-          type: integer
-          title: Eventversion
-          default: 1
-        aggregateType:
-          type: string
-          title: Aggregatetype
-        aggregateId:
-          type: string
-          title: Aggregateid
-        occurredAt:
-          type: string
-          title: Occurredat
-        actorType:
-          type: string
-          enum:
-          - user
-          - system
-          - agent
-          - integration
-          title: Actortype
-        actorId:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Actorid
-        correlationId:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Correlationid
-        causationId:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Causationid
-        idempotencyKey:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Idempotencykey
-        source:
-          type: string
-          enum:
-          - core
-          - integration
-          - system_job
-          - agent
-          title: Source
-        tenantId:
-          type: string
-          title: Tenantid
-          default: default
-        payload:
-          type: object
-          additionalProperties: true
-          title: Payload
-      type: object
-      required:
-      - eventId
-      - eventName
-      - eventType
-      - aggregateType
-      - aggregateId
-      - occurredAt
-      - actorType
-      - source
-      title: DomainEvent
-    DomainEventListResponse:
-      properties:
-        items:
-          items:
-            $ref: '#/components/schemas/DomainEvent'
-          type: array
-          title: Items
-        total:
-          type: integer
-          title: Total
-      type: object
-      required:
-      - items
-      - total
-      title: DomainEventListResponse
     OrderDetail:
       properties:
         orderId:
@@ -2077,51 +2376,6 @@ components:
       - cancelled
       - failed
       title: OrderStatus
-    PendingFulfillmentStatus:
-      type: string
-      enum:
-      - confirmed
-      - allocated
-      - packed
-      - shipped
-      title: PendingFulfillmentStatus
-    PendingFulfillmentListResponse:
-      properties:
-        items:
-          items:
-            $ref: '#/components/schemas/PendingFulfillmentView'
-          type: array
-          title: Items
-          description: Orders sorted by shipping deadline with null deadlines last, then by order code.
-      type: object
-      required:
-      - items
-      title: PendingFulfillmentListResponse
-    PendingFulfillmentView:
-      properties:
-        orderId:
-          type: string
-          title: Orderid
-        orderCode:
-          type: string
-          title: Ordercode
-        customerName:
-          type: string
-          title: Customername
-        status:
-          $ref: '#/components/schemas/PendingFulfillmentStatus'
-        shippingDeadline:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Shippingdeadline
-      type: object
-      required:
-      - orderId
-      - orderCode
-      - customerName
-      - status
-      title: PendingFulfillmentView
     PackOrderRequest:
       properties:
         packedQtySummary:
@@ -2163,6 +2417,82 @@ components:
       - refunded
       - writeoff
       title: PaymentStatus
+    PendingFulfillmentListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/PendingFulfillmentView'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: PendingFulfillmentListResponse
+    PendingFulfillmentView:
+      properties:
+        orderId:
+          type: string
+          title: Orderid
+        orderCode:
+          type: string
+          title: Ordercode
+        customerName:
+          type: string
+          title: Customername
+        status:
+          type: string
+          enum:
+          - confirmed
+          - allocated
+          - packed
+          - shipped
+          title: Status
+        shippingDeadline:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Shippingdeadline
+      type: object
+      required:
+      - orderId
+      - orderCode
+      - customerName
+      - status
+      title: PendingFulfillmentView
+    PlotSummary:
+      properties:
+        plotId:
+          type: string
+          title: Plotid
+        plotCode:
+          type: string
+          title: Plotcode
+        name:
+          type: string
+          title: Name
+        locationText:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Locationtext
+        areaValue:
+          type: number
+          title: Areavalue
+        areaUnit:
+          type: string
+          title: Areaunit
+        status:
+          type: string
+          title: Status
+          default: active
+      type: object
+      required:
+      - plotId
+      - plotCode
+      - name
+      - areaValue
+      - areaUnit
+      title: PlotSummary
     PreferenceResponse:
       properties:
         customerId:
@@ -2174,9 +2504,23 @@ components:
         preferenceValue:
           type: string
           title: Preferencevalue
+        source:
+          type: string
+          title: Source
+          default: human
         confidenceLevel:
           type: number
           title: Confidencelevel
+        confirmedBy:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Confirmedby
+        confirmedAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Confirmedat
       type: object
       required:
       - customerId
@@ -2250,29 +2594,6 @@ components:
       - completed
       - cancelled
       title: PreorderStatus
-    ReleaseLotRequest:
-      properties:
-        releasedQty:
-          type: number
-          title: Releasedqty
-        qualityStatus:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Qualitystatus
-        note:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Note
-        meta:
-          anyOf:
-          - $ref: '#/components/schemas/Meta'
-          - type: 'null'
-      type: object
-      required:
-      - releasedQty
-      title: ReleaseLotRequest
     QCReviewItem:
       properties:
         qcReviewId:
@@ -2327,6 +2648,29 @@ components:
       required:
       - data
       title: QCReviewResponse
+    ReleaseLotRequest:
+      properties:
+        releasedQty:
+          type: number
+          title: Releasedqty
+        qualityStatus:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Qualitystatus
+        note:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Note
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - releasedQty
+      title: ReleaseLotRequest
     RequestCancelOrderRequest:
       properties:
         reason:
@@ -2340,6 +2684,28 @@ components:
       required:
       - reason
       title: RequestCancelOrderRequest
+    ReviewDuplicateCandidateRequest:
+      properties:
+        status:
+          type: string
+          enum:
+          - reviewed_duplicate
+          - reviewed_distinct
+          - ignored
+          title: Status
+        note:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Note
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - status
+      title: ReviewDuplicateCandidateRequest
     ShipOrderRequest:
       properties:
         carrier:
@@ -2363,6 +2729,51 @@ components:
       required:
       - carrier
       title: ShipOrderRequest
+    UpdateCustomerRequest:
+      properties:
+        fullName:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Fullname
+        channelSource:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Channelsource
+        defaultAddress:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Defaultaddress
+        district:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: District
+        province:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Province
+        tags:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Tags
+        notes:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Notes
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      title: UpdateCustomerRequest
     UpsertPreferenceRequest:
       properties:
         preferenceType:
@@ -2403,9 +2814,62 @@ components:
         type:
           type: string
           title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
       type: object
       required:
       - loc
       - msg
       - type
       title: ValidationError
+    app__models__customers__CustomerPreferenceItem:
+      properties:
+        preferenceType:
+          type: string
+          title: Preferencetype
+        preferenceValue:
+          type: string
+          title: Preferencevalue
+        source:
+          type: string
+          title: Source
+          default: human
+        confidenceLevel:
+          type: number
+          title: Confidencelevel
+          default: 1.0
+        confirmedBy:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Confirmedby
+        confirmedAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Confirmedat
+      type: object
+      required:
+      - preferenceType
+      - preferenceValue
+      title: CustomerPreferenceItem
+    app__models__views__CustomerPreferenceItem:
+      properties:
+        preferenceType:
+          type: string
+          title: Preferencetype
+        preferenceValue:
+          type: string
+          title: Preferencevalue
+        confidenceLevel:
+          type: number
+          title: Confidencelevel
+      type: object
+      required:
+      - preferenceType
+      - preferenceValue
+      - confidenceLevel
+      title: CustomerPreferenceItem

@@ -104,6 +104,7 @@ Phase đầu cần hiểu rõ:
 - tạo order
 - cập nhật note bán hàng
 - xác nhận preference candidate thành preference dùng cho workflow
+- review duplicate candidate của customer khi cần giữ canonical identity sạch
 
 ### Không được
 - release lot
@@ -127,6 +128,7 @@ Phase đầu cần hiểu rõ:
 - preference candidate
 - lịch follow-up
 - xác nhận preference candidate theo guard chuẩn của core workflow
+- review duplicate candidate khi cần phân biệt đúng hồ sơ khách
 
 ### Không được
 - chỉnh allocation
@@ -155,6 +157,7 @@ Phase đầu cần hiểu rõ:
 - sửa payment final
 - tự un-block lot nếu policy không cho
 - xác nhận preference canonical
+- review duplicate candidate canonical
 
 ---
 
@@ -231,7 +234,13 @@ Phase đầu cần hiểu rõ:
 - sửa permission
 - override source of truth
 - xác nhận preference canonical
+- review duplicate candidate canonical
 - tự approve reconcile giữa Core và ERP
+
+### Guard cho trusted integration trên customer preference
+- integration chỉ được xác nhận trực tiếp preference canonical khi request mang `actorRole=integration`, có `actorId`, và có `externalRef`
+- nếu thiếu một trong ba guard trên, integration payload chỉ được coi là candidate/input chứ không được canonicalize trực tiếp
+- duplicate candidate review không mở cho integration hoặc agent path trong phase hiện tại
 
 ---
 
@@ -254,6 +263,7 @@ Phase đầu cần hiểu rõ:
 | Payment status xem | full | full | limited | limited | limited | no | yes | yes | scoped |
 | Payment chỉnh | full | limited | no | no | no | no | yes | no | no direct |
 | Preference confirm | full | yes | yes | yes theo policy | no | no | no | no | no direct |
+| Duplicate candidate review | full | yes | yes | yes theo policy | no | no | no | no | no direct |
 | ERP reconcile approve | full | limited | no | no | no | no | yes | no | no direct |
 | Config / Permission | full | limited | no | no | no | no | no | no | no |
 

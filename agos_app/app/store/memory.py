@@ -5,6 +5,7 @@ Replace with a real DB + event store in Phase 2.
 """
 from collections import defaultdict
 from datetime import datetime, timezone
+import re
 from typing import Any
 import uuid
 
@@ -15,6 +16,7 @@ _audit_log: list[dict[str, Any]] = []
 # ── Read model projections ────────────────────────────────────────────────────
 _customers: dict[str, dict[str, Any]] = {}
 _preferences: dict[str, list[dict[str, Any]]] = defaultdict(list)  # customer_id → [pref]
+_customer_duplicate_candidates: dict[str, dict[str, Any]] = {}
 
 _preorders: dict[str, dict[str, Any]] = {}
 _orders: dict[str, dict[str, Any]] = {}
@@ -28,6 +30,13 @@ _crop_cycles: dict[str, dict[str, Any]] = {}
 # ── Idempotency registry ──────────────────────────────────────────────────────
 # Maps idempotency_key → stored result payload for deduplication
 _idempotency_cache: dict[str, Any] = {}
+
+
+def _normalize_phone(phone: str) -> str:
+    digits = re.sub(r"\D", "", phone)
+    if digits.startswith("84") and len(digits) > 9:
+        return f"0{digits[2:]}"
+    return digits
 
 
 def append_event(event: dict[str, Any]) -> None:
@@ -44,6 +53,18 @@ def list_customers() -> list[dict[str, Any]]:
 
 def list_customer_preferences(customer_id: str) -> list[dict[str, Any]]:
     return list(_preferences.get(customer_id, []))
+
+
+def list_duplicate_candidates() -> list[dict[str, Any]]:
+    return list(_customer_duplicate_candidates.values())
+
+
+def list_customer_duplicate_candidates(customer_id: str) -> list[dict[str, Any]]:
+    return [
+        candidate
+        for candidate in _customer_duplicate_candidates.values()
+        if candidate.get("primaryCustomerId") == customer_id or candidate.get("suspectedCustomerId") == customer_id
+    ]
 
 
 def list_preorders() -> list[dict[str, Any]]:
@@ -75,7 +96,8 @@ def save_customer(customer_id: str, record: dict[str, Any]) -> None:
 
 
 def customer_phone_exists(phone: str) -> bool:
-    return any(customer.get("phone") == phone for customer in _customers.values())
+    normalized_phone = _normalize_phone(phone)
+    return any(_normalize_phone(customer.get("phone", "")) == normalized_phone for customer in _customers.values())
 
 
 def get_customer_preferences(customer_id: str) -> list[dict[str, Any]]:
@@ -84,6 +106,24 @@ def get_customer_preferences(customer_id: str) -> list[dict[str, Any]]:
 
 def save_customer_preferences(customer_id: str, preferences: list[dict[str, Any]]) -> None:
     _preferences[customer_id] = list(preferences)
+
+
+def get_duplicate_candidate(candidate_id: str) -> dict[str, Any] | None:
+    return _customer_duplicate_candidates.get(candidate_id)
+
+
+def save_duplicate_candidate(candidate_id: str, record: dict[str, Any]) -> None:
+    _customer_duplicate_candidates[candidate_id] = record
+
+
+def has_open_duplicate_candidate(primary_customer_id: str, suspected_customer_id: str, match_reason: str) -> bool:
+    return any(
+        candidate.get("primaryCustomerId") == primary_customer_id
+        and candidate.get("suspectedCustomerId") == suspected_customer_id
+        and candidate.get("matchReason") == match_reason
+        and candidate.get("status") == "open"
+        for candidate in _customer_duplicate_candidates.values()
+    )
 
 
 def get_lot(lot_id: str) -> dict[str, Any] | None:
@@ -223,6 +263,7 @@ def reset_state() -> None:
     _audit_log.clear()
     _customers.clear()
     _preferences.clear()
+    _customer_duplicate_candidates.clear()
     _preorders.clear()
     _orders.clear()
     _allocations.clear()

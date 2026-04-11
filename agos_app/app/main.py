@@ -32,6 +32,7 @@ app.add_middleware(CorrelationIdMiddleware)
 
 _STATUS_CODE_MAP: dict[int, str] = {
     400: "BAD_REQUEST",
+    403: "FORBIDDEN",
     404: "NOT_FOUND",
     409: "CONFLICT",
     422: "VALIDATION_ERROR",

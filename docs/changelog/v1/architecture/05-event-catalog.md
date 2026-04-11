@@ -83,12 +83,23 @@ Payload tối thiểu:
 - source
 - confidence_level
 - confirmed_by
+- confirmed_at
 
 Rule baseline:
 - event này dùng cho cả hai trường hợp: xác nhận candidate thành canonical, hoặc chỉnh sửa một preference đã canonicalized
 - chỉ `Sales`, `CSKH`, `Admin vận hành`, hoặc `Founder / Super Admin` mới được phát sinh event xác nhận preference canonical
+- trusted integration chỉ được phát sinh event này khi request có `actor_role=integration`, `actor_id`, và `external_ref`; nếu không thì payload integration vẫn là candidate/input
 - nếu source là CRM hoặc AI nhưng chưa có người xác nhận, dữ liệu vẫn chỉ là candidate/input cho workflow
+- route `POST /api/v1/customers/{customer_id}/preferences` hiện chỉ phát event cho canonical confirmation/update; candidate ingest raw từ AI/CRM chưa có public customer API riêng trong phase này
 - event này phải đủ để audit được ai đã xác nhận và candidate nào đã được canonicalize
+
+### `CustomerDuplicateCandidateReviewed`
+Phase hiện tại chưa phát domain event riêng cho duplicate-candidate review.
+
+Rule baseline:
+- quyết định review vẫn phải có audit log đầy đủ
+- action review chỉ mở cho `Sales`, `CSKH`, `Admin vận hành`, hoặc `Founder / Super Admin`
+- nếu sau này review outcome bắt đầu kích projection hay workflow liên domain, cần thêm event riêng thay vì chỉ dựa vào audit log
 
 ### `CustomerSegmentChanged`
 Khi khách được chuyển segment.

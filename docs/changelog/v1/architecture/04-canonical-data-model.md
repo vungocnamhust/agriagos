@@ -121,6 +121,7 @@ CRM có thể giữ conversation, nhưng customer identity canonical vẫn phả
 - `customer_code`
 - `full_name`
 - `phone`
+- `phone_normalized`
 - `status`
 - `created_at`
 
@@ -135,7 +136,9 @@ CRM có thể giữ conversation, nhưng customer identity canonical vẫn phả
 
 ### Ghi chú
 - phone là natural key quan trọng nhưng không nên làm primary key
+- `phone_normalized` là internal canonical key dùng cho rule chống trùng cơ bản; `phone` gốc vẫn giữ cho hiển thị
 - merge customer cần event và audit log riêng
+- phase hiện tại đã có `customer_duplicate_candidates` để review nghi ngờ trùng; queue này không được auto-merge record canonical
 
 ---
 
@@ -153,17 +156,22 @@ CRM có thể giữ conversation, nhưng customer identity canonical vẫn phả
 - `confidence_level`
 - `source`
 - `confirmed_by`
+- `confirmed_at`
 - `updated_at`
 
 ### Rule
 - nếu AI gợi ý, `source = ai_suggestion`
 - nếu chưa xác nhận, không được coi là truth cứng cho action nhạy cảm
 - preference chỉ trở thành canonical khi đã được xác nhận theo policy của core workflow
+- trusted integration chỉ được đi vào canonical preference write path khi request mang `actor_role = integration`, có `actor_id`, và có `external_ref` để audit/idempotency boundary rõ ràng
+- route public `POST /api/v1/customers/{customer_id}/preferences` hiện là canonical confirm/update path; candidate ingest từ CRM/AI phải đi qua surface khác hoặc integration normalizer, không đi thẳng vào canonical route này với `ai_suggestion`
 
 ### Confirmation policy baseline
 - CRM, AI, hoặc operator có thể tạo `preference candidate`
 - chỉ `Sales`, `CSKH`, `Admin vận hành`, hoặc `Founder / Super Admin` mới được xác nhận candidate thành preference canonical
+- integration chỉ được xác nhận trực tiếp vào canonical path nếu là trusted integration theo guard ở trên; nếu không thì vẫn chỉ là candidate/input
 - action xác nhận phải để lại `confirmed_by` và audit log
+- canonical route hiện không phải candidate queue API; nếu cần giữ raw `ai_suggestion` hoặc CRM candidate thì phải map qua contract khác trước khi vào Core truth
 - event tối thiểu cho việc xác nhận hoặc chỉnh sửa là `CustomerPreferenceUpdated`
 - permission chi tiết xem ở `07-permission-matrix.md`; event payload xem ở `05-event-catalog.md`
 
