@@ -26,6 +26,7 @@ from app.models.orders import (
     ConfirmOrderRequest,
     CreateOrderRequest,
     DeliverOrderRequest,
+    FailDeliveryRequest,
     OrderDetail,
     OrderLine,
     OrderResponse,
@@ -63,6 +64,7 @@ def _build_order_detail(record: dict[str, Any]) -> OrderDetail:
         shippedAt=record.get("shippedAt"),
         deliveredAt=record.get("deliveredAt"),
         proofRef=record.get("proofRef"),
+        failureReason=record.get("failureReason"),
         note=record.get("note"),
         createdBy=record.get("createdBy"),
         sourcePreorderFlag=bool(record.get("sourcePreorderFlag", False)),
@@ -1498,63 +1500,6 @@ def deliver_order(order_id: str, payload: DeliverOrderRequest) -> OrderResponse:
     if cached := check_idempotency(key):
         return OrderResponse(**cached)
 
-    if payload.deliveryResult == "failed":
-        if not payload.failureReason:
-            _raise_order_denied(
-                action_name="order.deliver",
-                order_id=order_id,
-                context=context,
-                detail="failureReason is required when deliveryResult is failed.",
-                reason_code="delivery_failure_reason_required",
-                before_snapshot=before_snapshot,
-            )
-        try:
-            next_status = assert_order_transition(record, "fail_delivery")
-        except HTTPException as exc:
-            _audit_order_decision(
-                "order.deliver",
-                order_id,
-                "denied",
-                context,
-                before_snapshot=before_snapshot,
-                reason_code="state_transition_rejected",
-                metadata={"message": str(exc.detail)},
-            )
-            raise
-
-        record["status"] = next_status
-        record["deliveryNote"] = payload.note
-        record["failureReason"] = payload.failureReason
-        result = OrderResponse(data=_build_order_detail(record))
-        with postgres_transaction() if postgres_sync.is_enabled() else nullcontext():
-            postgres_sync.upsert_order(record)
-            event = _emit_order_event(
-                "order.delivery_failed",
-                order_id,
-                {
-                    "orderId": order_id,
-                    "reason": payload.failureReason,
-                    "note": payload.note,
-                },
-                context,
-            )
-            _audit_order_decision(
-                "order.deliver",
-                order_id,
-                "allowed",
-                context,
-                before_snapshot=before_snapshot,
-                after_snapshot=record,
-                event=event,
-            )
-            record_idempotency(
-                key,
-                result.model_dump(),
-                operation_name="order.deliver",
-                request_hash=build_request_hash(payload, extra={"action": "order.deliver", "orderId": order_id}),
-            )
-        return result
-
     try:
         assert_order_transition(record, "deliver")
     except HTTPException as exc:
@@ -1657,6 +1602,74 @@ def deliver_order(order_id: str, payload: DeliverOrderRequest) -> OrderResponse:
             result.model_dump(),
             operation_name="order.deliver",
             request_hash=build_request_hash(payload, extra={"action": "order.deliver", "orderId": order_id}),
+        )
+    return result
+
+
+def fail_delivery(order_id: str, payload: FailDeliveryRequest) -> OrderResponse:
+    context = meta_context(payload.meta)
+    record = _get_order_record_or_404(order_id, action_name="order.fail_delivery", context=context)
+    before_snapshot = copy.deepcopy(record)
+    normalized_failure_reason = payload.failureReason.strip()
+
+    key = context["idempotency_key"]
+    if cached := check_idempotency(key):
+        return OrderResponse(**cached)
+
+    if not normalized_failure_reason:
+        _raise_order_denied(
+            action_name="order.fail_delivery",
+            order_id=order_id,
+            context=context,
+            detail="failureReason is required when delivery fails.",
+            reason_code="delivery_failure_reason_required",
+            before_snapshot=before_snapshot,
+        )
+
+    try:
+        next_status = assert_order_transition(record, "fail_delivery")
+    except HTTPException as exc:
+        _audit_order_decision(
+            "order.fail_delivery",
+            order_id,
+            "denied",
+            context,
+            before_snapshot=before_snapshot,
+            reason_code="state_transition_rejected",
+            metadata={"message": str(exc.detail)},
+        )
+        raise
+
+    record["status"] = next_status
+    record["deliveryNote"] = payload.note
+    record["failureReason"] = normalized_failure_reason
+    result = OrderResponse(data=_build_order_detail(record))
+    with postgres_transaction() if postgres_sync.is_enabled() else nullcontext():
+        postgres_sync.upsert_order(record)
+        event = _emit_order_event(
+            "order.delivery_failed",
+            order_id,
+            {
+                "orderId": order_id,
+                "reason": normalized_failure_reason,
+                "note": payload.note,
+            },
+            context,
+        )
+        _audit_order_decision(
+            "order.fail_delivery",
+            order_id,
+            "allowed",
+            context,
+            before_snapshot=before_snapshot,
+            after_snapshot=record,
+            event=event,
+        )
+        record_idempotency(
+            key,
+            result.model_dump(),
+            operation_name="order.fail_delivery",
+            request_hash=build_request_hash(payload, extra={"action": "order.fail_delivery", "orderId": order_id}),
         )
     return result
 

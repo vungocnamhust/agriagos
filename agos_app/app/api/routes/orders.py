@@ -12,6 +12,7 @@ from app.models.orders import (
     ConfirmOrderRequest,
     CreateOrderRequest,
     DeliverOrderRequest,
+    FailDeliveryRequest,
     OrderDetail,
     OrderResponse,
     PackOrderRequest,
@@ -26,6 +27,7 @@ from app.services.orders import (
     confirm_order as confirm_order_service,
     create_order as create_order_service,
     deliver_order as deliver_order_service,
+    fail_delivery as fail_delivery_service,
     get_order as get_order_service,
     pack_order as pack_order_service,
     release_allocation as release_allocation_service,
@@ -93,6 +95,11 @@ def ship_order(order_id: str, request: Request, payload: ShipOrderRequest) -> Or
 @router.post("/{order_id}/deliver", response_model=OrderResponse)
 def deliver_order(order_id: str, request: Request, payload: DeliverOrderRequest) -> OrderResponse:
     return deliver_order_service(order_id, apply_request_correlation(request, payload))
+
+
+@router.post("/{order_id}/fail-delivery", response_model=OrderResponse)
+def fail_delivery(order_id: str, request: Request, payload: FailDeliveryRequest) -> OrderResponse:
+    return fail_delivery_service(order_id, apply_request_correlation(request, payload))
 
 
 @router.post("/{order_id}/request-cancel", response_model=OrderResponse)

@@ -788,6 +788,39 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/orders/{order_id}/fail-delivery:
+    post:
+      tags:
+      - Orders
+      - Allocations
+      summary: Fail Delivery
+      operationId: fail_delivery_api_v1_orders__order_id__fail_delivery_post
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Order Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FailDeliveryRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/orders/{order_id}/request-cancel:
     post:
       tags:
@@ -2342,15 +2375,6 @@ components:
           type: array
           title: Deliveredqtysummary
           default: []
-        deliveryResult:
-          anyOf:
-          - type: string
-            enum:
-            - delivered
-            - partially_delivered
-            - failed
-          - type: 'null'
-          title: Deliveryresult
         deliveredAt:
           anyOf:
           - type: string
@@ -2361,11 +2385,6 @@ components:
           - type: string
           - type: 'null'
           title: Proofref
-        failureReason:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Failurereason
         note:
           anyOf:
           - type: string
@@ -2377,6 +2396,24 @@ components:
           - type: 'null'
       type: object
       title: DeliverOrderRequest
+    FailDeliveryRequest:
+      properties:
+        failureReason:
+          type: string
+          title: Failurereason
+        note:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Note
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - failureReason
+      title: FailDeliveryRequest
     DomainEvent:
       properties:
         eventId:
@@ -2862,6 +2899,11 @@ components:
           - type: string
           - type: 'null'
           title: Proofref
+        failureReason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Failurereason
         note:
           anyOf:
           - type: string

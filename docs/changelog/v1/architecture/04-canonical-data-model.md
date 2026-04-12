@@ -226,9 +226,20 @@ CRM có thể giữ conversation, nhưng customer identity canonical vẫn phả
 
 ### Field nên có
 - `shipping_address`
+- `carrier`
+- `tracking_ref`
+- `shipped_at`
+- `delivered_at`
+- `proof_ref`
+- `failure_reason`
 - `note`
+- `delivery_note`
 - `created_by`
 - `source_preorder_flag`
+
+### Ghi chú
+- phase đầu đang snapshot fulfillment trực tiếp trên `SalesOrder` để route `/pack`, `/ship`, `/deliver`, và `/fail-delivery` trả về operational detail ngay từ aggregate chính
+- `failure_reason` là snapshot phục vụ audit/tra cứu lane giao hàng thất bại; không làm thay đổi rule chỉ consume preorder khi quantity thật sự delivered
 
 ---
 

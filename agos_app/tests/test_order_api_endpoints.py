@@ -368,9 +368,8 @@ def test_order_failed_delivery_route_preserves_preorder_and_purchase_history() -
     )
 
     failed = client.post(
-        f"/api/v1/orders/{order_id}/deliver",
+        f"/api/v1/orders/{order_id}/fail-delivery",
         json={
-            "deliveryResult": "failed",
             "failureReason": "customer_unreachable",
             "note": "carrier could not complete handoff",
             "meta": {"correlationId": "corr-api-failed-order-deliver", "idempotencyKey": "idem-api-failed-order-deliver"},
@@ -380,6 +379,7 @@ def test_order_failed_delivery_route_preserves_preorder_and_purchase_history() -
     failed_body = failed.json()["data"]
     assert failed_body["status"] == "failed"
     assert failed_body["deliveredAt"] is None
+    assert failed_body["failureReason"] == "customer_unreachable"
     assert failed_body["lines"][0]["deliveredQty"] == 0
 
     preorder = memory.get_preorder(preorder_id)

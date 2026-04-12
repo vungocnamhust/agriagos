@@ -13,6 +13,7 @@ from app.models.orders import (
     AllocationMutationResponse,
     CancelOrderRequest,
     ConfirmOrderRequest,
+    FailDeliveryRequest,
     CreateOrderLineRequest,
     CreateOrderRequest,
     DeliverOrderRequest,
@@ -725,10 +726,9 @@ def test_deliver_order_can_mark_delivery_failed_without_consuming_preorder(monke
         ),
     )
 
-    failed = orders.deliver_order(
+    failed = orders.fail_delivery(
         created.data.orderId,
-        DeliverOrderRequest(
-            deliveryResult="failed",
+        FailDeliveryRequest(
             failureReason="customer_unreachable",
             note="carrier could not complete handoff",
             meta=Meta(correlationId="corr-failed-delivery"),
@@ -737,6 +737,7 @@ def test_deliver_order_can_mark_delivery_failed_without_consuming_preorder(monke
 
     assert failed.data.status == "failed"
     assert failed.data.deliveredAt is None
+    assert failed.data.failureReason == "customer_unreachable"
     assert failed.data.lines[0].deliveredQty == 0
 
     preorder = memory.get_preorder("preorder-1")
@@ -749,6 +750,61 @@ def test_deliver_order_can_mark_delivery_failed_without_consuming_preorder(monke
     assert customer is not None
     assert customer.get("lastOrderAt") is None
 
+    failed_event = next(event for event in memory.list_events() if event["eventName"] == "order.delivery_failed")
+    assert failed_event["payload"]["reason"] == "customer_unreachable"
+
+
+def test_fail_delivery_trims_failure_reason_before_persisting(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(orders.postgres_sync, "is_enabled", lambda: False)
+    memory.save_customer(
+        "customer-3",
+        {"customerId": "customer-3", "customerCode": "KH-003", "fullName": "Carol", "phone": "0903"},
+    )
+    created = orders.create_order(
+        CreateOrderRequest(
+            customerId="customer-3",
+            channel="direct",
+            lines=[CreateOrderLineRequest(productSkuId="sku-1", orderedQty=2, unit="kg")],
+        )
+    )
+    orders.confirm_order(created.data.orderId, ConfirmOrderRequest())
+    _seed_released_lot(lot_id="lot-3", available_qty=2)
+    orders.allocate_order(
+        created.data.orderId,
+        AllocateOrderRequest(
+            allocations=[
+                AllocateItem(orderLineId=created.data.lines[0].orderLineId, lotId="lot-3", allocatedQty=2)
+            ],
+            meta=Meta(correlationId="corr-trim-failure-allocate"),
+        ),
+    )
+    orders.pack_order(
+        created.data.orderId,
+        PackOrderRequest(
+            packedQtySummary=[PackQtyItem(orderLineId=created.data.lines[0].orderLineId, packedQty=2)],
+            meta=Meta(correlationId="corr-trim-failure-pack"),
+        ),
+    )
+    orders.ship_order(
+        created.data.orderId,
+        ShipOrderRequest(
+            carrier="gha",
+            trackingRef="TRK-TRIM-1",
+            shippedAt="2026-04-12T10:00:00Z",
+            meta=Meta(correlationId="corr-trim-failure-ship"),
+        ),
+    )
+
+    failed = orders.fail_delivery(
+        created.data.orderId,
+        FailDeliveryRequest(
+            failureReason="  customer_unreachable  ",
+            note="handoff failed",
+            meta=Meta(correlationId="corr-trim-failure"),
+        ),
+    )
+
+    assert failed.data.failureReason == "customer_unreachable"
     failed_event = next(event for event in memory.list_events() if event["eventName"] == "order.delivery_failed")
     assert failed_event["payload"]["reason"] == "customer_unreachable"
 
@@ -817,10 +873,9 @@ def test_failed_delivery_after_partial_delivery_preserves_prior_delivery_facts(
     assert partial.data.deliveredAt == "2026-04-12T12:00:00Z"
     assert partial.data.lines[0].deliveredQty == 3
 
-    failed = orders.deliver_order(
+    failed = orders.fail_delivery(
         created.data.orderId,
-        DeliverOrderRequest(
-            deliveryResult="failed",
+        FailDeliveryRequest(
             failureReason="customer_rejected_remaining_qty",
             note="only partial handoff completed",
             meta=Meta(correlationId="corr-partial-then-failed-deliver-2"),
@@ -829,6 +884,7 @@ def test_failed_delivery_after_partial_delivery_preserves_prior_delivery_facts(
 
     assert failed.data.status == "failed"
     assert failed.data.deliveredAt == "2026-04-12T12:00:00Z"
+    assert failed.data.failureReason == "customer_rejected_remaining_qty"
     assert failed.data.lines[0].deliveredQty == 3
 
     preorder = memory.get_preorder("preorder-2")

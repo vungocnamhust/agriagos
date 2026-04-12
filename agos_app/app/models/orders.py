@@ -1,5 +1,3 @@
-from typing import Literal
-
 from pydantic import BaseModel
 from app.models.common import CommandMetaRequest, Meta
 from app.models.enums import AllocationStatus, OrderLineStatus, OrderStatus, PaymentStatus
@@ -30,6 +28,7 @@ class OrderDetail(BaseModel):
     shippedAt: str | None = None
     deliveredAt: str | None = None
     proofRef: str | None = None
+    failureReason: str | None = None
     note: str | None = None
     createdBy: str | None = None
     sourcePreorderFlag: bool = False
@@ -123,10 +122,14 @@ class DeliveredQtyItem(BaseModel):
 
 class DeliverOrderRequest(BaseModel):
     deliveredQtySummary: list[DeliveredQtyItem] = []
-    deliveryResult: Literal["delivered", "partially_delivered", "failed"] | None = None
-    failureReason: str | None = None
     deliveredAt: str | None = None
     proofRef: str | None = None
+    note: str | None = None
+    meta: Meta | None = None
+
+
+class FailDeliveryRequest(BaseModel):
+    failureReason: str
     note: str | None = None
     meta: Meta | None = None
 

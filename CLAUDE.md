@@ -117,7 +117,7 @@ All endpoints are under `/api/v1/`. The route groups are:
 - `/health` — liveness check
 - `/customers` — customer CRUD and preferences
 - `/preorders` — pre-order management
-- `/orders` — full order lifecycle (create → confirm → allocate → adjust/release allocation → pack → ship → deliver / cancel)
+- `/orders` — full order lifecycle (create → confirm → allocate → adjust/release allocation → pack → ship → deliver / fail-delivery / cancel)
 - `/lots` — lot/batch management, evidence, and QC reviews
 - `/farm` — farm and plot operations
 - `/views` — read model projections (role-based BFF views)
@@ -176,12 +176,13 @@ All diagrams use `[Phase 1 ✅]` / `[Phase 2 🔜]` labels to distinguish implem
 | `11-sequence-orderallocated-to-orderdelivered.md` | Order allocation → delivery sequence |
 
 **Key Phase 1 state machine facts** (source: `core/gateway.py`):
-- Order: `draft → confirmed → allocated|partially_allocated → packed → shipped → delivered`; repeated `allocate` can move `confirmed -> partially_allocated` or `partially_allocated -> allocated`; `cancel_requested` is currently allowed from `partially_allocated` and `allocated`/`packed`, while direct cancel remains available from `draft`/`confirmed`
+- Order: `draft → confirmed → allocated|partially_allocated → packed|partially_packed → shipped → delivered|partially_delivered|failed`; repeated `allocate` can move `confirmed -> partially_allocated` or `partially_allocated -> allocated`; repeated `pack` can move `partially_allocated -> partially_packed|packed` and `partially_packed -> packed`; `fail_delivery` is allowed from `shipped` and `partially_delivered`; `cancel_requested` is currently allowed from `partially_allocated` and `allocated`/`packed`, while direct cancel remains available from `draft`/`confirmed`
 - Lot: create path can initialize `harvested` or `qc_pending`; gateway currently supports `harvested/qc_pending → released`, `harvested/qc_pending/released → blocked`, and `blocked → qc_pending` via unblock without reopening inventory
 - Preorder: created in `draft`; `confirm → confirmed`; `activate → active`; `adjust` stays in current `confirmed` or `active` state; `cancel → cancelled`; `remainingQty` is allocatable balance `committedQty - allocatedQty - deliveredQty - cancelledQty`
 
 **Key Phase 1 event names** (source: `core/events.py` + `services/`):
 - Use dotted lowercase at runtime: `order.created`, `order.confirmed`, `order.allocated`, `order.partially_allocated`, `allocation.adjusted`, `allocation.released`, `lot.harvest.created`, `lot.processed.created`, `lot.adjusted`, `preorder.placed`
+- Fulfillment runtime events now also include `order.packed`, `order.partially_packed`, `order.shipped`, `order.delivered`, `order.partially_delivered`, and `order.delivery_failed`
 - Preorder runtime events now include `preorder.confirmed`, `preorder.activated`, `preorder.adjusted`, `preorder.cancelled`, `preorder.quota_consumed`, and `preorder.completed`
 - `eventType` is auto-derived PascalCase: `OrderCreated`, `OrderConfirmed`, `OrderAllocated`, `OrderPartiallyAllocated`, `AllocationAdjusted`, `AllocationReleased`, `LotHarvestCreated`, `LotProcessedCreated`, `LotAdjusted`, `PreorderPlaced`
 - Preorder detail now carries append-only `adjustmentHistory`, backed by the `preorder_adjustments` table on the PostgreSQL path
@@ -189,6 +190,8 @@ All diagrams use `[Phase 1 ✅]` / `[Phase 2 🔜]` labels to distinguish implem
 **Key Phase 1 allocation contract facts**:
 - Public allocation commands now include `POST /api/v1/orders/{order_id}/allocate`, `POST /api/v1/orders/{order_id}/allocations/{allocation_id}/adjust`, and `POST /api/v1/orders/{order_id}/allocations/{allocation_id}/release`
 - PostgreSQL allocation and cancel paths now keep `sales_order_lines.allocated_qty`, `lots.available_qty/reserved_qty`, and `preorders.allocated_qty/remaining_qty` in sync inside the atomic store flow
+- Fulfillment write commands now include `POST /api/v1/orders/{order_id}/pack`, `POST /api/v1/orders/{order_id}/ship`, `POST /api/v1/orders/{order_id}/deliver`, and `POST /api/v1/orders/{order_id}/fail-delivery`
+- `sales_orders` now snapshots fulfillment metadata directly in Phase 1, including `carrier`, `tracking_ref`, `shipped_at`, `delivered_at`, `proof_ref`, `delivery_note`, and `failure_reason`
 
 When repo-root docs and `docs/changelog/v1/architecture/` overlap, treat the `docs/changelog/v1/architecture/` set as the working baseline for current deterministic-core decisions.
 

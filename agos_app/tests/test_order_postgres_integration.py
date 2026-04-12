@@ -18,6 +18,7 @@ from app.models.orders import (
     CreateOrderRequest,
     DeliverOrderRequest,
     DeliveredQtyItem,
+    FailDeliveryRequest,
     PackOrderRequest,
     PackQtyItem,
     ReleaseAllocationRequest,
@@ -793,10 +794,9 @@ def test_failed_delivery_persists_failed_status_without_customer_purchase_update
             meta=Meta(correlationId="corr-pg-fail-ship", idempotencyKey="idem-pg-fail-ship"),
         ),
     )
-    failed = order_service.deliver_order(
+    failed = order_service.fail_delivery(
         order_id,
-        DeliverOrderRequest(
-            deliveryResult="failed",
+        FailDeliveryRequest(
             failureReason="customer_unreachable",
             note="carrier could not complete handoff",
             meta=Meta(correlationId="corr-pg-fail-deliver", idempotencyKey="idem-pg-fail-deliver"),
@@ -804,13 +804,15 @@ def test_failed_delivery_persists_failed_status_without_customer_purchase_update
     )
 
     assert failed.data.status == "failed"
+    assert failed.data.failureReason == "customer_unreachable"
 
     order_row = postgres_db_session.execute(
-        text("SELECT status, delivered_at FROM sales_orders WHERE order_id = :order_id"),
+        text("SELECT status, delivered_at, failure_reason FROM sales_orders WHERE order_id = :order_id"),
         {"order_id": order_id},
     ).mappings().one()
     assert order_row["status"] == "failed"
     assert order_row["delivered_at"] is None
+    assert order_row["failure_reason"] == "customer_unreachable"
 
     line_row = postgres_db_session.execute(
         text("SELECT delivered_qty FROM sales_order_lines WHERE order_line_id = :order_line_id"),

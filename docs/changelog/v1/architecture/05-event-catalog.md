@@ -484,6 +484,7 @@ Payload:
 Payload:
 - order_id
 - reason
+- note
 
 ---
 

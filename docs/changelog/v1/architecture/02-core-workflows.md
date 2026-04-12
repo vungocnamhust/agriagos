@@ -374,6 +374,7 @@ Nếu workflow cần hủy sau `packed`, phải phát sinh `OrderCancelRequested
   - delivered
   - failed
   - partially delivered
+- lane `fail_delivery` là action riêng sau khi đã ship; phải ghi `failure_reason` để audit và không được consume thêm preorder quota
 - chỉ khi `delivered` mới:
   - tăng lịch sử mua thật
   - consume preorder quota
@@ -384,6 +385,7 @@ Nếu workflow cần hủy sau `packed`, phải phát sinh `OrderCancelRequested
 
 ### Output
 - delivery record
+- sales order snapshot có `failure_reason` khi giao thất bại
 - customer purchase history updated
 - preorder consumption updated nếu có
 - event log
