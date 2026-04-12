@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import Request
 from pydantic import BaseModel
 
-from app.api.routes._meta import apply_request_correlation, ensure_command_payload
+from app.api.routes._meta import apply_request_correlation, ensure_command_payload, request_meta
 from app.models.common import Meta
 
 
@@ -91,3 +91,26 @@ def test_ensure_command_payload_adopts_auth_context_for_empty_commands() -> None
     assert payload.meta.bypassRequested is True
     assert payload.meta.delegatedActorId == "ops-1"
     assert payload.meta.delegatedActorRole == "ops"
+
+
+def test_request_meta_reads_headers_and_preserves_state_precedence() -> None:
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/test",
+            "headers": [
+                (b"x-actor-id", b"header-actor"),
+                (b"x-actor-role", b"viewer"),
+                (b"x-bypass-requested", b" YeS "),
+            ],
+        }
+    )
+    request.state.actor_role = "sales"
+
+    meta = request_meta(request)
+
+    assert meta is not None
+    assert meta.actorId == "header-actor"
+    assert meta.actorRole == "sales"
+    assert meta.bypassRequested is True

@@ -20,6 +20,13 @@ from app.services import views as views_service
 client = TestClient(app)
 
 
+def _auth_headers(*, actor_role: str, actor_id: str = "actor-1") -> dict[str, str]:
+    return {
+        "X-Actor-Id": actor_id,
+        "X-Actor-Role": actor_role,
+    }
+
+
 @contextmanager
 def _bound_session_scope(session: Session) -> Iterator[Session]:
     yield session
@@ -562,7 +569,10 @@ def test_customer_360_endpoint_reads_real_postgres_projection(
         },
     )
 
-    response = client.get(f"/api/v1/views/customer-360/{customer_id}")
+    response = client.get(
+        f"/api/v1/views/customer-360/{customer_id}",
+        headers=_auth_headers(actor_role="sales", actor_id="sales-1"),
+    )
 
     assert response.status_code == 200
     payload = response.json()
@@ -645,7 +655,7 @@ def test_available_lots_endpoint_reads_real_postgres_projection(
         },
     )
 
-    response = client.get("/api/v1/views/available-lots")
+    response = client.get("/api/v1/views/available-lots", headers=_auth_headers(actor_role="viewer", actor_id="viewer-1"))
     scoped_rows = [row for row in response.json()["items"] if row["lotCode"].startswith(f"LOT-AL-{code_suffix}-")]
 
     assert response.status_code == 200
@@ -708,7 +718,7 @@ def test_pending_fulfillment_endpoint_reads_real_postgres_projection(
         },
     )
 
-    response = client.get("/api/v1/views/pending-fulfillment")
+    response = client.get("/api/v1/views/pending-fulfillment", headers=_auth_headers(actor_role="viewer", actor_id="viewer-1"))
     scoped_rows = [row for row in response.json()["items"] if row["orderCode"].startswith(f"ORD-PF-{code_suffix}-")]
 
     assert response.status_code == 200
@@ -787,7 +797,7 @@ def test_farm_summary_board_endpoint_reads_real_postgres_projection(
         },
     )
 
-    response = client.get("/api/v1/views/farm-summary-board")
+    response = client.get("/api/v1/views/farm-summary-board", headers=_auth_headers(actor_role="viewer", actor_id="viewer-1"))
     payload = response.json()["items"]
     scoped_rows = [row for row in payload if row["plotCode"] == f"PLOT-EP-{code_suffix}"]
 

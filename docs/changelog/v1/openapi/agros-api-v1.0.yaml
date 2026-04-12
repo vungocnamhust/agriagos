@@ -1273,6 +1273,11 @@ paths:
       - Farm
       summary: List Plots
       operationId: list_plots_api_v1_farm_plots_get
+      parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       responses:
         '200':
           description: Successful Response
@@ -1283,6 +1288,12 @@ paths:
                   $ref: '#/components/schemas/PlotSummary'
                 type: array
                 title: Response List Plots Api V1 Farm Plots Get
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/farm/crop-cycles:
     get:
       tags:
@@ -1290,6 +1301,10 @@ paths:
       summary: List Crop Cycles
       operationId: list_crop_cycles_api_v1_farm_crop_cycles_get
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: plotId
         in: query
         required: false
@@ -1316,6 +1331,12 @@ paths:
                 items:
                   $ref: '#/components/schemas/CropCycleSummary'
                 title: Response List Crop Cycles Api V1 Farm Crop Cycles Get
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Validation Error
           content:
@@ -1329,6 +1350,10 @@ paths:
       summary: Get Customer 360
       operationId: get_customer_360_api_v1_views_customer_360__customer_id__get
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: customer_id
         in: path
         required: true
@@ -1342,6 +1367,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Customer360View'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Customer Not Found
           content:
@@ -1361,6 +1392,10 @@ paths:
       summary: Get Available Lots Board
       operationId: get_available_lots_board_api_v1_views_available_lots_get
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: skuId
         in: query
         required: false
@@ -1376,6 +1411,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AvailableLotListResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Validation Error
           content:
@@ -1388,6 +1429,11 @@ paths:
       - Views
       summary: Get Pending Fulfillment
       operationId: get_pending_fulfillment_api_v1_views_pending_fulfillment_get
+      parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       responses:
         '200':
           description: Successful Response
@@ -1395,12 +1441,23 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PendingFulfillmentListResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/views/farm:
     get:
       tags:
       - Views
       summary: Get Farm View
       operationId: get_farm_view_api_v1_views_farm_get
+      parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       responses:
         '200':
           description: Successful Response
@@ -1408,12 +1465,23 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FarmView'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/views/farm-summary-board:
     get:
       tags:
       - Views
       summary: Get Farm Summary Board
       operationId: get_farm_summary_board_api_v1_views_farm_summary_board_get
+      parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       responses:
         '200':
           description: Successful Response
@@ -1421,6 +1489,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FarmSummaryBoardResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/events:
     get:
       tags:
@@ -1428,6 +1502,9 @@ paths:
       summary: List Events
       operationId: list_events_api_v1_events_get
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: aggregateType
         in: query
         required: false
@@ -1483,6 +1560,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DomainEventListResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Validation Error
           content:
@@ -1593,6 +1676,35 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 components:
+  parameters:
+    ActorIdHeader:
+      name: X-Actor-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Optional caller identity used for read-surface audit trails.
+    ActorRoleHeader:
+      name: X-Actor-Role
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Caller role used to authorize protected read surfaces in Phase 1.
+    BypassRequestedHeader:
+      name: X-Bypass-Requested
+      in: header
+      required: false
+      schema:
+        type: boolean
+      description: Optional bypass mechanism flag. Phase 1 denies all read-surface bypass attempts.
+    DelegatedActorRoleHeader:
+      name: X-Delegated-Actor-Role
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Delegated human role for advisory agent reads.
   schemas:
     ActivatePreorderRequest:
       properties:

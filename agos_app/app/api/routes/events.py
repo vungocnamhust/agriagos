@@ -1,13 +1,15 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
-from app.models.common import DomainEvent, DomainEventListResponse
-from app.store import events as store
+from app.api.routes._meta import request_meta
+from app.models.common import DomainEventListResponse, ErrorResponse
+from app.services import events as svc
 
 router = APIRouter()
 
 
-@router.get("", response_model=DomainEventListResponse)
+@router.get("", response_model=DomainEventListResponse, responses={403: {"model": ErrorResponse, "description": "Forbidden"}})
 def list_events(
+    request: Request,
     aggregateType: str | None = None,
     aggregateId: str | None = None,
     eventName: str | None = None,
@@ -15,15 +17,12 @@ def list_events(
     causationId: str | None = None,
     idempotencyKey: str | None = None,
 ) -> DomainEventListResponse:
-    items = store.query_events(
+    return svc.list_events(
         aggregate_type=aggregateType,
         aggregate_id=aggregateId,
         event_name=eventName,
         correlation_id=correlationId,
         causation_id=causationId,
         idempotency_key=idempotencyKey,
-    )
-    return DomainEventListResponse(
-        items=[DomainEvent(**e) for e in items],
-        total=len(items),
+        meta=request_meta(request),
     )

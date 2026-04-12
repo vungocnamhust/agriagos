@@ -4,6 +4,7 @@ from fastapi import HTTPException
 
 from app.models.enums import CropCycleStatus, GrowthStage, LotStatus
 from app.models.farm import CropCycleSummary, FarmView, PlotSummary
+from app.models.common import Meta
 from app.models.orders import OrderDetail, OrderLine
 from app.models.preorders import PreorderDetail
 from app.models.views import (
@@ -16,6 +17,7 @@ from app.models.views import (
     PendingFulfillmentListResponse,
     PendingFulfillmentView,
 )
+from app.services.read_authz import authorize_read_surface
 from app.services import customers as cust_svc
 from app.services import farm as farm_svc
 from app.store import postgres_sync
@@ -248,3 +250,68 @@ def get_farm_summary_board() -> FarmSummaryBoardResponse:
         )
     )
     return FarmSummaryBoardResponse(items=items)
+
+
+def get_customer_360_for_actor(customer_id: str, meta: Meta | None) -> Customer360View:
+    authorize_read_surface(
+        meta=meta,
+        action_name="view.customer_360",
+        target_type="CustomerView",
+        target_id=customer_id,
+        allowed_roles={"founder", "super_admin", "admin", "sales", "cskh"},
+        reason_code="forbidden_customer_360_view",
+        detail="Actor is not allowed to read Customer 360 views.",
+    )
+    return get_customer_360(customer_id)
+
+
+def get_available_lots_board_for_actor(product_sku_id: str | None, meta: Meta | None) -> AvailableLotListResponse:
+    authorize_read_surface(
+        meta=meta,
+        action_name="view.available_lots",
+        target_type="LotBoard",
+        target_id=product_sku_id or "all",
+        allowed_roles={"founder", "super_admin", "admin", "ops", "farm_manager", "qc_reviewer", "viewer"},
+        reason_code="forbidden_available_lots_view",
+        detail="Actor is not allowed to read available lots boards.",
+    )
+    return get_available_lots_board(product_sku_id)
+
+
+def get_pending_fulfillment_for_actor(meta: Meta | None) -> PendingFulfillmentListResponse:
+    authorize_read_surface(
+        meta=meta,
+        action_name="view.pending_fulfillment",
+        target_type="PendingFulfillmentBoard",
+        target_id="default",
+        allowed_roles={"founder", "super_admin", "admin", "sales", "cskh", "ops", "accountant", "viewer"},
+        reason_code="forbidden_pending_fulfillment_view",
+        detail="Actor is not allowed to read pending fulfillment boards.",
+    )
+    return get_pending_fulfillment()
+
+
+def get_farm_view_for_actor(meta: Meta | None) -> FarmView:
+    authorize_read_surface(
+        meta=meta,
+        action_name="view.farm",
+        target_type="FarmView",
+        target_id="default",
+        allowed_roles={"founder", "super_admin", "admin", "ops", "farm_manager", "viewer"},
+        reason_code="forbidden_farm_view",
+        detail="Actor is not allowed to read farm views.",
+    )
+    return get_farm_view()
+
+
+def get_farm_summary_board_for_actor(meta: Meta | None) -> FarmSummaryBoardResponse:
+    authorize_read_surface(
+        meta=meta,
+        action_name="view.farm_summary_board",
+        target_type="FarmSummaryBoard",
+        target_id="default",
+        allowed_roles={"founder", "super_admin", "admin", "ops", "farm_manager", "viewer"},
+        reason_code="forbidden_farm_summary_board_view",
+        detail="Actor is not allowed to read farm summary boards.",
+    )
+    return get_farm_summary_board()

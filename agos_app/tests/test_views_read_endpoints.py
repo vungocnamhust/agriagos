@@ -10,8 +10,15 @@ from app.store import memory
 client = TestClient(app)
 
 
+def _auth_headers(*, actor_role: str, actor_id: str = "actor-1") -> dict[str, str]:
+    return {
+        "X-Actor-Id": actor_id,
+        "X-Actor-Role": actor_role,
+    }
+
+
 def test_customer_360_returns_not_found_error_for_unknown_customer() -> None:
-    response = client.get("/api/v1/views/customer-360/missing-customer")
+    response = client.get("/api/v1/views/customer-360/missing-customer", headers=_auth_headers(actor_role="sales", actor_id="sales-1"))
 
     assert response.status_code == 404
     assert response.json()["code"] == "NOT_FOUND"
@@ -120,7 +127,7 @@ def test_customer_360_returns_customer_preorders_orders_and_preferences() -> Non
         ],
     )
 
-    response = client.get("/api/v1/views/customer-360/customer-1")
+    response = client.get("/api/v1/views/customer-360/customer-1", headers=_auth_headers(actor_role="sales", actor_id="sales-1"))
 
     assert response.status_code == 200
     payload = response.json()
@@ -166,7 +173,7 @@ def test_available_lots_board_only_returns_released_positive_qty_lots() -> None:
         },
     )
 
-    response = client.get("/api/v1/views/available-lots")
+    response = client.get("/api/v1/views/available-lots", headers=_auth_headers(actor_role="viewer", actor_id="viewer-1"))
 
     assert response.status_code == 200
     assert [item["lotCode"] for item in response.json()["items"]] == ["LOT-001"]
@@ -215,7 +222,7 @@ def test_pending_fulfillment_returns_phase1_statuses_sorted_by_deadline() -> Non
         },
     )
 
-    response = client.get("/api/v1/views/pending-fulfillment")
+    response = client.get("/api/v1/views/pending-fulfillment", headers=_auth_headers(actor_role="viewer", actor_id="viewer-1"))
 
     assert response.status_code == 200
     payload = response.json()["items"]
@@ -243,7 +250,7 @@ def test_farm_view_returns_legacy_plot_and_cycle_lists() -> None:
         "expectedHarvestTo": "2026-05-10",
     })
 
-    response = client.get("/api/v1/views/farm")
+    response = client.get("/api/v1/views/farm", headers=_auth_headers(actor_role="viewer", actor_id="viewer-1"))
 
     assert response.status_code == 200
     payload = response.json()
@@ -292,10 +299,20 @@ def test_farm_summary_board_flattens_plot_and_active_cycle_rows() -> None:
         "estimatedYieldQty": 50.0,
     })
 
-    response = client.get("/api/v1/views/farm-summary-board")
+    response = client.get("/api/v1/views/farm-summary-board", headers=_auth_headers(actor_role="viewer", actor_id="viewer-1"))
 
     assert response.status_code == 200
     payload = response.json()["items"]
     assert [item["plotCode"] for item in payload] == ["PLOT-001", "PLOT-002"]
     assert payload[0]["growthStage"] == "maturing"
     assert payload[1]["cropCycleId"] is None
+
+
+def test_customer_360_rejects_viewer_and_records_denied_audit() -> None:
+    response = client.get("/api/v1/views/customer-360/customer-1", headers=_auth_headers(actor_role="viewer", actor_id="viewer-1"))
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "FORBIDDEN"
+    assert response.json()["message"] == "Actor is not allowed to read Customer 360 views."
+    assert memory.list_audit_logs()[-1]["actionName"] == "view.customer_360"
+    assert memory.list_audit_logs()[-1]["reasonCode"] == "forbidden_customer_360_view"
