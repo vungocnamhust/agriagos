@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 from app.api.routes import (
+    audit,
     health,
     customers,
     preorders,
@@ -19,3 +20,4 @@ api_router.include_router(lots.router, prefix="/api/v1/lots", tags=["Lots"])
 api_router.include_router(farm.router, prefix="/api/v1/farm", tags=["Farm"])
 api_router.include_router(views.router, prefix="/api/v1/views", tags=["Views"])
 api_router.include_router(events.router, prefix="/api/v1/events", tags=["Events"])
+api_router.include_router(audit.router, prefix="/api/v1/audit", tags=["Audit"])

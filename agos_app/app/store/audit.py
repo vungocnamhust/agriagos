@@ -91,3 +91,112 @@ def append_audit_log(entry: dict[str, Any]) -> dict[str, Any]:
             session.commit()
 
     return audit_entry
+
+
+def query_audit_logs(
+    target_type: str | None = None,
+    target_id: str | None = None,
+    action_name: str | None = None,
+    decision: str | None = None,
+    reason_code: str | None = None,
+    correlation_id: str | None = None,
+    actor_id: str | None = None,
+    actor_role: str | None = None,
+    created_from: str | None = None,
+    created_to: str | None = None,
+) -> list[dict[str, Any]]:
+    if not _db.is_enabled():
+        return memory.query_audit_logs(
+            target_type=target_type,
+            target_id=target_id,
+            action_name=action_name,
+            decision=decision,
+            reason_code=reason_code,
+            correlation_id=correlation_id,
+            actor_id=actor_id,
+            actor_role=actor_role,
+            created_from=created_from,
+            created_to=created_to,
+        )
+
+    where_clauses: list[str] = []
+    params: dict[str, Any] = {}
+    if target_type is not None:
+        where_clauses.append("target_type = :target_type")
+        params["target_type"] = target_type
+    if target_id is not None:
+        where_clauses.append("target_id = :target_id")
+        params["target_id"] = target_id
+    if action_name is not None:
+        where_clauses.append("action_name = :action_name")
+        params["action_name"] = action_name
+    if decision is not None:
+        where_clauses.append("decision = :decision")
+        params["decision"] = decision
+    if reason_code is not None:
+        where_clauses.append("reason_code = :reason_code")
+        params["reason_code"] = reason_code
+    if correlation_id is not None:
+        where_clauses.append("correlation_id = :correlation_id")
+        params["correlation_id"] = correlation_id
+    if actor_id is not None:
+        where_clauses.append("actor_id = :actor_id")
+        params["actor_id"] = actor_id
+    if actor_role is not None:
+        where_clauses.append("actor_role = :actor_role")
+        params["actor_role"] = actor_role
+    if created_from is not None:
+        where_clauses.append("created_at >= CAST(:created_from AS timestamptz)")
+        params["created_from"] = created_from
+    if created_to is not None:
+        where_clauses.append("created_at <= CAST(:created_to AS timestamptz)")
+        params["created_to"] = created_to
+
+    where_sql = ""
+    if where_clauses:
+        where_sql = "WHERE " + " AND ".join(where_clauses)
+
+    with _db.read_session() as session:
+        rows = session.execute(
+            text(
+                f"""
+                SELECT
+                    audit_id,
+                    actor_id,
+                    actor_role,
+                    action_name,
+                    target_type,
+                    target_id,
+                    decision,
+                    reason_code,
+                    before_snapshot,
+                    after_snapshot,
+                    metadata,
+                    correlation_id,
+                    created_at
+                FROM audit_logs
+                {where_sql}
+                ORDER BY created_at DESC, audit_id DESC
+                """
+            ),
+            params,
+        ).mappings().all()
+
+    return [
+        {
+            "auditId": str(row["audit_id"]),
+            "actorId": row["actor_id"],
+            "actorRole": row["actor_role"],
+            "actionName": row["action_name"],
+            "targetType": row["target_type"],
+            "targetId": row["target_id"],
+            "decision": row["decision"],
+            "reasonCode": row["reason_code"],
+            "beforeSnapshot": row["before_snapshot"],
+            "afterSnapshot": row["after_snapshot"],
+            "metadata": row["metadata"] or {},
+            "correlationId": row["correlation_id"],
+            "createdAt": row["created_at"].isoformat() if row["created_at"] else None,
+        }
+        for row in rows
+    ]

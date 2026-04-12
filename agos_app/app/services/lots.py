@@ -7,7 +7,7 @@ from fastapi import HTTPException
 
 from app.core import events
 from app.core.codegen import generate_lot_code
-from app.core.write_context import append_audit_decision, build_request_hash, meta_context
+from app.core.write_context import build_request_hash, meta_context
 from app.core.gateway import assert_lot_transition, check_idempotency, record_idempotency
 from app.models.enums import LotStatus
 from app.models.lots import (
@@ -28,6 +28,7 @@ from app.models.lots import (
     ReleaseLotRequest,
     UnblockLotRequest,
 )
+from app.services import audit as audit_service
 from app.store import farm as farm_store
 from app.store.lots import (
     append_lot_evidence,
@@ -237,7 +238,7 @@ def _audit_lot(
     event: dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> None:
-    append_audit_decision(
+    audit_service.append_domain_audit_decision(
         action_name=action_name,
         target_type="Lot",
         target_id=lot_id,
@@ -249,6 +250,75 @@ def _audit_lot(
         event=event,
         metadata=metadata,
     )
+
+
+def _raise_lot_denied(
+    *,
+    action_name: str,
+    lot_id: str,
+    context: dict[str, Any],
+    detail: str,
+    reason_code: str,
+    status_code: int = 422,
+    before_snapshot: Any | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    _audit_lot(
+        action_name,
+        lot_id,
+        "denied",
+        context,
+        before_snapshot=before_snapshot,
+        reason_code=reason_code,
+        metadata={"message": detail, **(metadata or {})},
+    )
+    raise HTTPException(status_code=status_code, detail=detail)
+
+
+def _raise_lot_escalated(
+    *,
+    action_name: str,
+    lot_id: str,
+    context: dict[str, Any],
+    detail: str,
+    reason_code: str,
+    status_code: int = 403,
+    before_snapshot: Any | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    _audit_lot(
+        action_name,
+        lot_id,
+        "escalated",
+        context,
+        before_snapshot=before_snapshot,
+        reason_code=reason_code,
+        metadata={"message": detail, **(metadata or {})},
+    )
+    raise HTTPException(status_code=status_code, detail=detail)
+
+
+def _raise_lot_failed(
+    *,
+    action_name: str,
+    lot_id: str,
+    context: dict[str, Any],
+    detail: str,
+    reason_code: str,
+    status_code: int = 500,
+    before_snapshot: Any | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    _audit_lot(
+        action_name,
+        lot_id,
+        "failed",
+        context,
+        before_snapshot=before_snapshot,
+        reason_code=reason_code,
+        metadata={"message": detail, **(metadata or {})},
+    )
+    raise HTTPException(status_code=status_code, detail=detail)
 
 
 def _get_lot_record_or_404(
@@ -472,73 +542,61 @@ def release_lot(lot_id: str, payload: ReleaseLotRequest) -> LotResponse:
         raise
 
     if payload.releasedQty <= 0:
-        _audit_lot(
-            "lot.release",
-            lot_id,
-            "denied",
-            context,
-            before_snapshot=before_snapshot,
+        _raise_lot_denied(
+            action_name="lot.release",
+            lot_id=lot_id,
+            context=context,
+            detail="releasedQty must be greater than 0.",
             reason_code="invalid_released_quantity",
-            metadata={"message": "releasedQty must be greater than 0."},
+            before_snapshot=before_snapshot,
         )
-        raise HTTPException(status_code=422, detail="releasedQty must be greater than 0.")
 
     if payload.releasedQty > record["actualQty"]:
-        _audit_lot(
-            "lot.release",
-            lot_id,
-            "denied",
-            context,
-            before_snapshot=before_snapshot,
-            reason_code="released_qty_exceeds_actual",
-            metadata={"message": f"releasedQty ({payload.releasedQty}) exceeds actualQty ({record['actualQty']})."},
-        )
-        raise HTTPException(
-            status_code=422,
+        _raise_lot_denied(
+            action_name="lot.release",
+            lot_id=lot_id,
+            context=context,
             detail=f"releasedQty ({payload.releasedQty}) exceeds actualQty ({record['actualQty']}).",
+            reason_code="released_qty_exceeds_actual",
+            before_snapshot=before_snapshot,
         )
 
     reserved_qty = float(record.get("reservedQty", 0.0))
     if payload.releasedQty < reserved_qty:
-        _audit_lot(
-            "lot.release",
-            lot_id,
-            "denied",
-            context,
-            before_snapshot=before_snapshot,
-            reason_code="released_qty_below_reserved",
-            metadata={
-                "message": f"releasedQty ({payload.releasedQty}) cannot be less than reservedQty ({reserved_qty})."
-            },
-        )
-        raise HTTPException(
-            status_code=422,
+        _raise_lot_denied(
+            action_name="lot.release",
+            lot_id=lot_id,
+            context=context,
             detail=f"releasedQty ({payload.releasedQty}) cannot be less than reservedQty ({reserved_qty}).",
+            reason_code="released_qty_below_reserved",
+            before_snapshot=before_snapshot,
         )
 
     if _requires_sensitive_release_approval(record, context) and not payload.approvalRef:
-        _audit_lot(
-            "lot.release",
-            lot_id,
-            "denied",
-            context,
-            before_snapshot=before_snapshot,
+        _raise_lot_escalated(
+            action_name="lot.release",
+            lot_id=lot_id,
+            context=context,
+            detail="Sensitive lot release requires approvalRef.",
             reason_code="approval_required",
-            metadata={"message": "Sensitive lot release requires approvalRef."},
+            status_code=403,
+            before_snapshot=before_snapshot,
+            metadata={
+                "requiredApprovalRef": True,
+                "requiredApproverRoles": ["admin", "founder", "super_admin", "admin_van_hanh"],
+                "escalationOwner": "operations_admin",
+            },
         )
-        raise HTTPException(status_code=403, detail="Sensitive lot release requires approvalRef.")
 
     if record["status"] == LotStatus.qc_pending.value and _latest_qc_result(lot_id) != "passed":
-        _audit_lot(
-            "lot.release",
-            lot_id,
-            "denied",
-            context,
-            before_snapshot=before_snapshot,
+        _raise_lot_denied(
+            action_name="lot.release",
+            lot_id=lot_id,
+            context=context,
+            detail="Lot requires a passed QC review before release.",
             reason_code="qc_release_guard_failed",
-            metadata={"message": "Lot requires a passed QC review before release."},
+            before_snapshot=before_snapshot,
         )
-        raise HTTPException(status_code=422, detail="Lot requires a passed QC review before release.")
 
     if not postgres_sync.is_enabled():
         record["status"] = next_status
@@ -546,7 +604,7 @@ def release_lot(lot_id: str, payload: ReleaseLotRequest) -> LotResponse:
         record["availableQty"] = _compute_available_qty(payload.releasedQty, reserved_qty)
         if payload.qualityStatus:
             record["qualityStatus"] = payload.qualityStatus
-    result_record = record
+    result_record: dict[str, Any] = record
     with postgres_transaction() if postgres_sync.is_enabled() else nullcontext():
         if postgres_sync.is_enabled():
             persisted = postgres_sync.release_lot_atomic(
@@ -556,7 +614,16 @@ def release_lot(lot_id: str, payload: ReleaseLotRequest) -> LotResponse:
                 expected_version=record.get("version"),
             )
             if persisted is None:
-                raise HTTPException(status_code=500, detail="Failed to persist lot release.")
+                _raise_lot_failed(
+                    action_name="lot.release",
+                    lot_id=lot_id,
+                    context=context,
+                    detail="Failed to persist lot release.",
+                    reason_code="persistence_failed",
+                    before_snapshot=before_snapshot,
+                    metadata={"failureStage": "release_lot_atomic"},
+                )
+            assert persisted is not None
             result_record = persisted
         event = _emit_lot_event(
             "lot.released",

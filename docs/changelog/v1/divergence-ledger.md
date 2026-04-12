@@ -24,7 +24,7 @@ Do not keep divergence tracking only in local TODOs, comments, prompts, or instr
 
 | ID | Concern | Code Surface | Doc Surface | Divergence | Why | Status | Exit Condition |
 |---|---|---|---|---|---|---|---|
-| None | - | - | - | - | - | - | - |
+| DL-20260412-01 | api/permission | `agos_app/app/api/routes/audit.py`, `agos_app/app/api/router.py` | `docs/changelog/v1/architecture/07-permission-matrix.md`, `docs/changelog/v1/diagram/08-role-based-view-permission-diagram.md` | `GET /api/v1/audit` exists as a public read-only route before role-based gateway/auth enforcement is implemented. | Phase 1 needs operator/debug readback now, while permission enforcement is still an acknowledged later-hardening lane. | open | Resolve when audit-read access is enforced at the route/gateway boundary according to the permission baseline. |
 
 ## Resolved Entries
 

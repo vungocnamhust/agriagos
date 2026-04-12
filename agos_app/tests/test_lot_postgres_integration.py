@@ -5,6 +5,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -383,3 +384,226 @@ def test_atomic_lot_helpers_update_quantity_snapshots(
     assert unblocked["status"] == "qc_pending"
     assert unblocked["releasedQty"] == 0
     assert unblocked["availableQty"] == 0
+
+
+@pytest.mark.postgres_integration
+def test_release_lot_requires_approval_writes_escalated_audit_on_postgres_path(
+    postgres_db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_db, "is_enabled", lambda: True)
+    monkeypatch.setattr(_db, "read_session", lambda session=None: _bound_read_session(postgres_db_session))
+    monkeypatch.setattr(_db, "write_session", lambda session=None: _bound_write_session(postgres_db_session))
+    monkeypatch.setattr(lot_service.postgres_sync, "is_enabled", lambda: True)
+    monkeypatch.setattr(lot_service, "postgres_transaction", lambda: _bound_transaction(postgres_db_session))
+    monkeypatch.setattr(farm_store, "is_enabled", lambda: True)
+
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO product_skus (product_sku_id, tenant_id, sku_code, sku_name, unit, status)
+            VALUES (:product_sku_id, 'default', 'SKU-LOT-AUDIT-ESC-1', 'Lot Audit Escalation SKU', 'kg', 'active')
+            """
+        ),
+        {"product_sku_id": "00000000-0000-0000-0000-000000000114"},
+    )
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO plots (plot_id, tenant_id, plot_code, name, area_value, area_unit, status)
+            VALUES (:plot_id, 'default', 'PLOT-AUDIT-ESC-1', 'Plot Audit Escalation', 10, 'ha', 'active')
+            """
+        ),
+        {"plot_id": "00000000-0000-0000-0000-000000000214"},
+    )
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO crop_cycles (
+                crop_cycle_id,
+                tenant_id,
+                plot_id,
+                crop_name,
+                start_date,
+                growth_stage,
+                status
+            ) VALUES (
+                :crop_cycle_id,
+                'default',
+                :plot_id,
+                'rice',
+                DATE '2026-03-01',
+                'harvested',
+                'harvested'
+            )
+            """
+        ),
+        {
+            "crop_cycle_id": "00000000-0000-0000-0000-000000000314",
+            "plot_id": "00000000-0000-0000-0000-000000000214",
+        },
+    )
+
+    created = lot_service.create_harvested_lot(
+        CreateHarvestedLotRequest(
+            productSkuId="00000000-0000-0000-0000-000000000114",
+            sourceType="crop_cycle",
+            sourceRefId="00000000-0000-0000-0000-000000000314",
+            actualQty=12,
+            unit="kg",
+            harvestOrProductionDate="2026-04-12T00:00:00+00:00",
+            meta=Meta(
+                correlationId="corr-lot-pg-audit-esc-create",
+                idempotencyKey="idem-lot-pg-audit-esc-create",
+                actorId="farm-manager-1",
+                actorRole="farm_manager",
+            ),
+        )
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        lot_service.release_lot(
+            created.data.lotId,
+            ReleaseLotRequest(
+                releasedQty=5,
+                meta=Meta(
+                    correlationId="corr-lot-pg-audit-esc-release",
+                    idempotencyKey="idem-lot-pg-audit-esc-release",
+                    actorId="farm-manager-1",
+                    actorRole="farm_manager",
+                ),
+            ),
+        )
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "Sensitive lot release requires approvalRef."
+
+    audit_row = postgres_db_session.execute(
+        text(
+            """
+            SELECT decision, reason_code, before_snapshot, after_snapshot, metadata
+            FROM audit_logs
+            WHERE target_type = 'Lot'
+              AND target_id = :lot_id
+              AND action_name = 'lot.release'
+            ORDER BY created_at DESC, audit_id DESC
+            LIMIT 1
+            """
+        ),
+        {"lot_id": created.data.lotId},
+    ).mappings().one()
+
+    assert audit_row["decision"] == "escalated"
+    assert audit_row["reason_code"] == "approval_required"
+    assert audit_row["after_snapshot"] is None
+    assert audit_row["before_snapshot"]["status"] == "harvested"
+    assert audit_row["metadata"]["requiredApprovalRef"] is True
+
+
+@pytest.mark.postgres_integration
+def test_release_lot_persistence_failure_writes_failed_audit_on_postgres_path(
+    postgres_db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_db, "is_enabled", lambda: True)
+    monkeypatch.setattr(_db, "read_session", lambda session=None: _bound_read_session(postgres_db_session))
+    monkeypatch.setattr(_db, "write_session", lambda session=None: _bound_write_session(postgres_db_session))
+    monkeypatch.setattr(lot_service.postgres_sync, "is_enabled", lambda: True)
+    monkeypatch.setattr(lot_service, "postgres_transaction", lambda: _bound_transaction(postgres_db_session))
+    monkeypatch.setattr(farm_store, "is_enabled", lambda: True)
+
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO product_skus (product_sku_id, tenant_id, sku_code, sku_name, unit, status)
+            VALUES (:product_sku_id, 'default', 'SKU-LOT-AUDIT-FAIL-1', 'Lot Audit Failed SKU', 'kg', 'active')
+            """
+        ),
+        {"product_sku_id": "00000000-0000-0000-0000-000000000115"},
+    )
+
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO lots (
+                lot_id,
+                tenant_id,
+                lot_code,
+                product_sku_id,
+                source_type,
+                source_ref_id,
+                harvest_or_production_date,
+                status,
+                actual_qty,
+                released_qty,
+                available_qty,
+                reserved_qty,
+                unit,
+                quality_note
+            ) VALUES (
+                :lot_id,
+                'default',
+                'LOT-PG-AUDIT-FAIL-1',
+                :product_sku_id,
+                'crop_cycle',
+                'cycle-audit-fail-1',
+                DATE '2026-04-11',
+                'harvested',
+                10,
+                0,
+                0,
+                0,
+                'kg',
+                NULL
+            )
+            """
+        ),
+        {
+            "lot_id": "00000000-0000-0000-0000-000000000414",
+            "product_sku_id": "00000000-0000-0000-0000-000000000115",
+        },
+    )
+
+    original_release_atomic = lot_service.postgres_sync.release_lot_atomic
+    monkeypatch.setattr(lot_service.postgres_sync, "release_lot_atomic", lambda *args, **kwargs: None)
+
+    with pytest.raises(HTTPException) as exc_info:
+        lot_service.release_lot(
+            "00000000-0000-0000-0000-000000000414",
+            ReleaseLotRequest(
+                releasedQty=5,
+                approvalRef="APR-PG-FAIL-001",
+                meta=Meta(
+                    correlationId="corr-lot-pg-audit-fail-release",
+                    idempotencyKey="idem-lot-pg-audit-fail-release",
+                    actorId="admin-1",
+                    actorRole="admin",
+                ),
+            ),
+        )
+
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.detail == "Failed to persist lot release."
+
+    monkeypatch.setattr(lot_service.postgres_sync, "release_lot_atomic", original_release_atomic)
+
+    audit_row = postgres_db_session.execute(
+        text(
+            """
+            SELECT decision, reason_code, before_snapshot, after_snapshot, metadata
+            FROM audit_logs
+            WHERE target_type = 'Lot'
+              AND target_id = :lot_id
+              AND action_name = 'lot.release'
+            ORDER BY created_at DESC, audit_id DESC
+            LIMIT 1
+            """
+        ),
+        {"lot_id": "00000000-0000-0000-0000-000000000414"},
+    ).mappings().one()
+
+    assert audit_row["decision"] == "failed"
+    assert audit_row["reason_code"] == "persistence_failed"
+    assert audit_row["after_snapshot"] is None
+    assert audit_row["before_snapshot"]["status"] == "harvested"
+    assert audit_row["metadata"]["failureStage"] == "release_lot_atomic"

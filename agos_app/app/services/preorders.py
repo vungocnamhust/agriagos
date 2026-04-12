@@ -9,7 +9,7 @@ from fastapi import HTTPException
 
 from app.core import events
 from app.core.codegen import generate_preorder_code
-from app.core.write_context import append_audit_decision, build_request_hash, meta_context
+from app.core.write_context import build_request_hash, meta_context
 from app.core.gateway import assert_preorder_transition, check_idempotency, record_idempotency
 from app.models.enums import PreorderStatus
 from app.models.preorders import (
@@ -22,6 +22,7 @@ from app.models.preorders import (
     PreorderDetail,
     PreorderResponse,
 )
+from app.services import audit as audit_service
 from app.store import postgres_sync
 from app.store import memory as store
 from app.store._db import transaction as postgres_transaction
@@ -105,7 +106,7 @@ def _audit_preorder(
     event: dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> None:
-    append_audit_decision(
+    audit_service.append_domain_audit_decision(
         action_name=action_name,
         target_type="Preorder",
         target_id=preorder_id,
@@ -117,6 +118,29 @@ def _audit_preorder(
         event=event,
         metadata=metadata,
     )
+
+
+def _raise_preorder_denied(
+    *,
+    action_name: str,
+    preorder_id: str,
+    context: dict[str, Any],
+    detail: str,
+    reason_code: str,
+    status_code: int = 422,
+    before_snapshot: Any | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    _audit_preorder(
+        action_name,
+        preorder_id,
+        "denied",
+        context,
+        before_snapshot=before_snapshot,
+        reason_code=reason_code,
+        metadata={"message": detail, **(metadata or {})},
+    )
+    raise HTTPException(status_code=status_code, detail=detail)
 
 
 def _get_preorder_record_or_404(
@@ -344,16 +368,14 @@ def adjust_preorder(preorder_id: str, payload: AdjustPreorderRequest) -> Preorde
         raise
 
     if payload.newCommittedQty <= 0:
-        _audit_preorder(
-            "preorder.adjust",
-            preorder_id,
-            "denied",
-            context,
-            before_snapshot=before_snapshot,
+        _raise_preorder_denied(
+            action_name="preorder.adjust",
+            preorder_id=preorder_id,
+            context=context,
+            detail="newCommittedQty must be positive.",
             reason_code="invalid_committed_qty",
-            metadata={"message": "newCommittedQty must be positive."},
+            before_snapshot=before_snapshot,
         )
-        raise HTTPException(status_code=422, detail="newCommittedQty must be positive.")
 
     minimum_committed_qty = float(
         Decimal(str(record["allocatedQty"]))
@@ -361,26 +383,16 @@ def adjust_preorder(preorder_id: str, payload: AdjustPreorderRequest) -> Preorde
         + Decimal(str(record.get("cancelledQty", 0.0)))
     )
     if payload.newCommittedQty < minimum_committed_qty:
-        _audit_preorder(
-            "preorder.adjust",
-            preorder_id,
-            "denied",
-            context,
-            before_snapshot=before_snapshot,
-            reason_code="committed_qty_below_reserved_and_delivered",
-            metadata={
-                "message": (
-                    f"newCommittedQty ({payload.newCommittedQty}) cannot be less than "
-                    f"allocated + delivered qty ({minimum_committed_qty})."
-                )
-            },
-        )
-        raise HTTPException(
-            status_code=422,
+        _raise_preorder_denied(
+            action_name="preorder.adjust",
+            preorder_id=preorder_id,
+            context=context,
             detail=(
                 f"newCommittedQty ({payload.newCommittedQty}) cannot be less than "
                 f"allocated + delivered qty ({minimum_committed_qty})."
             ),
+            reason_code="committed_qty_below_reserved_and_delivered",
+            before_snapshot=before_snapshot,
         )
 
     old_qty = record["committedQty"]
@@ -457,16 +469,14 @@ def cancel_preorder(preorder_id: str, payload: CancelPreorderRequest) -> Preorde
 
     allocated_qty = float(record.get("allocatedQty", 0.0) or 0.0)
     if allocated_qty > 0:
-        _audit_preorder(
-            "preorder.cancel",
-            preorder_id,
-            "denied",
-            context,
-            before_snapshot=before_snapshot,
+        _raise_preorder_denied(
+            action_name="preorder.cancel",
+            preorder_id=preorder_id,
+            context=context,
+            detail="Preorder cannot be cancelled while allocated qty exists.",
             reason_code="preorder_has_allocations",
-            metadata={"message": "Preorder cannot be cancelled while allocated qty exists."},
+            before_snapshot=before_snapshot,
         )
-        raise HTTPException(status_code=422, detail="Preorder cannot be cancelled while allocated qty exists.")
 
     record["status"] = next_status
     record["cancelledQty"] = max(

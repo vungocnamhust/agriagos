@@ -41,6 +41,14 @@ Rule đọc tài liệu:
 - nếu transition chưa có trong gateway, coi đó là **policy chưa được enforce đầy đủ**, không phải lý do để tự ý bỏ qua guard
 - phase đầu phải ưu tiên khớp `gateway.py` trước khi mở rộng state machine phức tạp hơn
 
+### 2.5 Guard rejection contract trong Phase 1
+Khi một action bị `Command Gateway` hoặc service layer từ chối vì state hiện tại không hợp lệ, runtime Phase 1 phải giữ một contract thống nhất:
+- HTTP trả về `422`
+- message theo mẫu: `"<Aggregate> transition '<action>' not allowed from state '<state>'."`
+- audit append `reasonCode = state_transition_rejected`
+
+Rule này áp dụng cho các aggregate đang được harden trong Phase 1 như `preorder`, `order`, và `lot`.
+
 ---
 
 ## 3. Customer state

@@ -11,8 +11,11 @@ Sơ đồ này thể hiện nguyên tắc **one truth, many views**: cùng một
 > | `GET /views/available-lots` | Available Lot Board — released lots chưa được allocate hết |
 > | `GET /views/pending-fulfillment` | Order Board View (V3) — confirmed/allocated/packed orders |
 > | `GET /views/farm` | Farm View — plots + active crop cycles |
+> | `GET /audit` | Audit Query Surface — operator/debug readback, không phải role-facing business view |
 >
 > Các view còn lại (Farmer Task View, QC Board, Traceability, Management Metrics) là Phase 2.
+>
+> `GET /audit` hiện là read-only query surface cho operator/debug ở Phase 1; intended readers là Founder / Admin / Accountant. Permission enforcement đầy đủ cho endpoint này vẫn đi sau auth/gateway hardening.
 
 ## Mermaid
 ```mermaid

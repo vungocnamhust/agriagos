@@ -78,6 +78,7 @@ Phase đầu cần hiểu rõ:
 ## 4.2 Admin vận hành
 ### Được làm
 - xem gần như toàn bộ operational data
+- query event log và audit log phục vụ debug / điều phối vận hành
 - tạo / sửa customer, preorder, order
 - theo dõi lot, allocation, packing, delivery
 - điều phối liên phòng ban
@@ -262,6 +263,7 @@ Phase đầu cần hiểu rõ:
 | Plot/Crop sửa | full | full | no | no | limited | yes | no | no | no direct |
 | Payment status xem | full | full | limited | limited | limited | no | yes | yes | scoped |
 | Payment chỉnh | full | limited | no | no | no | no | yes | no | no direct |
+| Audit/Event log query | full | yes | no | no | no | no | limited | no | no direct |
 | Preference confirm | full | yes | yes | yes theo policy | no | no | no | no | no direct |
 | Duplicate candidate review | full | yes | yes | yes theo policy | no | no | no | no | no direct |
 | ERP reconcile approve | full | limited | no | no | no | no | yes | no | no direct |
@@ -292,6 +294,7 @@ Bắt buộc approval trong phase đầu:
 
 Phase 1 implementation note:
 - route `ReleaseLot` hiện chỉ mang `approvalRef` như approval evidence cho case đặc biệt; identity của người approve vẫn thuộc audit/workflow ngoài request schema và chưa được enforce như field riêng ở public API
+- khi thiếu `approvalRef` cho lot release nhạy cảm, service hiện ghi audit decision `escalated` với `reason_code=approval_required` và metadata tối thiểu như `requiredApprovalRef`, `requiredApproverRoles`, `escalationOwner` trước khi trả `403`
 
 ## 7. Pattern an toàn nên dùng với AI
 
@@ -326,6 +329,11 @@ Mọi action nhạy cảm phải log:
 - trước / sau thay đổi gì
 - lý do nếu override hoặc reject
 - correlation id nếu thuộc một flow lớn
+
+Phase 1 readback note:
+- `GET /api/v1/audit` là operator/debug surface để query audit decisions
+- intended roles hiện tại: Founder / Super Admin, Admin vận hành, và Accountant khi cần lần lại operational payment / reconcile trail
+- gateway/auth enforcement cho quyền đọc endpoint này chưa được implement đầy đủ trong phase hiện tại; xem divergence ledger nếu code surface đang đi trước permission enforcement
 
 ---
 

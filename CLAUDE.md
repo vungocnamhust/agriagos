@@ -85,9 +85,10 @@ agos_app/
 │   │   ├── codegen.py    # Centralized human-readable code generation (KH-, DT-, ORD-, LOT- formats)
 │   │   ├── gateway.py    # Command Gateway: idempotency, state machine transitions
 │   │   └── events.py     # Domain event factory (dotted-lowercase eventName + PascalCase eventType)
-│   ├── services/         # Application services — one file per domain
+│   ├── services/         # Application services — one file per domain; audit.py centralizes audit reason registries and snapshot shaping
 │   ├── store/
 │   │   ├── _db.py        # DB connection + is_enabled() flag
+│   │   ├── audit.py      # Audit log append/query against PostgreSQL
 │   │   ├── customers.py  # Customer store operations
 │   │   ├── events.py     # Domain event append/query against PostgreSQL
 │   │   ├── farm.py       # Farm summary reads against PostgreSQL
@@ -122,6 +123,7 @@ All endpoints are under `/api/v1/`. The route groups are:
 - `/farm` — farm and plot operations
 - `/views` — read model projections (role-based BFF views)
 - `/events` — domain event stream queries
+- `/audit` — audit decision log queries
 
 ## Key Design Principles
 
@@ -192,6 +194,10 @@ All diagrams use `[Phase 1 ✅]` / `[Phase 2 🔜]` labels to distinguish implem
 - PostgreSQL allocation and cancel paths now keep `sales_order_lines.allocated_qty`, `lots.available_qty/reserved_qty`, and `preorders.allocated_qty/remaining_qty` in sync inside the atomic store flow
 - Fulfillment write commands now include `POST /api/v1/orders/{order_id}/pack`, `POST /api/v1/orders/{order_id}/ship`, `POST /api/v1/orders/{order_id}/deliver`, and `POST /api/v1/orders/{order_id}/fail-delivery`
 - `sales_orders` now snapshots fulfillment metadata directly in Phase 1, including `carrier`, `tracking_ref`, `shipped_at`, `delivered_at`, `proof_ref`, `delivery_note`, and `failure_reason`
+
+**Key Phase 1 audit facts**:
+- `app/services/audit.py` is the shared audit normalization layer: reason-code registries live there, sensitive snapshots are projected there, and services should go through `append_domain_audit_decision()` instead of appending raw audit entries directly
+- `lot.release` is the first owner-backed non-terminal audit lane: missing `approvalRef` on sensitive release writes `decision=escalated` with `reason_code=approval_required`; PostgreSQL persistence failure writes `decision=failed` with `reason_code=persistence_failed`
 
 When repo-root docs and `docs/changelog/v1/architecture/` overlap, treat the `docs/changelog/v1/architecture/` set as the working baseline for current deterministic-core decisions.
 

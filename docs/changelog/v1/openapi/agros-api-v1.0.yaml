@@ -1567,6 +1567,7 @@ paths:
         schema:
           anyOf:
           - type: string
+            format: date-time
           - type: 'null'
           title: From
       - name: to
@@ -1575,6 +1576,7 @@ paths:
         schema:
           anyOf:
           - type: string
+            format: date-time
           - type: 'null'
           title: To
       responses:
@@ -1585,11 +1587,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/AuditLogListResponse'
         '422':
-          description: Validation Error
+          description: Validation error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/HTTPValidationError'
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   schemas:
     ActivatePreorderRequest:
@@ -1843,6 +1845,7 @@ components:
           title: Correlationid
         createdAt:
           type: string
+          format: date-time
           title: Createdat
       type: object
       required:

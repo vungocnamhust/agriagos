@@ -247,6 +247,52 @@ def list_audit_logs() -> list[dict[str, Any]]:
     return list(_audit_log)
 
 
+def query_audit_logs(
+    target_type: str | None = None,
+    target_id: str | None = None,
+    action_name: str | None = None,
+    decision: str | None = None,
+    reason_code: str | None = None,
+    correlation_id: str | None = None,
+    actor_id: str | None = None,
+    actor_role: str | None = None,
+    created_from: str | None = None,
+    created_to: str | None = None,
+) -> list[dict[str, Any]]:
+    result = list(_audit_log)
+    if target_type is not None:
+        result = [entry for entry in result if entry.get("targetType") == target_type]
+    if target_id is not None:
+        result = [entry for entry in result if entry.get("targetId") == target_id]
+    if action_name is not None:
+        result = [entry for entry in result if entry.get("actionName") == action_name]
+    if decision is not None:
+        result = [entry for entry in result if entry.get("decision") == decision]
+    if reason_code is not None:
+        result = [entry for entry in result if entry.get("reasonCode") == reason_code]
+    if correlation_id is not None:
+        result = [entry for entry in result if entry.get("correlationId") == correlation_id]
+    if actor_id is not None:
+        result = [entry for entry in result if entry.get("actorId") == actor_id]
+    if actor_role is not None:
+        result = [entry for entry in result if entry.get("actorRole") == actor_role]
+    if created_from is not None:
+        created_from_dt = datetime.fromisoformat(created_from)
+        result = [
+            entry for entry in result if datetime.fromisoformat(entry["createdAt"]) >= created_from_dt
+        ]
+    if created_to is not None:
+        created_to_dt = datetime.fromisoformat(created_to)
+        result = [
+            entry for entry in result if datetime.fromisoformat(entry["createdAt"]) <= created_to_dt
+        ]
+    return sorted(
+        result,
+        key=lambda entry: (entry.get("createdAt") or "", entry.get("auditId") or ""),
+        reverse=True,
+    )
+
+
 def append_inventory_movement(entry: dict[str, Any]) -> dict[str, Any]:
     movement = {
         "inventoryMovementId": entry.get("inventoryMovementId", str(uuid.uuid4())),

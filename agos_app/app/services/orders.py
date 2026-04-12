@@ -15,7 +15,7 @@ from app.core.gateway import (
     check_idempotency,
     record_idempotency,
 )
-from app.core.write_context import append_audit_decision, build_request_hash, meta_context
+from app.core.write_context import build_request_hash, meta_context
 from app.models.enums import AllocationStatus, LotStatus, OrderStatus, PaymentStatus, PreorderStatus
 from app.models.orders import (
     AllocateOrderRequest,
@@ -583,7 +583,7 @@ def _record_preorder_delivery(
             idempotency_key=context.get("idempotency_key"),
         )
 
-    append_audit_decision(
+    audit_service.append_domain_audit_decision(
         action_name="preorder.quota_consume",
         target_type="Preorder",
         target_id=preorder_id,
