@@ -21,6 +21,8 @@ COMMON_AUDIT_REASON_CODES = frozenset(
 
 ORDER_AUDIT_REASON_CODES = COMMON_AUDIT_REASON_CODES | frozenset(
     {
+        "forbidden_order_read",
+        "forbidden_order_write",
         "source_preorder_not_found",
         "source_preorder_not_linkable",
         "lot_not_found",

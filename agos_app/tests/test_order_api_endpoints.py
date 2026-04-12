@@ -10,6 +10,14 @@ from app.models.enums import LotStatus
 client = TestClient(app)
 
 
+def _auth_headers(role: str = "admin", actor_id: str | None = None) -> dict[str, str]:
+    resolved_actor_id = actor_id or f"{role}-actor"
+    return {
+        "X-Actor-Id": resolved_actor_id,
+        "X-Actor-Role": role,
+    }
+
+
 def _create_customer() -> str:
     response = client.post(
         "/api/v1/customers",
@@ -31,6 +39,7 @@ def _create_customer() -> str:
 def _create_preorder(customer_id: str) -> str:
     created = client.post(
         "/api/v1/preorders",
+        headers=_auth_headers(),
         json={
             "customerId": customer_id,
             "productSkuId": "sku-1",
@@ -46,12 +55,14 @@ def _create_preorder(customer_id: str) -> str:
 
     confirmed = client.post(
         f"/api/v1/preorders/{preorder_id}/confirm",
+        headers=_auth_headers(),
         json={"meta": {"correlationId": "corr-api-preorder-confirm", "idempotencyKey": "idem-api-preorder-confirm"}},
     )
     assert confirmed.status_code == 200
 
     activated = client.post(
         f"/api/v1/preorders/{preorder_id}/activate",
+        headers=_auth_headers(),
         json={"meta": {"correlationId": "corr-api-preorder-activate", "idempotencyKey": "idem-api-preorder-activate"}},
     )
     assert activated.status_code == 200
@@ -77,6 +88,7 @@ def test_order_routes_create_get_and_confirm_preserve_line_level_linkage() -> No
 
     created = client.post(
         "/api/v1/orders",
+        headers=_auth_headers(),
         json={
             "customerId": customer_id,
             "channel": "direct",
@@ -106,7 +118,7 @@ def test_order_routes_create_get_and_confirm_preserve_line_level_linkage() -> No
     assert created_body["lines"][0]["sourcePreorderId"] == preorder_id
     assert created_body["lines"][1]["sourcePreorderId"] is None
 
-    detail = client.get(f"/api/v1/orders/{created_body['orderId']}")
+    detail = client.get(f"/api/v1/orders/{created_body['orderId']}", headers=_auth_headers())
     assert detail.status_code == 200
     detail_body = detail.json()
     assert detail_body["sourcePreorderFlag"] is True
@@ -115,6 +127,7 @@ def test_order_routes_create_get_and_confirm_preserve_line_level_linkage() -> No
 
     confirmed = client.post(
         f"/api/v1/orders/{created_body['orderId']}/confirm",
+        headers=_auth_headers(),
         json={"meta": {"correlationId": "corr-api-order-confirm", "idempotencyKey": "idem-api-order-confirm"}},
     )
     assert confirmed.status_code == 200
@@ -132,6 +145,7 @@ def test_order_create_route_rejects_missing_source_preorder() -> None:
 
     response = client.post(
         "/api/v1/orders",
+        headers=_auth_headers(),
         json={
             "customerId": customer_id,
             "channel": "direct",
@@ -163,6 +177,7 @@ def test_order_allocation_adjust_and_release_routes() -> None:
 
     created = client.post(
         "/api/v1/orders",
+        headers=_auth_headers(),
         json={
             "customerId": customer_id,
             "channel": "direct",
@@ -186,12 +201,14 @@ def test_order_allocation_adjust_and_release_routes() -> None:
 
     confirmed = client.post(
         f"/api/v1/orders/{order_id}/confirm",
+        headers=_auth_headers(),
         json={"meta": {"correlationId": "corr-api-adjust-order-confirm", "idempotencyKey": "idem-api-adjust-order-confirm"}},
     )
     assert confirmed.status_code == 200
 
     allocated = client.post(
         f"/api/v1/orders/{order_id}/allocate",
+        headers=_auth_headers(),
         json={
             "allocations": [
                 {"orderLineId": order_line_id, "lotId": "lot-api-1", "allocatedQty": 4}
@@ -204,6 +221,7 @@ def test_order_allocation_adjust_and_release_routes() -> None:
 
     adjusted = client.post(
         f"/api/v1/orders/{order_id}/allocations/{allocation_id}/adjust",
+        headers=_auth_headers(),
         json={
             "newAllocatedQty": 2,
             "reason": "customer_reduced_qty",
@@ -218,6 +236,7 @@ def test_order_allocation_adjust_and_release_routes() -> None:
 
     released = client.post(
         f"/api/v1/orders/{order_id}/allocations/{allocation_id}/release",
+        headers=_auth_headers(),
         json={
             "reason": "lot_reassigned",
             "meta": {"correlationId": "corr-api-adjust-order-release", "idempotencyKey": "idem-api-adjust-order-release"},
@@ -235,6 +254,7 @@ def test_order_pack_ship_and_partial_deliver_routes() -> None:
 
     created = client.post(
         "/api/v1/orders",
+        headers=_auth_headers(),
         json={
             "customerId": customer_id,
             "channel": "direct",
@@ -251,12 +271,14 @@ def test_order_pack_ship_and_partial_deliver_routes() -> None:
 
     confirmed = client.post(
         f"/api/v1/orders/{order_id}/confirm",
+        headers=_auth_headers(),
         json={"meta": {"correlationId": "corr-api-full-order-confirm", "idempotencyKey": "idem-api-full-order-confirm"}},
     )
     assert confirmed.status_code == 200
 
     allocated = client.post(
         f"/api/v1/orders/{order_id}/allocate",
+        headers=_auth_headers(),
         json={
             "allocations": [
                 {"orderLineId": order_line_id, "lotId": "lot-api-2", "allocatedQty": 6}
@@ -268,6 +290,7 @@ def test_order_pack_ship_and_partial_deliver_routes() -> None:
 
     packed = client.post(
         f"/api/v1/orders/{order_id}/pack",
+        headers=_auth_headers(),
         json={
             "packedQtySummary": [{"orderLineId": order_line_id, "packedQty": 6}],
             "meta": {"correlationId": "corr-api-full-order-pack", "idempotencyKey": "idem-api-full-order-pack"},
@@ -278,6 +301,7 @@ def test_order_pack_ship_and_partial_deliver_routes() -> None:
 
     shipped = client.post(
         f"/api/v1/orders/{order_id}/ship",
+        headers=_auth_headers(),
         json={
             "carrier": "gha",
             "trackingRef": "TRK-API-1",
@@ -294,6 +318,7 @@ def test_order_pack_ship_and_partial_deliver_routes() -> None:
 
     delivered = client.post(
         f"/api/v1/orders/{order_id}/deliver",
+        headers=_auth_headers(),
         json={
             "deliveredQtySummary": [{"orderLineId": order_line_id, "deliveredQty": 4}],
             "deliveredAt": "2026-04-12T11:00:00Z",
@@ -318,6 +343,7 @@ def test_order_failed_delivery_route_preserves_preorder_and_purchase_history() -
 
     created = client.post(
         "/api/v1/orders",
+        headers=_auth_headers(),
         json={
             "customerId": customer_id,
             "channel": "direct",
@@ -341,10 +367,12 @@ def test_order_failed_delivery_route_preserves_preorder_and_purchase_history() -
 
     client.post(
         f"/api/v1/orders/{order_id}/confirm",
+        headers=_auth_headers(),
         json={"meta": {"correlationId": "corr-api-failed-order-confirm", "idempotencyKey": "idem-api-failed-order-confirm"}},
     )
     client.post(
         f"/api/v1/orders/{order_id}/allocate",
+        headers=_auth_headers(),
         json={
             "allocations": [{"orderLineId": order_line_id, "lotId": "lot-api-3", "allocatedQty": 6}],
             "meta": {"correlationId": "corr-api-failed-order-allocate", "idempotencyKey": "idem-api-failed-order-allocate"},
@@ -352,6 +380,7 @@ def test_order_failed_delivery_route_preserves_preorder_and_purchase_history() -
     )
     client.post(
         f"/api/v1/orders/{order_id}/pack",
+        headers=_auth_headers(),
         json={
             "packedQtySummary": [{"orderLineId": order_line_id, "packedQty": 6}],
             "meta": {"correlationId": "corr-api-failed-order-pack", "idempotencyKey": "idem-api-failed-order-pack"},
@@ -359,6 +388,7 @@ def test_order_failed_delivery_route_preserves_preorder_and_purchase_history() -
     )
     client.post(
         f"/api/v1/orders/{order_id}/ship",
+        headers=_auth_headers(),
         json={
             "carrier": "gha",
             "trackingRef": "TRK-API-FAIL-1",
@@ -369,6 +399,7 @@ def test_order_failed_delivery_route_preserves_preorder_and_purchase_history() -
 
     failed = client.post(
         f"/api/v1/orders/{order_id}/fail-delivery",
+        headers=_auth_headers(),
         json={
             "failureReason": "customer_unreachable",
             "note": "carrier could not complete handoff",
@@ -397,6 +428,7 @@ def test_order_deliver_route_rejects_transition_before_ship() -> None:
 
     created = client.post(
         "/api/v1/orders",
+        headers=_auth_headers(),
         json={
             "customerId": customer_id,
             "channel": "direct",
@@ -413,11 +445,13 @@ def test_order_deliver_route_rejects_transition_before_ship() -> None:
 
     assert client.post(
         f"/api/v1/orders/{order_id}/confirm",
+        headers=_auth_headers(),
         json={"meta": {"correlationId": "corr-api-before-ship-confirm", "idempotencyKey": "idem-api-before-ship-confirm"}},
     ).status_code == 200
 
     assert client.post(
         f"/api/v1/orders/{order_id}/allocate",
+        headers=_auth_headers(),
         json={
             "allocations": [{"orderLineId": order_line_id, "lotId": "lot-api-before-ship", "allocatedQty": 4}],
             "meta": {"correlationId": "corr-api-before-ship-allocate", "idempotencyKey": "idem-api-before-ship-allocate"},
@@ -426,6 +460,7 @@ def test_order_deliver_route_rejects_transition_before_ship() -> None:
 
     assert client.post(
         f"/api/v1/orders/{order_id}/pack",
+        headers=_auth_headers(),
         json={
             "packedQtySummary": [{"orderLineId": order_line_id, "packedQty": 4}],
             "meta": {"correlationId": "corr-api-before-ship-pack", "idempotencyKey": "idem-api-before-ship-pack"},
@@ -434,6 +469,7 @@ def test_order_deliver_route_rejects_transition_before_ship() -> None:
 
     response = client.post(
         f"/api/v1/orders/{order_id}/deliver",
+        headers=_auth_headers(),
         json={
             "deliveredAt": "2026-04-12T11:00:00Z",
             "proofRef": "proof-api-before-ship",
@@ -444,3 +480,24 @@ def test_order_deliver_route_rejects_transition_before_ship() -> None:
     assert response.status_code == 422
     assert response.json()["code"] == "VALIDATION_ERROR"
     assert response.json()["message"] == "Order transition 'deliver' not allowed from state 'packed'."
+
+
+def test_order_create_route_denies_viewer_role() -> None:
+    customer_id = _create_customer()
+
+    response = client.post(
+        "/api/v1/orders",
+        headers=_auth_headers("viewer", actor_id="viewer-1"),
+        json={
+            "customerId": customer_id,
+            "channel": "direct",
+            "lines": [{"productSkuId": "sku-1", "orderedQty": 1, "unit": "kg"}],
+            "meta": {
+                "correlationId": "corr-api-order-denied",
+                "idempotencyKey": "idem-api-order-denied",
+            },
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["message"] == "Actor is not allowed to create orders."

@@ -29,6 +29,15 @@ from app.store import _db, memory
 from app.models.enums import LotStatus, PreorderStatus
 
 
+def _admin_meta(correlation_id: str, idempotency_key: str | None = None) -> Meta:
+    return Meta(
+        correlationId=correlation_id,
+        idempotencyKey=idempotency_key,
+        actorId="admin-1",
+        actorRole="admin",
+    )
+
+
 @dataclass
 class FakeSession:
     statements: list[str] = field(default_factory=list)
@@ -70,7 +79,7 @@ def test_create_order_postgres_path_uses_single_transaction(monkeypatch: pytest.
             customerId="customer-1",
             channel="direct",
             lines=[CreateOrderLineRequest(productSkuId="sku-1", orderedQty=3, unit="kg")],
-            meta=Meta(correlationId="corr-order", idempotencyKey="idem-order"),
+            meta=_admin_meta("corr-order", "idem-order"),
         )
     )
 
@@ -90,7 +99,7 @@ def test_confirm_order_missing_aggregate_writes_denied_audit(monkeypatch: pytest
     monkeypatch.setattr(orders.postgres_sync, "is_enabled", lambda: False)
 
     with pytest.raises(HTTPException) as exc_info:
-        orders.confirm_order("missing-order", ConfirmOrderRequest(meta=Meta(correlationId="corr-confirm")))
+        orders.confirm_order("missing-order", ConfirmOrderRequest(meta=_admin_meta("corr-confirm")))
 
     assert exc_info.value.status_code == 404
     assert memory.list_audit_logs()[-1]["actionName"] == "order.confirm"
@@ -106,9 +115,10 @@ def test_allocate_order_missing_lot_writes_denied_audit(monkeypatch: pytest.Monk
             customerId="customer-1",
             channel="direct",
             lines=[CreateOrderLineRequest(productSkuId="sku-1", orderedQty=2, unit="kg")],
+            meta=_admin_meta("corr-create-missing-lot"),
         )
     )
-    orders.confirm_order(created.data.orderId, ConfirmOrderRequest())
+    orders.confirm_order(created.data.orderId, ConfirmOrderRequest(meta=_admin_meta("corr-confirm-missing-lot")))
 
     with pytest.raises(HTTPException) as exc_info:
         orders.allocate_order(
@@ -121,7 +131,7 @@ def test_allocate_order_missing_lot_writes_denied_audit(monkeypatch: pytest.Monk
                         allocatedQty=1,
                     )
                 ],
-                meta=Meta(correlationId="corr-allocate"),
+                meta=_admin_meta("corr-allocate"),
             ),
         )
 
@@ -176,9 +186,10 @@ def test_allocate_order_rejects_aggregate_overflow_on_same_lot(monkeypatch: pyte
                 CreateOrderLineRequest(productSkuId="sku-1", orderedQty=3, unit="kg"),
                 CreateOrderLineRequest(productSkuId="sku-1", orderedQty=3, unit="kg"),
             ],
+            meta=_admin_meta("corr-create-aggregate-overflow"),
         )
     )
-    orders.confirm_order(created.data.orderId, ConfirmOrderRequest())
+    orders.confirm_order(created.data.orderId, ConfirmOrderRequest(meta=_admin_meta("corr-confirm-aggregate-overflow")))
     _seed_released_lot(lot_id="lot-1", available_qty=5)
 
     with pytest.raises(HTTPException) as exc_info:
@@ -189,7 +200,7 @@ def test_allocate_order_rejects_aggregate_overflow_on_same_lot(monkeypatch: pyte
                     AllocateItem(orderLineId=created.data.lines[0].orderLineId, lotId="lot-1", allocatedQty=3),
                     AllocateItem(orderLineId=created.data.lines[1].orderLineId, lotId="lot-1", allocatedQty=3),
                 ],
-                meta=Meta(correlationId="corr-aggregate-lot-overflow"),
+                meta=_admin_meta("corr-aggregate-lot-overflow"),
             ),
         )
 
@@ -209,9 +220,10 @@ def test_allocate_order_rejects_total_line_allocation_above_ordered_qty(monkeypa
             customerId="customer-1",
             channel="direct",
             lines=[CreateOrderLineRequest(productSkuId="sku-1", orderedQty=2, unit="kg")],
+            meta=_admin_meta("corr-create-line-overflow"),
         )
     )
-    orders.confirm_order(created.data.orderId, ConfirmOrderRequest())
+    orders.confirm_order(created.data.orderId, ConfirmOrderRequest(meta=_admin_meta("corr-confirm-line-overflow")))
     _seed_released_lot(lot_id="lot-1", available_qty=5)
     _seed_released_lot(lot_id="lot-2", available_qty=5)
 
@@ -223,7 +235,7 @@ def test_allocate_order_rejects_total_line_allocation_above_ordered_qty(monkeypa
                     AllocateItem(orderLineId=created.data.lines[0].orderLineId, lotId="lot-1", allocatedQty=1.5),
                     AllocateItem(orderLineId=created.data.lines[0].orderLineId, lotId="lot-2", allocatedQty=1.0),
                 ],
-                meta=Meta(correlationId="corr-line-overflow"),
+                meta=_admin_meta("corr-line-overflow"),
             ),
         )
 
@@ -250,9 +262,10 @@ def test_allocate_order_rejects_preorder_quota_overflow(monkeypatch: pytest.Monk
                     sourcePreorderId="preorder-1",
                 )
             ],
+            meta=_admin_meta("corr-create-preorder-overflow"),
         )
     )
-    orders.confirm_order(created.data.orderId, ConfirmOrderRequest())
+    orders.confirm_order(created.data.orderId, ConfirmOrderRequest(meta=_admin_meta("corr-confirm-preorder-overflow")))
     _seed_released_lot(lot_id="lot-1", available_qty=5)
 
     with pytest.raises(HTTPException) as exc_info:
@@ -262,7 +275,7 @@ def test_allocate_order_rejects_preorder_quota_overflow(monkeypatch: pytest.Monk
                 allocations=[
                     AllocateItem(orderLineId=created.data.lines[0].orderLineId, lotId="lot-1", allocatedQty=2)
                 ],
-                meta=Meta(correlationId="corr-preorder-overflow"),
+                meta=_admin_meta("corr-preorder-overflow"),
             ),
         )
 
@@ -290,9 +303,10 @@ def test_allocate_order_records_reserve_movement_and_updates_preorder(monkeypatc
                     sourcePreorderId="preorder-1",
                 )
             ],
+            meta=_admin_meta("corr-create-reserve-success"),
         )
     )
-    orders.confirm_order(created.data.orderId, ConfirmOrderRequest())
+    orders.confirm_order(created.data.orderId, ConfirmOrderRequest(meta=_admin_meta("corr-confirm-reserve-success")))
     _seed_released_lot(lot_id="lot-1", available_qty=5)
 
     response = orders.allocate_order(
@@ -301,7 +315,7 @@ def test_allocate_order_records_reserve_movement_and_updates_preorder(monkeypatc
             allocations=[
                 AllocateItem(orderLineId=created.data.lines[0].orderLineId, lotId="lot-1", allocatedQty=1.5)
             ],
-            meta=Meta(correlationId="corr-reserve-success"),
+            meta=_admin_meta("corr-reserve-success"),
         ),
     )
 
@@ -340,9 +354,10 @@ def test_cancel_order_releases_allocation_and_records_release_movement(monkeypat
                     sourcePreorderId="preorder-1",
                 )
             ],
+            meta=_admin_meta("corr-create-cancel"),
         )
     )
-    orders.confirm_order(created.data.orderId, ConfirmOrderRequest())
+    orders.confirm_order(created.data.orderId, ConfirmOrderRequest(meta=_admin_meta("corr-confirm-cancel")))
     _seed_released_lot(lot_id="lot-1", available_qty=5)
     orders.allocate_order(
         created.data.orderId,
@@ -350,20 +365,20 @@ def test_cancel_order_releases_allocation_and_records_release_movement(monkeypat
             allocations=[
                 AllocateItem(orderLineId=created.data.lines[0].orderLineId, lotId="lot-1", allocatedQty=1.5)
             ],
-            meta=Meta(correlationId="corr-allocate-before-cancel"),
+            meta=_admin_meta("corr-allocate-before-cancel"),
         ),
     )
     orders.request_cancel_order(
         created.data.orderId,
         RequestCancelOrderRequest(
             reason="customer_changed_mind",
-            meta=Meta(correlationId="corr-request-cancel-order"),
+            meta=_admin_meta("corr-request-cancel-order"),
         ),
     )
 
     orders.cancel_order(
         created.data.orderId,
-        CancelOrderRequest(reason="customer_changed_mind", meta=Meta(correlationId="corr-cancel-order")),
+        CancelOrderRequest(reason="customer_changed_mind", meta=_admin_meta("corr-cancel-order")),
     )
 
     preorder = memory.get_preorder("preorder-1")
@@ -387,6 +402,24 @@ def test_cancel_order_releases_allocation_and_records_release_movement(monkeypat
     assert allocations[0]["status"] == "cancelled"
 
 
+def test_create_order_denies_viewer_role(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(orders.postgres_sync, "is_enabled", lambda: False)
+    memory.save_customer("customer-1", {"customerId": "customer-1", "fullName": "Alice"})
+
+    with pytest.raises(HTTPException) as exc_info:
+        orders.create_order(
+            CreateOrderRequest(
+                customerId="customer-1",
+                channel="direct",
+                lines=[CreateOrderLineRequest(productSkuId="sku-1", orderedQty=1, unit="kg")],
+                meta=Meta(correlationId="corr-create-denied", actorId="viewer-1", actorRole="viewer"),
+            )
+        )
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "Actor is not allowed to create orders."
+
+
 def test_adjust_allocation_rebalances_inventory_and_sets_partial_status(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(orders.postgres_sync, "is_enabled", lambda: False)
     memory.save_customer("customer-1", {"customerId": "customer-1", "fullName": "Alice"})
@@ -403,9 +436,10 @@ def test_adjust_allocation_rebalances_inventory_and_sets_partial_status(monkeypa
                     sourcePreorderId="preorder-1",
                 )
             ],
+            meta=_admin_meta("corr-create-release"),
         )
     )
-    orders.confirm_order(created.data.orderId, ConfirmOrderRequest())
+    orders.confirm_order(created.data.orderId, ConfirmOrderRequest(meta=_admin_meta("corr-confirm-release")))
     _seed_released_lot(lot_id="lot-1", available_qty=10)
     allocated = orders.allocate_order(
         created.data.orderId,
@@ -413,7 +447,7 @@ def test_adjust_allocation_rebalances_inventory_and_sets_partial_status(monkeypa
             allocations=[
                 AllocateItem(orderLineId=created.data.lines[0].orderLineId, lotId="lot-1", allocatedQty=4)
             ],
-            meta=Meta(correlationId="corr-adjust-seed"),
+            meta=_admin_meta("corr-adjust-seed"),
         ),
     )
 
@@ -423,7 +457,7 @@ def test_adjust_allocation_rebalances_inventory_and_sets_partial_status(monkeypa
         AdjustAllocationRequest(
             newAllocatedQty=2,
             reason="customer_reduced_qty",
-            meta=Meta(correlationId="corr-adjust-allocation"),
+            meta=_admin_meta("corr-adjust-allocation"),
         ),
     )
 
@@ -463,9 +497,10 @@ def test_release_allocation_returns_order_to_confirmed_and_marks_release(monkeyp
                     sourcePreorderId="preorder-1",
                 )
             ],
+            meta=_admin_meta("corr-create-release-route"),
         )
     )
-    orders.confirm_order(created.data.orderId, ConfirmOrderRequest())
+    orders.confirm_order(created.data.orderId, ConfirmOrderRequest(meta=_admin_meta("corr-confirm-release-route")))
     _seed_released_lot(lot_id="lot-1", available_qty=5)
     allocated = orders.allocate_order(
         created.data.orderId,
@@ -473,7 +508,7 @@ def test_release_allocation_returns_order_to_confirmed_and_marks_release(monkeyp
             allocations=[
                 AllocateItem(orderLineId=created.data.lines[0].orderLineId, lotId="lot-1", allocatedQty=2)
             ],
-            meta=Meta(correlationId="corr-release-seed"),
+            meta=_admin_meta("corr-release-seed"),
         ),
     )
 
@@ -482,7 +517,7 @@ def test_release_allocation_returns_order_to_confirmed_and_marks_release(monkeyp
         allocated.allocations[0].allocationId,
         ReleaseAllocationRequest(
             reason="lot_reassigned",
-            meta=Meta(correlationId="corr-release-allocation"),
+            meta=_admin_meta("corr-release-allocation"),
         ),
     )
 
@@ -509,9 +544,10 @@ def test_pack_order_sets_partially_packed_when_actual_qty_is_short(monkeypatch: 
             customerId="customer-1",
             channel="direct",
             lines=[CreateOrderLineRequest(productSkuId="sku-1", orderedQty=4, unit="kg")],
+            meta=_admin_meta("corr-create-pack-partial"),
         )
     )
-    orders.confirm_order(created.data.orderId, ConfirmOrderRequest())
+    orders.confirm_order(created.data.orderId, ConfirmOrderRequest(meta=_admin_meta("corr-confirm-pack-partial")))
     _seed_released_lot(lot_id="lot-1", available_qty=10)
     orders.allocate_order(
         created.data.orderId,
@@ -519,7 +555,7 @@ def test_pack_order_sets_partially_packed_when_actual_qty_is_short(monkeypatch: 
             allocations=[
                 AllocateItem(orderLineId=created.data.lines[0].orderLineId, lotId="lot-1", allocatedQty=4)
             ],
-            meta=Meta(correlationId="corr-pack-seed"),
+            meta=_admin_meta("corr-pack-seed"),
         ),
     )
 
@@ -527,7 +563,7 @@ def test_pack_order_sets_partially_packed_when_actual_qty_is_short(monkeypatch: 
         created.data.orderId,
         PackOrderRequest(
             packedQtySummary=[PackQtyItem(orderLineId=created.data.lines[0].orderLineId, packedQty=2)],
-            meta=Meta(correlationId="corr-pack-partial"),
+            meta=_admin_meta("corr-pack-partial"),
         ),
     )
 
@@ -546,9 +582,10 @@ def test_pack_order_keeps_partially_allocated_order_in_partially_packed(monkeypa
             customerId="customer-1",
             channel="direct",
             lines=[CreateOrderLineRequest(productSkuId="sku-1", orderedQty=4, unit="kg")],
+            meta=_admin_meta("corr-create-pack-partial-status"),
         )
     )
-    orders.confirm_order(created.data.orderId, ConfirmOrderRequest())
+    orders.confirm_order(created.data.orderId, ConfirmOrderRequest(meta=_admin_meta("corr-confirm-pack-partial-status")))
     _seed_released_lot(lot_id="lot-pack-partial", available_qty=10)
     orders.allocate_order(
         created.data.orderId,
@@ -556,7 +593,7 @@ def test_pack_order_keeps_partially_allocated_order_in_partially_packed(monkeypa
             allocations=[
                 AllocateItem(orderLineId=created.data.lines[0].orderLineId, lotId="lot-pack-partial", allocatedQty=2)
             ],
-            meta=Meta(correlationId="corr-pack-partial-allocate"),
+            meta=_admin_meta("corr-pack-partial-allocate"),
         ),
     )
 
@@ -564,7 +601,7 @@ def test_pack_order_keeps_partially_allocated_order_in_partially_packed(monkeypa
         created.data.orderId,
         PackOrderRequest(
             packedQtySummary=[PackQtyItem(orderLineId=created.data.lines[0].orderLineId, packedQty=2)],
-            meta=Meta(correlationId="corr-pack-partial-pack"),
+            meta=_admin_meta("corr-pack-partial-pack"),
         ),
     )
 
@@ -580,9 +617,10 @@ def test_deliver_order_rejects_before_ship_and_writes_transition_audit(monkeypat
             customerId="customer-1",
             channel="direct",
             lines=[CreateOrderLineRequest(productSkuId="sku-1", orderedQty=4, unit="kg")],
+            meta=_admin_meta("corr-create-deliver-before-ship"),
         )
     )
-    orders.confirm_order(created.data.orderId, ConfirmOrderRequest())
+    orders.confirm_order(created.data.orderId, ConfirmOrderRequest(meta=_admin_meta("corr-confirm-deliver-before-ship")))
     _seed_released_lot(lot_id="lot-1", available_qty=10)
     orders.allocate_order(
         created.data.orderId,
@@ -590,14 +628,14 @@ def test_deliver_order_rejects_before_ship_and_writes_transition_audit(monkeypat
             allocations=[
                 AllocateItem(orderLineId=created.data.lines[0].orderLineId, lotId="lot-1", allocatedQty=4)
             ],
-            meta=Meta(correlationId="corr-deliver-before-ship-allocate"),
+            meta=_admin_meta("corr-deliver-before-ship-allocate"),
         ),
     )
     orders.pack_order(
         created.data.orderId,
         PackOrderRequest(
             packedQtySummary=[PackQtyItem(orderLineId=created.data.lines[0].orderLineId, packedQty=4)],
-            meta=Meta(correlationId="corr-deliver-before-ship-pack"),
+            meta=_admin_meta("corr-deliver-before-ship-pack"),
         ),
     )
 
@@ -607,7 +645,7 @@ def test_deliver_order_rejects_before_ship_and_writes_transition_audit(monkeypat
             DeliverOrderRequest(
                 deliveredAt="2026-04-12T11:00:00Z",
                 proofRef="proof-early",
-                meta=Meta(correlationId="corr-deliver-before-ship"),
+                meta=_admin_meta("corr-deliver-before-ship"),
             ),
         )
 
@@ -639,9 +677,10 @@ def test_ship_order_does_not_auto_deliver_or_consume_quota(monkeypatch: pytest.M
                     sourcePreorderId="preorder-ship-only",
                 )
             ],
+            meta=_admin_meta("corr-create-ship-only"),
         )
     )
-    orders.confirm_order(created.data.orderId, ConfirmOrderRequest())
+    orders.confirm_order(created.data.orderId, ConfirmOrderRequest(meta=_admin_meta("corr-confirm-ship-only")))
     _seed_released_lot(lot_id="lot-ship-only", available_qty=6)
     orders.allocate_order(
         created.data.orderId,
@@ -649,14 +688,14 @@ def test_ship_order_does_not_auto_deliver_or_consume_quota(monkeypatch: pytest.M
             allocations=[
                 AllocateItem(orderLineId=created.data.lines[0].orderLineId, lotId="lot-ship-only", allocatedQty=6)
             ],
-            meta=Meta(correlationId="corr-ship-only-allocate"),
+            meta=_admin_meta("corr-ship-only-allocate"),
         ),
     )
     orders.pack_order(
         created.data.orderId,
         PackOrderRequest(
             packedQtySummary=[PackQtyItem(orderLineId=created.data.lines[0].orderLineId, packedQty=6)],
-            meta=Meta(correlationId="corr-ship-only-pack"),
+            meta=_admin_meta("corr-ship-only-pack"),
         ),
     )
 
@@ -666,7 +705,7 @@ def test_ship_order_does_not_auto_deliver_or_consume_quota(monkeypatch: pytest.M
             carrier="gha",
             trackingRef="TRK-SHIP-ONLY",
             shippedAt="2026-04-12T10:00:00Z",
-            meta=Meta(correlationId="corr-ship-only"),
+            meta=_admin_meta("corr-ship-only"),
         ),
     )
 
@@ -703,9 +742,10 @@ def test_deliver_order_consumes_preorder_using_delivered_delta(monkeypatch: pyte
                     sourcePreorderId="preorder-1",
                 )
             ],
+            meta=_admin_meta("corr-create-deliver-quota"),
         )
     )
-    orders.confirm_order(created.data.orderId, ConfirmOrderRequest())
+    orders.confirm_order(created.data.orderId, ConfirmOrderRequest(meta=_admin_meta("corr-confirm-deliver-quota")))
     _seed_released_lot(lot_id="lot-1", available_qty=20)
     orders.allocate_order(
         created.data.orderId,
@@ -713,19 +753,19 @@ def test_deliver_order_consumes_preorder_using_delivered_delta(monkeypatch: pyte
             allocations=[
                 AllocateItem(orderLineId=created.data.lines[0].orderLineId, lotId="lot-1", allocatedQty=15)
             ],
-            meta=Meta(correlationId="corr-deliver-seed"),
+            meta=_admin_meta("corr-deliver-seed"),
         ),
     )
     orders.pack_order(
         created.data.orderId,
         PackOrderRequest(
             packedQtySummary=[PackQtyItem(orderLineId=created.data.lines[0].orderLineId, packedQty=15)],
-            meta=Meta(correlationId="corr-pack-full"),
+            meta=_admin_meta("corr-pack-full"),
         ),
     )
     orders.ship_order(
         created.data.orderId,
-        ShipOrderRequest(carrier="gha", trackingRef="TRK-1", shippedAt="2026-04-12T10:00:00Z", meta=Meta(correlationId="corr-ship")),
+        ShipOrderRequest(carrier="gha", trackingRef="TRK-1", shippedAt="2026-04-12T10:00:00Z", meta=_admin_meta("corr-ship")),
     )
 
     response = orders.deliver_order(
@@ -736,7 +776,7 @@ def test_deliver_order_consumes_preorder_using_delivered_delta(monkeypatch: pyte
             ],
             deliveredAt="2026-04-12T11:00:00Z",
             proofRef="proof-1",
-            meta=Meta(correlationId="corr-deliver"),
+            meta=_admin_meta("corr-deliver"),
         ),
     )
 
@@ -771,9 +811,10 @@ def test_deliver_order_allows_partial_then_final_delivery(monkeypatch: pytest.Mo
             customerId="customer-1",
             channel="direct",
             lines=[CreateOrderLineRequest(productSkuId="sku-1", orderedQty=10, unit="kg")],
+            meta=_admin_meta("corr-create-deliver-partial-final"),
         )
     )
-    orders.confirm_order(created.data.orderId, ConfirmOrderRequest())
+    orders.confirm_order(created.data.orderId, ConfirmOrderRequest(meta=_admin_meta("corr-confirm-deliver-partial-final")))
     _seed_released_lot(lot_id="lot-1", available_qty=10)
     orders.allocate_order(
         created.data.orderId,
@@ -781,19 +822,19 @@ def test_deliver_order_allows_partial_then_final_delivery(monkeypatch: pytest.Mo
             allocations=[
                 AllocateItem(orderLineId=created.data.lines[0].orderLineId, lotId="lot-1", allocatedQty=10)
             ],
-            meta=Meta(correlationId="corr-deliver-seed-2"),
+            meta=_admin_meta("corr-deliver-seed-2"),
         ),
     )
     orders.pack_order(
         created.data.orderId,
         PackOrderRequest(
             packedQtySummary=[PackQtyItem(orderLineId=created.data.lines[0].orderLineId, packedQty=10)],
-            meta=Meta(correlationId="corr-pack-2"),
+            meta=_admin_meta("corr-pack-2"),
         ),
     )
     orders.ship_order(
         created.data.orderId,
-        ShipOrderRequest(carrier="gha", trackingRef="TRK-2", shippedAt="2026-04-12T10:00:00Z", meta=Meta(correlationId="corr-ship-2")),
+        ShipOrderRequest(carrier="gha", trackingRef="TRK-2", shippedAt="2026-04-12T10:00:00Z", meta=_admin_meta("corr-ship-2")),
     )
 
     partial = orders.deliver_order(
@@ -803,7 +844,7 @@ def test_deliver_order_allows_partial_then_final_delivery(monkeypatch: pytest.Mo
                 DeliveredQtyItem(orderLineId=created.data.lines[0].orderLineId, deliveredQty=4)
             ],
             deliveredAt="2026-04-12T11:00:00Z",
-            meta=Meta(correlationId="corr-deliver-partial-2"),
+            meta=_admin_meta("corr-deliver-partial-2"),
         ),
     )
     assert partial.data.status == "partially_delivered"
@@ -815,7 +856,7 @@ def test_deliver_order_allows_partial_then_final_delivery(monkeypatch: pytest.Mo
                 DeliveredQtyItem(orderLineId=created.data.lines[0].orderLineId, deliveredQty=10)
             ],
             deliveredAt="2026-04-12T12:00:00Z",
-            meta=Meta(correlationId="corr-deliver-final-2"),
+            meta=_admin_meta("corr-deliver-final-2"),
         ),
     )
 
@@ -836,9 +877,10 @@ def test_deliver_order_rejects_repeated_partial_delivery_from_partially_delivere
             customerId="customer-1",
             channel="direct",
             lines=[CreateOrderLineRequest(productSkuId="sku-1", orderedQty=10, unit="kg")],
+            meta=_admin_meta("corr-create-deliver-repeat"),
         )
     )
-    orders.confirm_order(created.data.orderId, ConfirmOrderRequest())
+    orders.confirm_order(created.data.orderId, ConfirmOrderRequest(meta=_admin_meta("corr-confirm-deliver-repeat")))
     _seed_released_lot(lot_id="lot-deliver-repeat", available_qty=10)
     orders.allocate_order(
         created.data.orderId,
@@ -846,14 +888,14 @@ def test_deliver_order_rejects_repeated_partial_delivery_from_partially_delivere
             allocations=[
                 AllocateItem(orderLineId=created.data.lines[0].orderLineId, lotId="lot-deliver-repeat", allocatedQty=10)
             ],
-            meta=Meta(correlationId="corr-deliver-repeat-allocate"),
+            meta=_admin_meta("corr-deliver-repeat-allocate"),
         ),
     )
     orders.pack_order(
         created.data.orderId,
         PackOrderRequest(
             packedQtySummary=[PackQtyItem(orderLineId=created.data.lines[0].orderLineId, packedQty=10)],
-            meta=Meta(correlationId="corr-deliver-repeat-pack"),
+            meta=_admin_meta("corr-deliver-repeat-pack"),
         ),
     )
     orders.ship_order(
@@ -862,7 +904,7 @@ def test_deliver_order_rejects_repeated_partial_delivery_from_partially_delivere
             carrier="gha",
             trackingRef="TRK-REPEAT-DELIVER",
             shippedAt="2026-04-12T10:00:00Z",
-            meta=Meta(correlationId="corr-deliver-repeat-ship"),
+            meta=_admin_meta("corr-deliver-repeat-ship"),
         ),
     )
     partial = orders.deliver_order(
@@ -872,7 +914,7 @@ def test_deliver_order_rejects_repeated_partial_delivery_from_partially_delivere
                 DeliveredQtyItem(orderLineId=created.data.lines[0].orderLineId, deliveredQty=4)
             ],
             deliveredAt="2026-04-12T11:00:00Z",
-            meta=Meta(correlationId="corr-deliver-repeat-first"),
+            meta=_admin_meta("corr-deliver-repeat-first"),
         ),
     )
 
@@ -886,7 +928,7 @@ def test_deliver_order_rejects_repeated_partial_delivery_from_partially_delivere
                     DeliveredQtyItem(orderLineId=created.data.lines[0].orderLineId, deliveredQty=6)
                 ],
                 deliveredAt="2026-04-12T12:00:00Z",
-                meta=Meta(correlationId="corr-deliver-repeat-second"),
+                meta=_admin_meta("corr-deliver-repeat-second"),
             ),
         )
 
@@ -919,9 +961,10 @@ def test_deliver_order_can_mark_delivery_failed_without_consuming_preorder(monke
                     sourcePreorderId="preorder-1",
                 )
             ],
+            meta=_admin_meta("corr-create-failed-delivery"),
         )
     )
-    orders.confirm_order(created.data.orderId, ConfirmOrderRequest())
+    orders.confirm_order(created.data.orderId, ConfirmOrderRequest(meta=_admin_meta("corr-confirm-failed-delivery")))
     _seed_released_lot(lot_id="lot-1", available_qty=8)
     orders.allocate_order(
         created.data.orderId,
@@ -929,14 +972,14 @@ def test_deliver_order_can_mark_delivery_failed_without_consuming_preorder(monke
             allocations=[
                 AllocateItem(orderLineId=created.data.lines[0].orderLineId, lotId="lot-1", allocatedQty=8)
             ],
-            meta=Meta(correlationId="corr-failed-delivery-allocate"),
+            meta=_admin_meta("corr-failed-delivery-allocate"),
         ),
     )
     orders.pack_order(
         created.data.orderId,
         PackOrderRequest(
             packedQtySummary=[PackQtyItem(orderLineId=created.data.lines[0].orderLineId, packedQty=8)],
-            meta=Meta(correlationId="corr-failed-delivery-pack"),
+            meta=_admin_meta("corr-failed-delivery-pack"),
         ),
     )
     orders.ship_order(
@@ -945,7 +988,7 @@ def test_deliver_order_can_mark_delivery_failed_without_consuming_preorder(monke
             carrier="gha",
             trackingRef="TRK-FAIL-1",
             shippedAt="2026-04-12T10:00:00Z",
-            meta=Meta(correlationId="corr-failed-delivery-ship"),
+            meta=_admin_meta("corr-failed-delivery-ship"),
         ),
     )
 
@@ -954,7 +997,7 @@ def test_deliver_order_can_mark_delivery_failed_without_consuming_preorder(monke
         FailDeliveryRequest(
             failureReason="customer_unreachable",
             note="carrier could not complete handoff",
-            meta=Meta(correlationId="corr-failed-delivery"),
+            meta=_admin_meta("corr-failed-delivery"),
         ),
     )
 
@@ -988,9 +1031,10 @@ def test_fail_delivery_trims_failure_reason_before_persisting(monkeypatch: pytes
             customerId="customer-3",
             channel="direct",
             lines=[CreateOrderLineRequest(productSkuId="sku-1", orderedQty=2, unit="kg")],
+            meta=_admin_meta("corr-create-trim-failure"),
         )
     )
-    orders.confirm_order(created.data.orderId, ConfirmOrderRequest())
+    orders.confirm_order(created.data.orderId, ConfirmOrderRequest(meta=_admin_meta("corr-confirm-trim-failure")))
     _seed_released_lot(lot_id="lot-3", available_qty=2)
     orders.allocate_order(
         created.data.orderId,
@@ -998,14 +1042,14 @@ def test_fail_delivery_trims_failure_reason_before_persisting(monkeypatch: pytes
             allocations=[
                 AllocateItem(orderLineId=created.data.lines[0].orderLineId, lotId="lot-3", allocatedQty=2)
             ],
-            meta=Meta(correlationId="corr-trim-failure-allocate"),
+            meta=_admin_meta("corr-trim-failure-allocate"),
         ),
     )
     orders.pack_order(
         created.data.orderId,
         PackOrderRequest(
             packedQtySummary=[PackQtyItem(orderLineId=created.data.lines[0].orderLineId, packedQty=2)],
-            meta=Meta(correlationId="corr-trim-failure-pack"),
+            meta=_admin_meta("corr-trim-failure-pack"),
         ),
     )
     orders.ship_order(
@@ -1014,7 +1058,7 @@ def test_fail_delivery_trims_failure_reason_before_persisting(monkeypatch: pytes
             carrier="gha",
             trackingRef="TRK-TRIM-1",
             shippedAt="2026-04-12T10:00:00Z",
-            meta=Meta(correlationId="corr-trim-failure-ship"),
+            meta=_admin_meta("corr-trim-failure-ship"),
         ),
     )
 
@@ -1023,7 +1067,7 @@ def test_fail_delivery_trims_failure_reason_before_persisting(monkeypatch: pytes
         FailDeliveryRequest(
             failureReason="  customer_unreachable  ",
             note="handoff failed",
-            meta=Meta(correlationId="corr-trim-failure"),
+            meta=_admin_meta("corr-trim-failure"),
         ),
     )
 
@@ -1053,9 +1097,10 @@ def test_failed_delivery_after_partial_delivery_preserves_prior_delivery_facts(
                     sourcePreorderId="preorder-2",
                 )
             ],
+            meta=_admin_meta("corr-create-partial-then-failed"),
         )
     )
-    orders.confirm_order(created.data.orderId, ConfirmOrderRequest())
+    orders.confirm_order(created.data.orderId, ConfirmOrderRequest(meta=_admin_meta("corr-confirm-partial-then-failed")))
     _seed_released_lot(lot_id="lot-2", available_qty=8)
     orders.allocate_order(
         created.data.orderId,
@@ -1063,14 +1108,14 @@ def test_failed_delivery_after_partial_delivery_preserves_prior_delivery_facts(
             allocations=[
                 AllocateItem(orderLineId=created.data.lines[0].orderLineId, lotId="lot-2", allocatedQty=8)
             ],
-            meta=Meta(correlationId="corr-partial-then-failed-allocate"),
+            meta=_admin_meta("corr-partial-then-failed-allocate"),
         ),
     )
     orders.pack_order(
         created.data.orderId,
         PackOrderRequest(
             packedQtySummary=[PackQtyItem(orderLineId=created.data.lines[0].orderLineId, packedQty=8)],
-            meta=Meta(correlationId="corr-partial-then-failed-pack"),
+            meta=_admin_meta("corr-partial-then-failed-pack"),
         ),
     )
     orders.ship_order(
@@ -1079,7 +1124,7 @@ def test_failed_delivery_after_partial_delivery_preserves_prior_delivery_facts(
             carrier="gha",
             trackingRef="TRK-FAIL-2",
             shippedAt="2026-04-12T10:00:00Z",
-            meta=Meta(correlationId="corr-partial-then-failed-ship"),
+            meta=_admin_meta("corr-partial-then-failed-ship"),
         ),
     )
     partial = orders.deliver_order(
@@ -1088,7 +1133,7 @@ def test_failed_delivery_after_partial_delivery_preserves_prior_delivery_facts(
             deliveredQtySummary=[DeliveredQtyItem(orderLineId=created.data.lines[0].orderLineId, deliveredQty=3)],
             deliveredAt="2026-04-12T12:00:00Z",
             proofRef="proof-partial-1",
-            meta=Meta(correlationId="corr-partial-then-failed-deliver-1"),
+            meta=_admin_meta("corr-partial-then-failed-deliver-1"),
         ),
     )
 
@@ -1101,7 +1146,7 @@ def test_failed_delivery_after_partial_delivery_preserves_prior_delivery_facts(
         FailDeliveryRequest(
             failureReason="customer_rejected_remaining_qty",
             note="only partial handoff completed",
-            meta=Meta(correlationId="corr-partial-then-failed-deliver-2"),
+            meta=_admin_meta("corr-partial-then-failed-deliver-2"),
         ),
     )
 

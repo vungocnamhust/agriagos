@@ -10,6 +10,10 @@ from app.services import orders
 from app.store import memory
 
 
+def _admin_meta(correlation_id: str) -> Meta:
+    return Meta(correlationId=correlation_id, actorId="admin-1", actorRole="admin")
+
+
 def _seed_preorder(preorder_id: str = "preorder-1") -> str:
     memory.save_preorder(
         preorder_id,
@@ -49,7 +53,7 @@ def test_create_order_rejects_invalid_source_preorder_id(monkeypatch: pytest.Mon
                         sourcePreorderId="missing-preorder-id",
                     )
                 ],
-                meta=Meta(correlationId="corr-bad-preorder"),
+                meta=_admin_meta("corr-bad-preorder"),
             )
         )
 
@@ -83,7 +87,7 @@ def test_create_and_get_order_preserve_line_level_preorder_linkage(monkeypatch: 
                     unit="kg",
                 ),
             ],
-            meta=Meta(correlationId="corr-create-order"),
+            meta=_admin_meta("corr-create-order"),
         )
     )
 
@@ -95,7 +99,7 @@ def test_create_and_get_order_preserve_line_level_preorder_linkage(monkeypatch: 
     assert persisted is not None
     assert persisted["sourcePreorderFlag"] is True
 
-    detail = orders.get_order(created.data.orderId)
+    detail = orders.get_order(created.data.orderId, meta=_admin_meta("corr-get-order"))
     assert detail.sourcePreorderFlag is True
     assert detail.lines[0].sourcePreorderId == preorder_id
     assert detail.lines[1].sourcePreorderId is None
@@ -118,13 +122,13 @@ def test_confirm_order_preserves_linkage_and_emits_preorder_context(monkeypatch:
                     sourcePreorderId=preorder_id,
                 )
             ],
-            meta=Meta(correlationId="corr-create-linked-order"),
+            meta=_admin_meta("corr-create-linked-order"),
         )
     )
 
     confirmed = orders.confirm_order(
         created.data.orderId,
-        ConfirmOrderRequest(meta=Meta(correlationId="corr-confirm-linked-order")),
+        ConfirmOrderRequest(meta=_admin_meta("corr-confirm-linked-order")),
     )
 
     assert confirmed.data.sourcePreorderFlag is True
@@ -154,7 +158,7 @@ def test_confirm_order_rejects_when_linked_preorder_becomes_unlinkable(monkeypat
                     sourcePreorderId=preorder_id,
                 )
             ],
-            meta=Meta(correlationId="corr-create-revalidate"),
+            meta=_admin_meta("corr-create-revalidate"),
         )
     )
 
@@ -166,7 +170,7 @@ def test_confirm_order_rejects_when_linked_preorder_becomes_unlinkable(monkeypat
     with pytest.raises(HTTPException) as exc_info:
         orders.confirm_order(
             created.data.orderId,
-            ConfirmOrderRequest(meta=Meta(correlationId="corr-confirm-revalidate")),
+            ConfirmOrderRequest(meta=_admin_meta("corr-confirm-revalidate")),
         )
 
     assert exc_info.value.status_code == 422

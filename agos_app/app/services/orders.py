@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from app.core import events
+from app.core.authz import ensure_bypass_permitted, normalize_actor_role
 from app.core.codegen import generate_order_code
 from app.core.gateway import (
     assert_order_transition,
@@ -16,6 +17,7 @@ from app.core.gateway import (
     record_idempotency,
 )
 from app.core.write_context import build_request_hash, meta_context
+from app.models.common import Meta
 from app.models.enums import AllocationStatus, LotStatus, OrderStatus, PaymentStatus, PreorderStatus
 from app.models.orders import (
     AllocateOrderRequest,
@@ -44,9 +46,75 @@ from app.store._db import transaction as postgres_transaction
 
 _MEMORY_ALLOCATION_LOCK = threading.RLock()
 
+_ORDER_READ_ROLES = frozenset({"founder", "super_admin", "admin", "sales", "cskh", "ops", "accountant"})
+_ORDER_CUSTOMER_WRITE_ROLES = frozenset({"founder", "super_admin", "admin", "sales", "cskh"})
+_ORDER_OPS_WRITE_ROLES = frozenset({"founder", "super_admin", "admin", "ops"})
+_ORDER_REQUEST_CANCEL_ROLES = frozenset({"founder", "super_admin", "admin", "sales", "cskh", "ops"})
+_ORDER_STANDARD_CANCEL_ROLES = frozenset({"founder", "super_admin", "admin", "sales", "cskh", "ops"})
+_ORDER_SENSITIVE_CANCEL_ROLES = frozenset({"founder", "super_admin", "admin", "ops"})
+_SENSITIVE_CANCEL_STATUSES = frozenset(
+    {
+        OrderStatus.packed.value,
+        OrderStatus.partially_packed.value,
+        OrderStatus.shipped.value,
+        OrderStatus.partially_delivered.value,
+        OrderStatus.delivered.value,
+        OrderStatus.failed.value,
+    }
+)
+
 
 def _new_order_code() -> str:
     return generate_order_code()
+
+
+def _effective_order_actor_role(context: dict[str, Any], *, allow_delegated_agent: bool = False) -> str | None:
+    actor_role = context.get("normalized_actor_role") or normalize_actor_role(context.get("actor_role"))
+    if actor_role != "agent" or not allow_delegated_agent:
+        return actor_role
+
+    delegated_actor_role = normalize_actor_role(context.get("delegated_actor_role"))
+    return delegated_actor_role or actor_role
+
+
+def _assert_order_access(
+    *,
+    context: dict[str, Any],
+    action_name: str,
+    order_id: str,
+    allowed_roles: frozenset[str],
+    reason_code: str,
+    detail: str,
+    before_snapshot: Any | None = None,
+    allow_delegated_agent: bool = False,
+) -> None:
+    ensure_bypass_permitted(
+        action_name=action_name,
+        target_type="Order",
+        target_id=order_id,
+        context=context,
+    )
+
+    actor_role = _effective_order_actor_role(context, allow_delegated_agent=allow_delegated_agent)
+    if actor_role in allowed_roles:
+        return
+
+    _audit_order_decision(
+        action_name,
+        order_id,
+        "denied",
+        context,
+        before_snapshot=before_snapshot,
+        reason_code=reason_code,
+        metadata={"message": detail, "effectiveActorRole": actor_role},
+    )
+    raise HTTPException(status_code=403, detail=detail)
+
+
+def _cancel_roles_for_status(order_status: str | None) -> frozenset[str]:
+    if order_status in _SENSITIVE_CANCEL_STATUSES:
+        return _ORDER_SENSITIVE_CANCEL_ROLES
+    return _ORDER_STANDARD_CANCEL_ROLES
 
 
 def _build_order_detail(record: dict[str, Any]) -> OrderDetail:
@@ -657,6 +725,14 @@ def _get_allocation_for_order_or_404(order_id: str, allocation_id: str) -> dict[
 
 def create_order(payload: CreateOrderRequest) -> OrderResponse:
     context = meta_context(payload.meta)
+    _assert_order_access(
+        context=context,
+        action_name="order.create",
+        order_id=f"pending:{payload.customerId}",
+        allowed_roles=_ORDER_CUSTOMER_WRITE_ROLES,
+        reason_code="forbidden_order_write",
+        detail="Actor is not allowed to create orders.",
+    )
     key = context["idempotency_key"]
     if cached := check_idempotency(key):
         return OrderResponse(**cached)
@@ -742,7 +818,17 @@ def create_order(payload: CreateOrderRequest) -> OrderResponse:
     return result
 
 
-def get_order(order_id: str) -> OrderDetail:
+def get_order(order_id: str, meta: Meta | None = None) -> OrderDetail:
+    context = meta_context(meta)
+    _assert_order_access(
+        context=context,
+        action_name="order.get",
+        order_id=order_id,
+        allowed_roles=_ORDER_READ_ROLES,
+        reason_code="forbidden_order_read",
+        detail="Actor is not allowed to read order details.",
+        allow_delegated_agent=True,
+    )
     record = _get_order_record_or_404(order_id)
     return _build_order_detail(record)
 
@@ -751,6 +837,15 @@ def confirm_order(order_id: str, payload: ConfirmOrderRequest | None = None) -> 
     context = meta_context(payload.meta if payload else None)
     record = _get_order_record_or_404(order_id, action_name="order.confirm", context=context)
     before_snapshot = copy.deepcopy(record)
+    _assert_order_access(
+        context=context,
+        action_name="order.confirm",
+        order_id=order_id,
+        allowed_roles=_ORDER_CUSTOMER_WRITE_ROLES,
+        reason_code="forbidden_order_write",
+        detail="Actor is not allowed to confirm orders.",
+        before_snapshot=before_snapshot,
+    )
     key = context["idempotency_key"]
     if cached := check_idempotency(key):
         return OrderResponse(**cached)
@@ -809,6 +904,15 @@ def allocate_order(order_id: str, payload: AllocateOrderRequest) -> AllocationRe
     context = meta_context(payload.meta)
     record = _get_order_record_or_404(order_id, action_name="order.allocate", context=context)
     before_snapshot = copy.deepcopy(record)
+    _assert_order_access(
+        context=context,
+        action_name="order.allocate",
+        order_id=order_id,
+        allowed_roles=_ORDER_OPS_WRITE_ROLES,
+        reason_code="forbidden_order_write",
+        detail="Actor is not allowed to allocate orders.",
+        before_snapshot=before_snapshot,
+    )
 
     key = context["idempotency_key"]
     if cached := check_idempotency(key):
@@ -1011,6 +1115,15 @@ def adjust_allocation(
     context = meta_context(payload.meta)
     record = _get_order_record_or_404(order_id, action_name="allocation.adjust", context=context)
     before_snapshot = copy.deepcopy(record)
+    _assert_order_access(
+        context=context,
+        action_name="allocation.adjust",
+        order_id=order_id,
+        allowed_roles=_ORDER_OPS_WRITE_ROLES,
+        reason_code="forbidden_order_write",
+        detail="Actor is not allowed to adjust allocations.",
+        before_snapshot=before_snapshot,
+    )
 
     key = context["idempotency_key"]
     if cached := check_idempotency(key):
@@ -1242,6 +1355,15 @@ def release_allocation(
     context = meta_context(payload.meta)
     record = _get_order_record_or_404(order_id, action_name="allocation.release", context=context)
     before_snapshot = copy.deepcopy(record)
+    _assert_order_access(
+        context=context,
+        action_name="allocation.release",
+        order_id=order_id,
+        allowed_roles=_ORDER_OPS_WRITE_ROLES,
+        reason_code="forbidden_order_write",
+        detail="Actor is not allowed to release allocations.",
+        before_snapshot=before_snapshot,
+    )
 
     key = context["idempotency_key"]
     if cached := check_idempotency(key):
@@ -1384,6 +1506,15 @@ def pack_order(order_id: str, payload: PackOrderRequest) -> OrderResponse:
     context = meta_context(payload.meta)
     record = _get_order_record_or_404(order_id, action_name="order.pack", context=context)
     before_snapshot = copy.deepcopy(record)
+    _assert_order_access(
+        context=context,
+        action_name="order.pack",
+        order_id=order_id,
+        allowed_roles=_ORDER_OPS_WRITE_ROLES,
+        reason_code="forbidden_order_write",
+        detail="Actor is not allowed to pack orders.",
+        before_snapshot=before_snapshot,
+    )
 
     key = context["idempotency_key"]
     if cached := check_idempotency(key):
@@ -1500,6 +1631,15 @@ def ship_order(order_id: str, payload: ShipOrderRequest) -> OrderResponse:
     context = meta_context(payload.meta)
     record = _get_order_record_or_404(order_id, action_name="order.ship", context=context)
     before_snapshot = copy.deepcopy(record)
+    _assert_order_access(
+        context=context,
+        action_name="order.ship",
+        order_id=order_id,
+        allowed_roles=_ORDER_OPS_WRITE_ROLES,
+        reason_code="forbidden_order_write",
+        detail="Actor is not allowed to ship orders.",
+        before_snapshot=before_snapshot,
+    )
 
     key = context["idempotency_key"]
     if cached := check_idempotency(key):
@@ -1553,6 +1693,15 @@ def deliver_order(order_id: str, payload: DeliverOrderRequest) -> OrderResponse:
     context = meta_context(payload.meta)
     record = _get_order_record_or_404(order_id, action_name="order.deliver", context=context)
     before_snapshot = copy.deepcopy(record)
+    _assert_order_access(
+        context=context,
+        action_name="order.deliver",
+        order_id=order_id,
+        allowed_roles=_ORDER_OPS_WRITE_ROLES,
+        reason_code="forbidden_order_write",
+        detail="Actor is not allowed to deliver orders.",
+        before_snapshot=before_snapshot,
+    )
 
     key = context["idempotency_key"]
     if cached := check_idempotency(key):
@@ -1687,6 +1836,15 @@ def fail_delivery(order_id: str, payload: FailDeliveryRequest) -> OrderResponse:
     context = meta_context(payload.meta)
     record = _get_order_record_or_404(order_id, action_name="order.fail_delivery", context=context)
     before_snapshot = copy.deepcopy(record)
+    _assert_order_access(
+        context=context,
+        action_name="order.fail_delivery",
+        order_id=order_id,
+        allowed_roles=_ORDER_OPS_WRITE_ROLES,
+        reason_code="forbidden_order_write",
+        detail="Actor is not allowed to mark delivery failures.",
+        before_snapshot=before_snapshot,
+    )
     normalized_failure_reason = payload.failureReason.strip()
 
     key = context["idempotency_key"]
@@ -1755,6 +1913,15 @@ def request_cancel_order(order_id: str, payload: RequestCancelOrderRequest) -> O
     context = meta_context(payload.meta)
     record = _get_order_record_or_404(order_id, action_name="order.request_cancel", context=context)
     before_snapshot = copy.deepcopy(record)
+    _assert_order_access(
+        context=context,
+        action_name="order.request_cancel",
+        order_id=order_id,
+        allowed_roles=_ORDER_REQUEST_CANCEL_ROLES,
+        reason_code="forbidden_order_write",
+        detail="Actor is not allowed to request order cancellation.",
+        before_snapshot=before_snapshot,
+    )
 
     key = context["idempotency_key"]
     if cached := check_idempotency(key):
@@ -1807,6 +1974,15 @@ def cancel_order(order_id: str, payload: CancelOrderRequest | None) -> OrderResp
     context = meta_context(meta)
     record = _get_order_record_or_404(order_id, action_name="order.cancel", context=context)
     before_snapshot = copy.deepcopy(record)
+    _assert_order_access(
+        context=context,
+        action_name="order.cancel",
+        order_id=order_id,
+        allowed_roles=_cancel_roles_for_status(record.get("status")),
+        reason_code="forbidden_order_write",
+        detail="Actor is not allowed to cancel this order.",
+        before_snapshot=before_snapshot,
+    )
     key = context["idempotency_key"]
     if cached := check_idempotency(key):
         return OrderResponse(**cached)

@@ -324,6 +324,7 @@ Bắt buộc approval trong phase đầu:
 | Preference confirm từ candidate có tác động workflow | Sales, CSKH, Admin | Không cần lớp approve riêng, nhưng bắt buộc audit log |
 
 Phase 1 implementation note:
+- raw `/api/v1/orders*` reads and write commands now enforce the matrix directly in the service layer; Viewer remains denied on raw order access and agent lanes stay proposal-only
 - route `ReleaseLot` hiện chỉ mang `approvalRef` như approval evidence cho case đặc biệt; identity của người approve vẫn thuộc audit/workflow ngoài request schema và chưa được enforce như field riêng ở public API
 - khi thiếu `approvalRef` cho lot release nhạy cảm, service hiện ghi audit decision `escalated` với `reason_code=approval_required` và metadata tối thiểu như `requiredApprovalRef`, `requiredApproverRoles`, `escalationOwner` trước khi trả `403`
 

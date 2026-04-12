@@ -558,6 +558,11 @@ paths:
       - Allocations
       summary: Create Order
       operationId: create_order_api_v1_orders_post
+      parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       requestBody:
         content:
           application/json:
@@ -571,6 +576,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrderResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Validation Error
           content:
@@ -585,6 +596,10 @@ paths:
       summary: Get Order
       operationId: get_order_api_v1_orders__order_id__get
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: order_id
         in: path
         required: true
@@ -598,6 +613,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrderDetail'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Validation Error
           content:
@@ -612,6 +633,10 @@ paths:
       summary: Confirm Order
       operationId: confirm_order_api_v1_orders__order_id__confirm_post
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: order_id
         in: path
         required: true
@@ -633,6 +658,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrderResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Validation Error
           content:
@@ -647,6 +678,10 @@ paths:
       summary: Allocate Order
       operationId: allocate_order_api_v1_orders__order_id__allocate_post
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: order_id
         in: path
         required: true
@@ -666,6 +701,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AllocationResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Validation Error
           content:
@@ -680,6 +721,10 @@ paths:
       summary: Adjust Allocation
       operationId: adjust_allocation_api_v1_orders__order_id__allocations__allocation_id__adjust_post
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: order_id
         in: path
         required: true
@@ -705,6 +750,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AllocationMutationResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Validation Error
           content:
@@ -719,6 +770,10 @@ paths:
       summary: Release Allocation
       operationId: release_allocation_api_v1_orders__order_id__allocations__allocation_id__release_post
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: order_id
         in: path
         required: true
@@ -744,6 +799,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AllocationMutationResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Validation Error
           content:
@@ -758,6 +819,10 @@ paths:
       summary: Pack Order
       operationId: pack_order_api_v1_orders__order_id__pack_post
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: order_id
         in: path
         required: true
@@ -777,6 +842,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrderResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Validation Error
           content:
@@ -791,6 +862,10 @@ paths:
       summary: Ship Order
       operationId: ship_order_api_v1_orders__order_id__ship_post
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: order_id
         in: path
         required: true
@@ -810,6 +885,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrderResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Validation Error
           content:
@@ -824,6 +905,10 @@ paths:
       summary: Deliver Order
       operationId: deliver_order_api_v1_orders__order_id__deliver_post
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: order_id
         in: path
         required: true
@@ -843,6 +928,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrderResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Validation Error
           content:
@@ -857,6 +948,10 @@ paths:
       summary: Fail Delivery
       operationId: fail_delivery_api_v1_orders__order_id__fail_delivery_post
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: order_id
         in: path
         required: true
@@ -876,6 +971,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrderResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Validation Error
           content:
@@ -890,6 +991,10 @@ paths:
       summary: Request Cancel Order
       operationId: request_cancel_order_api_v1_orders__order_id__request_cancel_post
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: order_id
         in: path
         required: true
@@ -909,6 +1014,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrderResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Validation Error
           content:
@@ -923,6 +1034,10 @@ paths:
       summary: Cancel Order
       operationId: cancel_order_api_v1_orders__order_id__cancel_post
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: order_id
         in: path
         required: true
@@ -944,6 +1059,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrderResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Validation Error
           content:
