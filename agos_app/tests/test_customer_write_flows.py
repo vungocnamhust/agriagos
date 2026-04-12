@@ -50,6 +50,28 @@ def test_create_customer_rejects_unauthorized_role(monkeypatch: pytest.MonkeyPat
     assert memory.list_audit_logs()[-1]["reasonCode"] == "forbidden_customer_creation"
 
 
+def test_create_customer_rejects_disabled_bypass_request(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(customers, "postgres_enabled", lambda: False)
+
+    with pytest.raises(HTTPException) as exc_info:
+        customers.create_customer(
+            CreateCustomerRequest(
+                fullName="Alice Nguyen",
+                phone="0900000888",
+                meta=Meta(
+                    correlationId="corr-customer-bypass",
+                    actorId="agent-1",
+                    actorRole="agent",
+                    bypassRequested=True,
+                    delegatedActorRole="sales",
+                ),
+            )
+        )
+
+    assert exc_info.value.status_code == 403
+    assert memory.list_audit_logs()[-1]["reasonCode"] == "agent_execution_not_allowed"
+
+
 def test_upsert_preference_missing_customer_writes_denied_audit(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(customers, "postgres_enabled", lambda: False)
 

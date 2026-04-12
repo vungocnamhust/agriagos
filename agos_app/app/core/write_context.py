@@ -9,14 +9,9 @@ from app.store import audit as audit_store
 
 
 def meta_context(meta: Any | None) -> dict[str, Any]:
-    return {
-        "correlation_id": getattr(meta, "correlationId", None),
-        "causation_id": getattr(meta, "causationId", None),
-        "actor_id": getattr(meta, "actorId", None),
-        "actor_role": getattr(meta, "actorRole", None),
-        "idempotency_key": getattr(meta, "idempotencyKey", None),
-        "external_ref": getattr(meta, "externalRef", None),
-    }
+    from app.core.authz import build_auth_context
+
+    return build_auth_context(meta).to_context_dict()
 
 
 def build_request_hash(payload: Any, *, extra: dict[str, Any] | None = None) -> str:

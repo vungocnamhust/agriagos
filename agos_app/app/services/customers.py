@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from app.core import events
+from app.core.authz import ensure_bypass_permitted, normalize_actor_role as _normalize_actor_role
 from app.core.codegen import generate_customer_code
 from app.core.write_context import append_audit_decision, build_request_hash, meta_context
 from app.core.gateway import check_idempotency, record_idempotency
@@ -33,30 +34,8 @@ _DUPLICATE_REVIEW_ROLES = {"founder", "super_admin", "admin", "sales", "cskh"}
 _CUSTOMER_WRITE_ROLES = {"founder", "super_admin", "admin", "sales", "cskh"}
 
 
-def _normalize_actor_role(actor_role: str | None) -> str | None:
-    if actor_role is None:
-        return None
-    normalized = actor_role.strip().lower().replace("/", " ").replace("-", " ")
-    normalized = "_".join(normalized.split())
-    alias_map = {
-        "super_admin": "super_admin",
-        "superadmin": "super_admin",
-        "founder": "founder",
-        "admin": "admin",
-        "admin_van_hanh": "admin",
-        "operations_admin": "admin",
-        "sales": "sales",
-        "cskh": "cskh",
-        "customer_service": "cskh",
-        "customer_success": "cskh",
-        "integration": "integration",
-        "ops": "ops",
-    }
-    return alias_map.get(normalized, normalized)
-
-
 def _assert_can_confirm_canonical_preference(context: dict[str, Any], source: str, customer_id: str) -> None:
-    actor_role = _normalize_actor_role(context.get("actor_role"))
+    actor_role = context.get("normalized_actor_role") or _normalize_actor_role(context.get("actor_role"))
     actor_id = context.get("actor_id")
     external_ref = context.get("external_ref")
 
@@ -105,7 +84,7 @@ def _assert_can_confirm_canonical_preference(context: dict[str, Any], source: st
 
 
 def _assert_can_review_duplicate_candidate(context: dict[str, Any], candidate_id: str) -> None:
-    actor_role = _normalize_actor_role(context.get("actor_role"))
+    actor_role = context.get("normalized_actor_role") or _normalize_actor_role(context.get("actor_role"))
     if actor_role in _DUPLICATE_REVIEW_ROLES:
         return
 
@@ -121,7 +100,7 @@ def _assert_can_review_duplicate_candidate(context: dict[str, Any], candidate_id
 
 
 def _assert_can_write_customer(context: dict[str, Any], action_name: str, target_id: str, reason_code: str, detail: str) -> None:
-    actor_role = _normalize_actor_role(context.get("actor_role"))
+    actor_role = context.get("normalized_actor_role") or _normalize_actor_role(context.get("actor_role"))
     if actor_role in _CUSTOMER_WRITE_ROLES:
         return
 
@@ -341,6 +320,12 @@ def _audit_customer(
 
 def create_customer(payload: CreateCustomerRequest) -> CustomerResponse:
     context = meta_context(payload.meta)
+    ensure_bypass_permitted(
+        action_name="customer.create",
+        target_type="Customer",
+        target_id="pending",
+        context=context,
+    )
     _assert_can_write_customer(
         context,
         "customer.create",
@@ -467,6 +452,12 @@ def get_customer(customer_id: str) -> CustomerDetail:
 
 def update_customer(customer_id: str, payload: UpdateCustomerRequest) -> CustomerDetail:
     context = meta_context(payload.meta)
+    ensure_bypass_permitted(
+        action_name="customer.update",
+        target_type="Customer",
+        target_id=customer_id,
+        context=context,
+    )
     _assert_can_write_customer(
         context,
         "customer.update",
@@ -573,6 +564,12 @@ def list_duplicate_candidates() -> list[CustomerDuplicateCandidateSummary]:
 
 def review_duplicate_candidate(candidate_id: str, payload: ReviewDuplicateCandidateRequest) -> CustomerDuplicateCandidateSummary:
     context = meta_context(payload.meta)
+    ensure_bypass_permitted(
+        action_name="customer.duplicate_candidate_review",
+        target_type="Customer",
+        target_id=candidate_id,
+        context=context,
+    )
     _assert_can_review_duplicate_candidate(context, candidate_id)
     candidate = customer_store.fetch_duplicate_candidate(candidate_id) if postgres_enabled() else None
     if candidate is None:
@@ -620,8 +617,14 @@ def review_duplicate_candidate(candidate_id: str, payload: ReviewDuplicateCandid
 
 
 def upsert_preference(customer_id: str, payload: UpsertPreferenceRequest) -> PreferenceResponse:
+    context = meta_context(payload.meta)
+    ensure_bypass_permitted(
+        action_name="customer.preference_upsert",
+        target_type="Customer",
+        target_id=customer_id,
+        context=context,
+    )
     if payload.source not in _ALLOWED_CANONICAL_PREFERENCE_SOURCES:
-        context = meta_context(payload.meta)
         _audit_customer(
             "customer.preference_upsert",
             customer_id,
@@ -632,7 +635,6 @@ def upsert_preference(customer_id: str, payload: UpsertPreferenceRequest) -> Pre
         )
         raise HTTPException(status_code=422, detail="Source is not allowed for canonical preference writes.")
 
-    context = meta_context(payload.meta)
     customer = customer_store.fetch_customer(customer_id) if postgres_enabled() else None
     if customer is None:
         customer = memory_store.get_customer(customer_id)
