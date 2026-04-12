@@ -23,6 +23,7 @@ class LotDetail(BaseModel):
     reservedQty: float
     unit: Literal["kg"] = "kg"  # (04-canonical-data-model.md — unit via inventory movement context)
     status: LotStatus  # (06-state-transitions.md)
+    version: int = 1
 
 class LotResponse(BaseModel):
     data: LotDetail

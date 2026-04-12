@@ -26,6 +26,7 @@ class OrderDetail(BaseModel):
     note: str | None = None
     createdBy: str | None = None
     sourcePreorderFlag: bool = False
+    version: int = 1
     lines: list[OrderLine]
 
 class CreateOrderLineRequest(BaseModel):
@@ -72,6 +73,25 @@ class AllocationItemResponse(BaseModel):
 class AllocationResponse(BaseModel):
     orderId: str
     allocations: list[AllocationItemResponse]
+
+
+class AdjustAllocationRequest(BaseModel):
+    newAllocatedQty: float
+    reason: str | None = None
+    approvalRef: str | None = None
+    meta: Meta | None = None
+
+
+class ReleaseAllocationRequest(BaseModel):
+    reason: str | None = None
+    approvalRef: str | None = None
+    meta: Meta | None = None
+
+
+class AllocationMutationResponse(BaseModel):
+    orderId: str
+    orderStatus: OrderStatus
+    allocation: AllocationItemResponse
 
 class PackQtyItem(BaseModel):
     orderLineId: str

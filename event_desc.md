@@ -190,6 +190,66 @@ Vì `OrderConfirmed` mới chỉ nói:
 
 ---
 
+## `OrderPartiallyAllocated`
+
+### Vì sao cần?
+
+Vì không phải lúc nào order cũng được reserve đủ hàng trong một lần allocate.
+
+Nếu không có event này, hệ chỉ nhìn thấy hai trạng thái cực đoan:
+
+* chưa allocate gì
+* hoặc đã allocate đủ
+
+trong khi thực tế ops thường phải đi qua một pha trung gian: đã giữ được một phần hàng, nhưng chưa đủ để coi là fully allocated.
+
+### Nó mở ra những gì?
+
+* cho phép order quay về một trạng thái trung gian có ý nghĩa vận hành
+* giúp UI/ops biết đơn nào còn thiếu hàng thật
+* làm mốc để tiếp tục allocate bổ sung thay vì pack nhầm
+
+---
+
+## `AllocationAdjusted`
+
+### Vì sao cần?
+
+Vì allocation không phải lúc nào cũng cố định sau lần reserve đầu tiên.
+
+Có lúc khách giảm số lượng, ops phải hạ reserve, hoặc cần đổi cách chia hàng giữa các line/order mà vẫn giữ audit trail rõ ràng.
+
+### Nó mở ra những gì?
+
+* ghi lại old/new quantity của reservation thay vì sửa âm thầm
+* trả hoặc giữ thêm `available_qty` đúng theo phần delta
+* cập nhật lại quota preorder đang bị giữ
+
+Trong phase 1 runtime, đây là event đi ra từ public command `POST /api/v1/orders/{order_id}/allocations/{allocation_id}/adjust`.
+
+---
+
+## `AllocationReleased`
+
+### Vì sao cần?
+
+Vì có những lúc cần bỏ reservation hoàn toàn mà order chưa bị hủy toàn bộ.
+
+Nếu không có event này, hệ sẽ không phân biệt được:
+
+* release reservation có chủ đích
+* với một thay đổi trạng thái chung chung trên order
+
+### Nó mở ra những gì?
+
+* trả quantity về `available_qty` của lot qua `release_reservation`
+* đưa allocation về trạng thái `released`
+* có thể đưa order quay về `confirmed` nếu không còn active allocation nào
+
+Trong phase 1 runtime, đây là event đi ra từ public command `POST /api/v1/orders/{order_id}/allocations/{allocation_id}/release` và cũng được tái dùng khi cancel flow giải phóng reservation.
+
+---
+
 ## `OrderPacked`
 
 ### Vì sao cần?
@@ -293,6 +353,7 @@ CustomerCreated
    -> HarvestedLotCreated
    -> LotReleased
    -> OrderAllocated
+  -> OrderPartiallyAllocated / AllocationAdjusted / AllocationReleased (nếu cần re-balance reservation)
    -> OrderPacked
    -> OrderDelivered
    -> CustomerPreferenceUpdated

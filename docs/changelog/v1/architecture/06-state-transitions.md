@@ -165,7 +165,9 @@ Trong implementation hiện tại của `app/core/gateway.py`, preorder đang en
 `app/core/gateway.py` hiện enforce chắc các transition sau:
 - `draft -> confirmed`
 - `draft -> cancelled`
-- `confirmed -> allocated`
+- `confirmed -> allocated | partially_allocated` qua action `allocate`
+- `partially_allocated -> allocated` qua action `allocate`
+- `partially_allocated -> cancel_requested`
 - `confirmed -> cancelled`
 - `allocated -> packed`
 - `allocated -> cancel_requested`
@@ -174,7 +176,7 @@ Trong implementation hiện tại của `app/core/gateway.py`, preorder đang en
 - `cancel_requested -> cancelled`
 - `shipped -> delivered`
 
-Các state và transition như `partially_allocated`, `partially_packed`, `partially_delivered`, `failed` vẫn thuộc canonical vocabulary của domain, nhưng chưa phải gateway-enforced subset của phase đầu.
+Các state và transition như `partially_packed`, `partially_delivered`, `failed` vẫn thuộc canonical vocabulary của domain, nhưng chưa phải gateway-enforced subset của phase đầu.
 
 ---
 

@@ -12,6 +12,7 @@ import uuid
 # ── Event store (append-only) ─────────────────────────────────────────────────
 _event_log: list[dict[str, Any]] = []
 _audit_log: list[dict[str, Any]] = []
+_inventory_movements: list[dict[str, Any]] = []
 
 # ── Read model projections ────────────────────────────────────────────────────
 _customers: dict[str, dict[str, Any]] = {}
@@ -246,6 +247,25 @@ def list_audit_logs() -> list[dict[str, Any]]:
     return list(_audit_log)
 
 
+def append_inventory_movement(entry: dict[str, Any]) -> dict[str, Any]:
+    movement = {
+        "inventoryMovementId": entry.get("inventoryMovementId", str(uuid.uuid4())),
+        "lotId": entry["lotId"],
+        "movementType": entry["movementType"],
+        "qty": entry["qty"],
+        "relatedOrderId": entry.get("relatedOrderId"),
+        "relatedOrderLineId": entry.get("relatedOrderLineId"),
+        "reason": entry.get("reason"),
+        "createdAt": entry.get("createdAt", now_iso()),
+    }
+    _inventory_movements.append(movement)
+    return movement
+
+
+def list_inventory_movements() -> list[dict[str, Any]]:
+    return list(_inventory_movements)
+
+
 def is_idempotent(key: str) -> bool:
     return key in _idempotency_cache
 
@@ -261,6 +281,7 @@ def set_idempotent_result(key: str, result: Any) -> None:
 def reset_state() -> None:
     _event_log.clear()
     _audit_log.clear()
+    _inventory_movements.clear()
     _customers.clear()
     _preferences.clear()
     _customer_duplicate_candidates.clear()

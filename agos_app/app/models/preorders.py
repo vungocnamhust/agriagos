@@ -22,6 +22,7 @@ class PreorderDetail(BaseModel):
     cancelledQty: float = 0
     status: PreorderStatus  # required: draft|confirmed|active|completed|cancelled (06-state-transitions.md)
     startDate: str | None = None
+    version: int = 1
     adjustmentHistory: list[PreorderAdjustmentEntry] = Field(default_factory=list)
 
 class CreatePreorderRequest(BaseModel):

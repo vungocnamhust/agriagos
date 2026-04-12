@@ -1,10 +1,19 @@
 {
   "permissions": {
+    "allow": [
+      "Bash(cat /Users/nam/.claude/scripts/hooks/*.sh)",
+      "Bash(PYENV_VERSION=agos_3.10.14 ruff check --fix agos_app/app/store/lots.py)",
+      "Bash(pyenv exec:*)",
+      "Bash(~/.pyenv/versions/agos_3.10.14/bin/ruff check:*)",
+      "Read(//Users/nam/.pyenv/versions/**)",
+      "Bash(~/.pyenv/versions/3.10.14/bin/ruff check:*)",
+      "Bash(python3 -)",
+      "Bash(DATABASE_URL=postgresql+psycopg://agriagos:agriagos@127.0.0.1:5436/agriagos POSTGRES_WRITE_PATH_ENABLED=true ~/.pyenv/versions/3.10.14/envs/chanminh_3.10.14/bin/python -m pytest tests/test_view_board_integration.py tests/test_customer_360_view_integration.py -m postgres_integration -x -q)",
+      "Read(//Users/nam/Workspace/projects/running/**)",
+      "Bash(~/.pyenv/versions/3.10.14/envs/chanminh_3.10.14/bin/python -m pytest tests/ -x -q --ignore=tests/test_view_board_integration.py --ignore=tests/test_customer_360_view_integration.py)"
+    ],
     "additionalDirectories": [
       "/Users/nam/Workspace/projects/running/agriagos/.claude"
-    ],
-    "allow": [
-      "Bash(cat /Users/nam/.claude/scripts/hooks/*.sh)"
     ]
   },
   "hooks": {

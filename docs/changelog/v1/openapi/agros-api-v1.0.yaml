@@ -611,6 +611,84 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/orders/{order_id}/allocations/{allocation_id}/adjust:
+    post:
+      tags:
+      - Orders
+      - Allocations
+      summary: Adjust Allocation
+      operationId: adjust_allocation_api_v1_orders__order_id__allocations__allocation_id__adjust_post
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Order Id
+      - name: allocation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Allocation Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdjustAllocationRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AllocationMutationResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/orders/{order_id}/allocations/{allocation_id}/release:
+    post:
+      tags:
+      - Orders
+      - Allocations
+      summary: Release Allocation
+      operationId: release_allocation_api_v1_orders__order_id__allocations__allocation_id__release_post
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Order Id
+      - name: allocation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Allocation Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReleaseAllocationRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AllocationMutationResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/orders/{order_id}/pack:
     post:
       tags:
@@ -1502,6 +1580,29 @@ components:
       required:
       - allocations
       title: AllocateOrderRequest
+    AdjustAllocationRequest:
+      properties:
+        newAllocatedQty:
+          type: number
+          title: Newallocatedqty
+        reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reason
+        approvalRef:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Approvalref
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - newAllocatedQty
+      title: AdjustAllocationRequest
     AllocationItemResponse:
       properties:
         allocationId:
@@ -1531,6 +1632,21 @@ components:
       - allocatedQty
       - status
       title: AllocationItemResponse
+    AllocationMutationResponse:
+      properties:
+        orderId:
+          type: string
+          title: Orderid
+        orderStatus:
+          $ref: '#/components/schemas/OrderStatus'
+        allocation:
+          $ref: '#/components/schemas/AllocationItemResponse'
+      type: object
+      required:
+      - orderId
+      - orderStatus
+      - allocation
+      title: AllocationMutationResponse
     AllocationResponse:
       properties:
         orderId:
@@ -1554,6 +1670,24 @@ components:
       - consumed
       - cancelled
       title: AllocationStatus
+    ReleaseAllocationRequest:
+      properties:
+        reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reason
+        approvalRef:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Approvalref
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      title: ReleaseAllocationRequest
     AvailableLotListResponse:
       properties:
         items:

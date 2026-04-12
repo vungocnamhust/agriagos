@@ -363,20 +363,33 @@ Payload:
 ### `AllocationAdjusted`
 Payload:
 - allocation_id
+- order_id
+- order_line_id
+- lot_id
 - old_qty
 - new_qty
 - reason
+- approval_ref
 
 Rule baseline:
 - nếu adjustment là override ngoài policy thường, event phải có `approved_by` hoặc `approval_ref`
+- phase 1 runtime phát event này từ public command `POST /api/v1/orders/{order_id}/allocations/{allocation_id}/adjust`
 
 ### `AllocationReleased`
 Khi bỏ giữ chỗ của lot.
 
 Payload:
 - allocation_id
+- order_id
+- order_line_id
+- lot_id
 - released_qty
 - reason
+- approval_ref
+
+Rule baseline:
+- phase 1 runtime phát event này từ public command `POST /api/v1/orders/{order_id}/allocations/{allocation_id}/release`
+- khi release xảy ra qua adjust-down, release route, hoặc cancel flow thì quantity phải quay lại lot bằng `release_reservation` inventory movement
 
 ### `InventoryReleased`
 Khi quantity của lot được đưa vào pool có thể reserve.

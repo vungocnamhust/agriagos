@@ -20,6 +20,10 @@ from app.store._db import is_enabled as postgres_enabled
 ORDER_TRANSITIONS: dict[str, dict[str, str]] = {
     OrderStatus.draft.value: {"confirm": OrderStatus.confirmed.value, "cancel": OrderStatus.cancelled.value},
     OrderStatus.confirmed.value: {"allocate": OrderStatus.allocated.value, "cancel": OrderStatus.cancelled.value},
+    OrderStatus.partially_allocated.value: {
+        "allocate": OrderStatus.allocated.value,
+        "request_cancel": OrderStatus.cancel_requested.value,
+    },
     OrderStatus.allocated.value: {"pack": OrderStatus.packed.value, "request_cancel": OrderStatus.cancel_requested.value},
     OrderStatus.packed.value: {"ship": OrderStatus.shipped.value, "request_cancel": OrderStatus.cancel_requested.value},
     OrderStatus.cancel_requested.value: {"cancel": OrderStatus.cancelled.value},

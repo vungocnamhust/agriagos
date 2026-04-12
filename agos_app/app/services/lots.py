@@ -553,6 +553,7 @@ def release_lot(lot_id: str, payload: ReleaseLotRequest) -> LotResponse:
                 lot_id,
                 next_status=next_status,
                 released_qty=payload.releasedQty,
+                expected_version=record.get("version"),
             )
             if persisted is None:
                 raise HTTPException(status_code=500, detail="Failed to persist lot release.")
@@ -622,7 +623,7 @@ def block_lot(lot_id: str, payload: BlockLotRequest) -> LotResponse:
     result_record = record
     with postgres_transaction() if postgres_sync.is_enabled() else nullcontext():
         if postgres_sync.is_enabled():
-            persisted = postgres_sync.block_lot_atomic(lot_id, next_status=next_status)
+            persisted = postgres_sync.block_lot_atomic(lot_id, next_status=next_status, expected_version=record.get("version"))
             if persisted is None:
                 raise HTTPException(status_code=500, detail="Failed to persist lot block.")
             result_record = persisted
@@ -692,7 +693,7 @@ def unblock_lot(lot_id: str, payload: UnblockLotRequest) -> LotResponse:
     result_record = record
     with postgres_transaction() if postgres_sync.is_enabled() else nullcontext():
         if postgres_sync.is_enabled():
-            persisted = postgres_sync.unblock_lot_atomic(lot_id, next_status=next_status)
+            persisted = postgres_sync.unblock_lot_atomic(lot_id, next_status=next_status, expected_version=record.get("version"))
             if persisted is None:
                 raise HTTPException(status_code=500, detail="Failed to persist lot unblock.")
             result_record = persisted
@@ -899,7 +900,7 @@ def create_lot_qc_review(lot_id: str, payload: CreateQCReviewRequest) -> QCRevie
 
     if postgres_sync.is_enabled():
         with postgres_transaction():
-            persisted = create_qc_review_with_lot_status(lot_id, record["status"], review_record)
+            persisted = create_qc_review_with_lot_status(lot_id, record["status"], review_record, expected_version=record.get("version"))
             if persisted is None:
                 raise HTTPException(status_code=500, detail="Failed to persist QC review.")
             event = _emit_lot_event(

@@ -4,6 +4,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
+from fastapi import HTTPException
 from sqlalchemy import text
 
 from app.store import _db
@@ -21,6 +22,24 @@ __all__ = [
     "unblock_lot_atomic",
     "upsert_lot",
 ]
+
+_LOT_RETURNING = """
+    lot_id,
+    tenant_id,
+    lot_code,
+    product_sku_id,
+    source_type,
+    source_ref_id,
+    harvest_or_production_date,
+    actual_qty,
+    available_qty,
+    reserved_qty,
+    released_qty,
+    unit,
+    quality_note,
+    status,
+    version
+"""
 
 
 def _lot_record_from_row(row: Any) -> dict[str, Any]:
@@ -42,37 +61,11 @@ def _lot_record_from_row(row: Any) -> dict[str, Any]:
         "unit": row["unit"],
         "qualityNote": row["quality_note"],
         "status": row["status"],
+        "version": int(row["version"]) if row["version"] is not None else 1,
     }
 
 
-def _fetch_updated_lot_row(session: Any, lot_id: str) -> dict[str, Any] | None:
-    row = session.execute(
-        text(
-            """
-            SELECT
-                lot_id,
-                tenant_id,
-                lot_code,
-                product_sku_id,
-                source_type,
-                source_ref_id,
-                harvest_or_production_date,
-                actual_qty,
-                available_qty,
-                reserved_qty,
-                released_qty,
-                unit,
-                quality_note,
-                status
-            FROM lots
-            WHERE lot_id = :lot_id
-            """
-        ),
-        {"lot_id": lot_id},
-    ).mappings().first()
-    if row is None:
-        return None
-    return _lot_record_from_row(row)
+
 def append_lot_evidence(lot_id: str, attachments: list[str], actor_id: str | None = None) -> None:
     if not _db.is_enabled() or not attachments:
         return
@@ -250,26 +243,35 @@ def create_qc_review_with_lot_status(
     lot_id: str,
     next_status: str,
     review: dict[str, Any],
+    *,
+    expected_version: int | None = None,
 ) -> dict[str, Any] | None:
     if not _db.is_enabled():
         return None
 
     review_id = str(uuid.uuid4())
+    version_clause = "AND version = :expected_version" if expected_version is not None else ""
     with _db.write_session() as (session, should_commit):
         session.execute(
             text("SELECT lot_id FROM lots WHERE lot_id = :lot_id FOR UPDATE"),
             {"lot_id": lot_id},
         ).first()
-        session.execute(
+        update_result: Any = session.execute(
             text(
-                """
+                f"""
                 UPDATE lots
-                SET status = :status, updated_at = now()
-                WHERE lot_id = :lot_id
+                SET status = :status, version = version + 1, updated_at = now()
+                WHERE lot_id = :lot_id {version_clause}
                 """
             ),
-            {"lot_id": lot_id, "status": next_status},
+            {
+                "lot_id": lot_id,
+                "status": next_status,
+                **({"expected_version": expected_version} if expected_version is not None else {}),
+            },
         )
+        if update_result.rowcount == 0:
+            raise HTTPException(status_code=409, detail="LOT_VERSION_CONFLICT")
         row = session.execute(
             text(
                 """
@@ -436,135 +438,124 @@ def upsert_lot(record: dict[str, Any]) -> None:
             session.commit()
 
 
-def release_lot_atomic(lot_id: str, *, next_status: str, released_qty: float) -> dict[str, Any] | None:
+def release_lot_atomic(
+    lot_id: str,
+    *,
+    next_status: str,
+    released_qty: float,
+    expected_version: int | None = None,
+) -> dict[str, Any] | None:
     if not _db.is_enabled():
         return None
 
+    version_clause = "AND version = :expected_version" if expected_version is not None else ""
     with _db.write_session() as (session, should_commit):
         row = session.execute(
             text(
-                """
+                f"""
                 UPDATE lots
                 SET
                     status = :status,
                     released_qty = :released_qty,
                     available_qty = GREATEST(:released_qty - reserved_qty, 0),
+                    version = version + 1,
                     updated_at = now()
-                WHERE lot_id = :lot_id
-                RETURNING
-                    lot_id,
-                    tenant_id,
-                    lot_code,
-                    product_sku_id,
-                    source_type,
-                    source_ref_id,
-                    harvest_or_production_date,
-                    actual_qty,
-                    available_qty,
-                    reserved_qty,
-                    released_qty,
-                    unit,
-                    quality_note,
-                    status
+                WHERE lot_id = :lot_id {version_clause}
+                RETURNING {_LOT_RETURNING}
                 """
             ),
             {
                 "lot_id": lot_id,
                 "status": next_status,
                 "released_qty": released_qty,
+                **({"expected_version": expected_version} if expected_version is not None else {}),
             },
         ).mappings().first()
         if should_commit:
             session.commit()
     if row is None:
+        if expected_version is not None:
+            raise HTTPException(status_code=409, detail="LOT_VERSION_CONFLICT")
         return None
     return _lot_record_from_row(row)
 
 
-def block_lot_atomic(lot_id: str, *, next_status: str) -> dict[str, Any] | None:
+def block_lot_atomic(
+    lot_id: str,
+    *,
+    next_status: str,
+    expected_version: int | None = None,
+) -> dict[str, Any] | None:
     if not _db.is_enabled():
         return None
 
+    version_clause = "AND version = :expected_version" if expected_version is not None else ""
     with _db.write_session() as (session, should_commit):
         row = session.execute(
             text(
-                """
+                f"""
                 UPDATE lots
                 SET
                     status = :status,
                     released_qty = reserved_qty,
                     available_qty = 0,
+                    version = version + 1,
                     updated_at = now()
-                WHERE lot_id = :lot_id
-                RETURNING
-                    lot_id,
-                    tenant_id,
-                    lot_code,
-                    product_sku_id,
-                    source_type,
-                    source_ref_id,
-                    harvest_or_production_date,
-                    actual_qty,
-                    available_qty,
-                    reserved_qty,
-                    released_qty,
-                    unit,
-                    quality_note,
-                    status
+                WHERE lot_id = :lot_id {version_clause}
+                RETURNING {_LOT_RETURNING}
                 """
             ),
             {
                 "lot_id": lot_id,
                 "status": next_status,
+                **({"expected_version": expected_version} if expected_version is not None else {}),
             },
         ).mappings().first()
         if should_commit:
             session.commit()
     if row is None:
+        if expected_version is not None:
+            raise HTTPException(status_code=409, detail="LOT_VERSION_CONFLICT")
         return None
     return _lot_record_from_row(row)
 
 
-def unblock_lot_atomic(lot_id: str, *, next_status: str) -> dict[str, Any] | None:
+def unblock_lot_atomic(
+    lot_id: str,
+    *,
+    next_status: str,
+    expected_version: int | None = None,
+) -> dict[str, Any] | None:
     if not _db.is_enabled():
         return None
 
+    version_clause = "AND version = :expected_version" if expected_version is not None else ""
     with _db.write_session() as (session, should_commit):
         row = session.execute(
             text(
-                """
+                f"""
                 UPDATE lots
                 SET
                     status = :status,
                     released_qty = reserved_qty,
                     available_qty = 0,
+                    version = version + 1,
                     updated_at = now()
-                WHERE lot_id = :lot_id
-                RETURNING
-                    lot_id,
-                    tenant_id,
-                    lot_code,
-                    product_sku_id,
-                    source_type,
-                    source_ref_id,
-                    harvest_or_production_date,
-                    actual_qty,
-                    available_qty,
-                    reserved_qty,
-                    released_qty,
-                    unit,
-                    quality_note,
-                    status
+                WHERE lot_id = :lot_id {version_clause}
+                RETURNING {_LOT_RETURNING}
                 """
             ),
             {
                 "lot_id": lot_id,
                 "status": next_status,
+                **({"expected_version": expected_version} if expected_version is not None else {}),
             },
         ).mappings().first()
         if should_commit:
             session.commit()
     if row is None:
+        if expected_version is not None:
+            raise HTTPException(status_code=409, detail="LOT_VERSION_CONFLICT")
         return None
     return _lot_record_from_row(row)
 
@@ -576,22 +567,8 @@ def fetch_lot(lot_id: str) -> dict[str, Any] | None:
     with _db.read_session() as session:
         row = session.execute(
             text(
-                """
-                SELECT
-                    lot_id,
-                    tenant_id,
-                    lot_code,
-                    product_sku_id,
-                    source_type,
-                    source_ref_id,
-                    harvest_or_production_date,
-                    actual_qty,
-                    available_qty,
-                    reserved_qty,
-                    released_qty,
-                    unit,
-                    quality_note,
-                    status
+                f"""
+                SELECT {_LOT_RETURNING}
                 FROM lots
                 WHERE lot_id = :lot_id
                 """

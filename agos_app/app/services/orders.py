@@ -1,4 +1,5 @@
 import copy
+import threading
 import uuid
 from contextlib import nullcontext
 from decimal import Decimal
@@ -17,6 +18,8 @@ from app.core.write_context import append_audit_decision, build_request_hash, me
 from app.models.enums import AllocationStatus, LotStatus, OrderStatus, PaymentStatus, PreorderStatus
 from app.models.orders import (
     AllocateOrderRequest,
+    AdjustAllocationRequest,
+    AllocationMutationResponse,
     AllocationItemResponse,
     AllocationResponse,
     CancelOrderRequest,
@@ -27,12 +30,16 @@ from app.models.orders import (
     OrderLine,
     OrderResponse,
     PackOrderRequest,
+    ReleaseAllocationRequest,
     RequestCancelOrderRequest,
     ShipOrderRequest,
 )
 from app.store import postgres_sync
 from app.store import memory as store
 from app.store._db import transaction as postgres_transaction
+
+
+_MEMORY_ALLOCATION_LOCK = threading.RLock()
 
 
 def _new_order_code() -> str:
@@ -128,6 +135,74 @@ def _emit_order_event(
     )
 
 
+def _emit_allocation_event(
+    event_name: str,
+    allocation_id: str,
+    payload: dict[str, Any],
+    context: dict[str, Any],
+) -> dict[str, Any]:
+    return events.emit(
+        event_name=event_name,
+        aggregate_type="Allocation",
+        aggregate_id=allocation_id,
+        payload=payload,
+        actor_id=context.get("actor_id"),
+        correlation_id=context.get("correlation_id"),
+        causation_id=context.get("causation_id"),
+        idempotency_key=context.get("idempotency_key"),
+    )
+
+
+def _record_inventory_movement(
+    *,
+    lot_id: str,
+    movement_type: str,
+    qty: float,
+    order_id: str,
+    order_line_id: str,
+    reason: str,
+) -> None:
+    movement = {
+        "lotId": lot_id,
+        "movementType": movement_type,
+        "qty": qty,
+        "relatedOrderId": order_id,
+        "relatedOrderLineId": order_line_id,
+        "reason": reason,
+    }
+    if postgres_sync.is_enabled():
+        postgres_sync.append_inventory_movement(movement)
+    else:
+        store.append_inventory_movement(movement)
+
+
+def _derive_order_allocation_status(lines: list[dict[str, Any]]) -> str:
+    if not lines:
+        return OrderStatus.confirmed.value
+
+    has_any_allocation = False
+    is_fully_allocated = True
+    for line in lines:
+        ordered_qty = _float_value(line.get("orderedQty"))
+        allocated_qty = _float_value(line.get("allocatedQty"))
+        if allocated_qty > 0:
+            has_any_allocation = True
+        if allocated_qty < ordered_qty:
+            is_fully_allocated = False
+
+    if not has_any_allocation:
+        return OrderStatus.confirmed.value
+    if is_fully_allocated:
+        return OrderStatus.allocated.value
+    return OrderStatus.partially_allocated.value
+
+
+def _allocation_order_event_name(order_status: str) -> str:
+    if order_status == OrderStatus.partially_allocated.value:
+        return "order.partially_allocated"
+    return "order.allocated"
+
+
 def _audit_order_decision(
     action_name: str,
     order_id: str,
@@ -185,6 +260,143 @@ def _recompute_preorder_remaining(record: dict[str, Any]) -> float:
         - Decimal(str(record.get("deliveredQty", 0.0) or 0.0))
         - Decimal(str(record.get("cancelledQty", 0.0) or 0.0)),
     ))
+
+
+def _float_value(value: Any) -> float:
+    if value is None:
+        return 0.0
+    return float(value)
+
+
+def _collect_allocation_request_totals(
+    allocations: list[Any],
+) -> tuple[dict[str, float], dict[str, float]]:
+    lot_totals: dict[str, float] = {}
+    line_totals: dict[str, float] = {}
+
+    for item in allocations:
+        lot_totals[item.lotId] = lot_totals.get(item.lotId, 0.0) + _float_value(item.allocatedQty)
+        line_totals[item.orderLineId] = line_totals.get(item.orderLineId, 0.0) + _float_value(item.allocatedQty)
+
+    return lot_totals, line_totals
+
+
+def _validate_allocation_request(
+    *,
+    order_id: str,
+    allocations: list[Any],
+    line_map: dict[str, dict[str, Any]],
+    context: dict[str, Any],
+    before_snapshot: Any,
+) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    lot_totals, line_totals = _collect_allocation_request_totals(allocations)
+
+    lots_by_id: dict[str, dict[str, Any]] = {}
+    for lot_id, requested_qty in lot_totals.items():
+        try:
+            lot = _get_lot_record_or_404(lot_id)
+        except HTTPException as exc:
+            if exc.status_code == 404:
+                _raise_order_denied(
+                    action_name="order.allocate",
+                    order_id=order_id,
+                    context=context,
+                    detail=str(exc.detail),
+                    reason_code="lot_not_found",
+                    status_code=404,
+                    before_snapshot=before_snapshot,
+                    metadata={"lotId": lot_id},
+                )
+            raise
+
+        if lot["status"] != LotStatus.released.value:
+            _raise_order_denied(
+                action_name="order.allocate",
+                order_id=order_id,
+                context=context,
+                detail=f"Lot {lot_id} is not in released state (current: {lot['status']}).",
+                reason_code="lot_not_released",
+                before_snapshot=before_snapshot,
+            )
+
+        if _float_value(lot.get("availableQty")) < requested_qty:
+            _raise_order_denied(
+                action_name="order.allocate",
+                order_id=order_id,
+                context=context,
+                detail=f"Lot {lot_id} has insufficient available qty ({lot['availableQty']}).",
+                reason_code="insufficient_lot_qty",
+                before_snapshot=before_snapshot,
+                metadata={"lotId": lot_id, "requestedQty": requested_qty},
+            )
+
+        lots_by_id[lot_id] = lot
+
+    preorder_records: dict[str, dict[str, Any]] = {}
+    for order_line_id, requested_qty in line_totals.items():
+        if order_line_id not in line_map:
+            _raise_order_denied(
+                action_name="order.allocate",
+                order_id=order_id,
+                context=context,
+                detail=f"OrderLine {order_line_id} not found.",
+                reason_code="order_line_not_found",
+                before_snapshot=before_snapshot,
+            )
+
+        line = line_map[order_line_id]
+        remaining_line_qty = _float_value(line.get("orderedQty")) - _float_value(line.get("allocatedQty"))
+        if requested_qty > remaining_line_qty:
+            _raise_order_denied(
+                action_name="order.allocate",
+                order_id=order_id,
+                context=context,
+                detail=(
+                    f"OrderLine {order_line_id} allocation exceeds remaining qty ({remaining_line_qty})."
+                ),
+                reason_code="order_line_qty_exceeded",
+                before_snapshot=before_snapshot,
+                metadata={"orderLineId": order_line_id, "requestedQty": requested_qty},
+            )
+
+        source_preorder_id = line.get("sourcePreorderId")
+        if not source_preorder_id:
+            continue
+
+        preorder_record = preorder_records.get(source_preorder_id)
+        if preorder_record is None:
+            loaded_preorder_record = _get_preorder_record(source_preorder_id)
+            if loaded_preorder_record is None:
+                _raise_order_denied(
+                    action_name="order.allocate",
+                    order_id=order_id,
+                    context=context,
+                    detail=f"Preorder {source_preorder_id} not found.",
+                    reason_code="preorder_not_found",
+                    status_code=404,
+                    before_snapshot=before_snapshot,
+                    metadata={"sourcePreorderId": source_preorder_id},
+                )
+            preorder_record = loaded_preorder_record
+            assert preorder_record is not None
+            preorder_records[source_preorder_id] = preorder_record
+
+        assert preorder_record is not None
+        remaining_preorder_qty = _float_value(preorder_record.get("remainingQty"))
+        if requested_qty > remaining_preorder_qty:
+            _raise_order_denied(
+                action_name="order.allocate",
+                order_id=order_id,
+                context=context,
+                detail=(
+                    f"Preorder {source_preorder_id} has insufficient remaining qty ({remaining_preorder_qty})."
+                ),
+                reason_code="preorder_quota_exceeded",
+                before_snapshot=before_snapshot,
+                metadata={"sourcePreorderId": source_preorder_id, "requestedQty": requested_qty},
+            )
+
+    return lots_by_id, preorder_records
 
 
 def _increment_preorder_allocated_qty(preorder_id: str, qty: float) -> None:
@@ -344,6 +556,20 @@ def _get_allocations_for_order(order_id: str) -> list[dict[str, Any]]:
     if postgres_sync.is_enabled():
         return postgres_sync.fetch_allocations_for_order(order_id)
     return store.get_allocations(order_id)
+
+
+def _get_allocation_for_order_or_404(order_id: str, allocation_id: str) -> dict[str, Any]:
+    if postgres_sync.is_enabled():
+        allocation = postgres_sync.fetch_allocation_for_order(order_id, allocation_id)
+    else:
+        allocation = next(
+            (item for item in store.get_allocations(order_id) if item["allocationId"] == allocation_id),
+            None,
+        )
+
+    if allocation is None:
+        raise HTTPException(status_code=404, detail=f"Allocation {allocation_id} not found.")
+    return allocation
 
 
 def create_order(payload: CreateOrderRequest) -> OrderResponse:
@@ -506,7 +732,7 @@ def allocate_order(order_id: str, payload: AllocateOrderRequest) -> AllocationRe
         return AllocationResponse(**cached)
 
     try:
-        next_status = assert_order_transition(record, "allocate")
+        assert_order_transition(record, "allocate")
     except HTTPException as exc:
         _audit_order_decision(
             "order.allocate",
@@ -519,102 +745,60 @@ def allocate_order(order_id: str, payload: AllocateOrderRequest) -> AllocationRe
         )
         raise
 
-    existing_allocations = _get_allocations_for_order(order_id)
-    all_allocations = list(existing_allocations)
-    new_allocations: list[dict[str, Any]] = []
-    line_map = {ln["orderLineId"]: ln for ln in record["lines"]}
-    preorder_allocations: list[tuple[str, float]] = []
+    if not postgres_sync.is_enabled():
+        with _MEMORY_ALLOCATION_LOCK:
+            record = _get_order_record_or_404(order_id, action_name="order.allocate", context=context)
+            line_map = {ln["orderLineId"]: ln for ln in record["lines"]}
+            lots_by_id, _ = _validate_allocation_request(
+                order_id=order_id,
+                allocations=payload.allocations,
+                line_map=line_map,
+                context=context,
+                before_snapshot=before_snapshot,
+            )
+            existing_allocations = _get_allocations_for_order(order_id)
+            all_allocations = list(existing_allocations)
+            new_allocations: list[dict[str, Any]] = []
 
-    for item in payload.allocations:
-        try:
-            lot = _get_lot_record_or_404(item.lotId)
-        except HTTPException as exc:
-            if exc.status_code == 404:
-                _raise_order_denied(
-                    action_name="order.allocate",
+            for item in payload.allocations:
+                lot = lots_by_id[item.lotId]
+                line_map[item.orderLineId]["allocatedQty"] += item.allocatedQty
+
+                allocation_id = str(uuid.uuid4())
+                alloc_record = {
+                    "allocationId": allocation_id,
+                    "orderLineId": item.orderLineId,
+                    "lotId": item.lotId,
+                    "allocatedQty": item.allocatedQty,
+                    "status": AllocationStatus.active.value,
+                }
+                all_allocations.append(alloc_record)
+                new_allocations.append(alloc_record)
+
+                source_preorder_id = line_map[item.orderLineId].get("sourcePreorderId")
+                if source_preorder_id:
+                    _increment_preorder_allocated_qty(source_preorder_id, item.allocatedQty)
+                lot["availableQty"] -= item.allocatedQty
+                lot["reservedQty"] = lot.get("reservedQty", 0.0) + item.allocatedQty
+                _record_inventory_movement(
+                    lot_id=item.lotId,
+                    movement_type="reserve",
+                    qty=_float_value(item.allocatedQty),
                     order_id=order_id,
-                    context=context,
-                    detail=str(exc.detail),
-                    reason_code="lot_not_found",
-                    status_code=404,
-                    before_snapshot=before_snapshot,
-                    metadata={"lotId": item.lotId},
+                    order_line_id=item.orderLineId,
+                    reason="allocation_reserved",
                 )
-            raise
-        if lot["status"] != LotStatus.released.value:
-            _raise_order_denied(
-                action_name="order.allocate",
-                order_id=order_id,
-                context=context,
-                detail=f"Lot {item.lotId} is not in released state (current: {lot['status']}).",
-                reason_code="lot_not_released",
-                before_snapshot=before_snapshot,
+
+            next_status = _derive_order_allocation_status(record["lines"])
+            result = AllocationResponse(
+                orderId=order_id,
+                allocations=[AllocationItemResponse(**a) for a in new_allocations],
             )
-        if lot["availableQty"] < item.allocatedQty:
-            _raise_order_denied(
-                action_name="order.allocate",
-                order_id=order_id,
-                context=context,
-                detail=f"Lot {item.lotId} has insufficient available qty ({lot['availableQty']}).",
-                reason_code="insufficient_lot_qty",
-                before_snapshot=before_snapshot,
-            )
-        if item.orderLineId not in line_map:
-            _raise_order_denied(
-                action_name="order.allocate",
-                order_id=order_id,
-                context=context,
-                detail=f"OrderLine {item.orderLineId} not found.",
-                reason_code="order_line_not_found",
-                before_snapshot=before_snapshot,
-            )
-
-        # Reserve inventory
-        line_map[item.orderLineId]["allocatedQty"] += item.allocatedQty
-
-        allocation_id = str(uuid.uuid4())
-        alloc_record = {
-            "allocationId": allocation_id,
-            "orderLineId": item.orderLineId,
-            "lotId": item.lotId,
-            "allocatedQty": item.allocatedQty,
-            "status": AllocationStatus.active.value,
-        }
-        all_allocations.append(alloc_record)
-        new_allocations.append(alloc_record)
-
-        source_preorder_id = line_map[item.orderLineId].get("sourcePreorderId")
-        if source_preorder_id:
-            preorder_allocations.append((source_preorder_id, item.allocatedQty))
-
-        if not postgres_sync.is_enabled():
-            if source_preorder_id:
-                _increment_preorder_allocated_qty(source_preorder_id, item.allocatedQty)
-            lot["availableQty"] -= item.allocatedQty
-            lot["reservedQty"] = lot.get("reservedQty", 0.0) + item.allocatedQty
-
-    result = AllocationResponse(
-        orderId=order_id,
-        allocations=[AllocationItemResponse(**a) for a in new_allocations],
-    )
-    if postgres_sync.is_enabled():
-        with postgres_transaction():
-            try:
-                postgres_sync.allocate_order_atomic(order_id, next_status, new_allocations)
-            except ValueError as exc:
-                _raise_order_denied(
-                    action_name="order.allocate",
-                    order_id=order_id,
-                    context=context,
-                    detail=str(exc),
-                    reason_code="allocation_atomic_rejected",
-                    before_snapshot=before_snapshot,
-                )
-            for source_preorder_id, allocated_qty in preorder_allocations:
-                _increment_preorder_allocated_qty(source_preorder_id, allocated_qty)
-            record = _get_order_record_or_404(order_id)
+            record["status"] = next_status
+            postgres_sync.upsert_order(record)
+            store.save_allocations(order_id, all_allocations)
             event = _emit_order_event(
-                "order.allocated",
+                _allocation_order_event_name(next_status),
                 order_id,
                 {"orderId": order_id, "allocations": new_allocations},
                 context,
@@ -635,33 +819,450 @@ def allocate_order(order_id: str, payload: AllocateOrderRequest) -> AllocationRe
                 operation_name="order.allocate",
                 request_hash=build_request_hash(payload, extra={"action": "order.allocate", "orderId": order_id}),
             )
-    else:
-        record["status"] = next_status
-        postgres_sync.upsert_order(record)
-        store.save_allocations(order_id, all_allocations)
-        event = _emit_order_event(
-            "order.allocated",
-            order_id,
-            {"orderId": order_id, "allocations": new_allocations},
+            return result
+
+    new_allocations: list[dict[str, Any]] = []
+    line_map = {ln["orderLineId"]: ln for ln in record["lines"]}
+    lots_by_id, _ = _validate_allocation_request(
+        order_id=order_id,
+        allocations=payload.allocations,
+        line_map=line_map,
+        context=context,
+        before_snapshot=before_snapshot,
+    )
+
+    for item in payload.allocations:
+        line_map[item.orderLineId]["allocatedQty"] += item.allocatedQty
+        allocation_id = str(uuid.uuid4())
+        alloc_record = {
+            "allocationId": allocation_id,
+            "orderLineId": item.orderLineId,
+            "lotId": item.lotId,
+            "allocatedQty": item.allocatedQty,
+            "status": AllocationStatus.active.value,
+        }
+        new_allocations.append(alloc_record)
+
+    next_status = _derive_order_allocation_status(list(line_map.values()))
+
+    result = AllocationResponse(
+        orderId=order_id,
+        allocations=[AllocationItemResponse(**a) for a in new_allocations],
+    )
+    if postgres_sync.is_enabled():
+        with postgres_transaction():
+            try:
+                postgres_sync.allocate_order_atomic(order_id, next_status, new_allocations)
+            except ValueError as exc:
+                _raise_order_denied(
+                    action_name="order.allocate",
+                    order_id=order_id,
+                    context=context,
+                    detail=str(exc),
+                    reason_code="allocation_atomic_rejected",
+                    before_snapshot=before_snapshot,
+                )
+            record = _get_order_record_or_404(order_id)
+            event = _emit_order_event(
+                _allocation_order_event_name(next_status),
+                order_id,
+                {"orderId": order_id, "allocations": new_allocations},
+                context,
+            )
+            _audit_order_decision(
+                "order.allocate",
+                order_id,
+                "allowed",
+                context,
+                before_snapshot=before_snapshot,
+                after_snapshot=record,
+                event=event,
+                metadata={"allocationCount": len(new_allocations)},
+            )
+            record_idempotency(
+                key,
+                result.model_dump(),
+                operation_name="order.allocate",
+                request_hash=build_request_hash(payload, extra={"action": "order.allocate", "orderId": order_id}),
+            )
+    return result
+
+
+def adjust_allocation(
+    order_id: str,
+    allocation_id: str,
+    payload: AdjustAllocationRequest,
+) -> AllocationMutationResponse:
+    context = meta_context(payload.meta)
+    record = _get_order_record_or_404(order_id, action_name="allocation.adjust", context=context)
+    before_snapshot = copy.deepcopy(record)
+
+    key = context["idempotency_key"]
+    if cached := check_idempotency(key):
+        return AllocationMutationResponse(**cached)
+
+    if payload.newAllocatedQty <= 0:
+        _raise_order_denied(
+            action_name="allocation.adjust",
+            order_id=order_id,
+            context=context,
+            detail="newAllocatedQty must be greater than 0. Use the release route to fully release an allocation.",
+            reason_code="allocation_adjust_invalid_qty",
+            before_snapshot=before_snapshot,
+        )
+
+    allocation = _get_allocation_for_order_or_404(order_id, allocation_id)
+    if allocation["status"] != AllocationStatus.active.value:
+        _raise_order_denied(
+            action_name="allocation.adjust",
+            order_id=order_id,
+            context=context,
+            detail=f"Allocation {allocation_id} is not adjustable from status {allocation['status']}.",
+            reason_code="allocation_not_adjustable",
+            before_snapshot=before_snapshot,
+        )
+
+    old_qty = _float_value(allocation.get("allocatedQty"))
+
+    if postgres_sync.is_enabled():
+        with postgres_transaction():
+            try:
+                updated_allocation, next_status = postgres_sync.adjust_allocation_atomic(
+                    order_id,
+                    allocation_id,
+                    payload.newAllocatedQty,
+                )
+            except ValueError as exc:
+                _raise_order_denied(
+                    action_name="allocation.adjust",
+                    order_id=order_id,
+                    context=context,
+                    detail=str(exc),
+                    reason_code="allocation_adjust_rejected",
+                    before_snapshot=before_snapshot,
+                )
+            else:
+                order_status = OrderStatus(next_status)
+
+                record = _get_order_record_or_404(order_id)
+                event = _emit_allocation_event(
+                    "allocation.adjusted",
+                    allocation_id,
+                    {
+                        "allocationId": allocation_id,
+                        "orderId": order_id,
+                        "orderLineId": updated_allocation["orderLineId"],
+                        "lotId": updated_allocation["lotId"],
+                        "oldQty": old_qty,
+                        "newQty": payload.newAllocatedQty,
+                        "reason": payload.reason,
+                        "approvalRef": payload.approvalRef,
+                    },
+                    context,
+                )
+                response = AllocationMutationResponse(
+                    orderId=order_id,
+                    orderStatus=order_status,
+                    allocation=AllocationItemResponse(**updated_allocation),
+                )
+                _audit_order_decision(
+                    "allocation.adjust",
+                    order_id,
+                    "allowed",
+                    context,
+                    before_snapshot=before_snapshot,
+                    after_snapshot=record,
+                    event=event,
+                    metadata={"allocationId": allocation_id},
+                )
+                record_idempotency(
+                    key,
+                    response.model_dump(),
+                    operation_name="allocation.adjust",
+                    request_hash=build_request_hash(payload, extra={"action": "allocation.adjust", "orderId": order_id, "allocationId": allocation_id}),
+                )
+                return response
+
+    with _MEMORY_ALLOCATION_LOCK:
+        record = _get_order_record_or_404(order_id, action_name="allocation.adjust", context=context)
+        allocations = _get_allocations_for_order(order_id)
+        allocation = _get_allocation_for_order_or_404(order_id, allocation_id)
+        old_qty = _float_value(allocation.get("allocatedQty"))
+        delta = _float_value(payload.newAllocatedQty) - old_qty
+        line_map = {ln["orderLineId"]: ln for ln in record["lines"]}
+        line = line_map[allocation["orderLineId"]]
+        lot = _get_lot_record_or_404(allocation["lotId"])
+        source_preorder_id = line.get("sourcePreorderId")
+
+        if delta > 0:
+            if lot["status"] != LotStatus.released.value:
+                _raise_order_denied(
+                    action_name="allocation.adjust",
+                    order_id=order_id,
+                    context=context,
+                    detail=f"Lot {allocation['lotId']} is not in released state (current: {lot['status']}).",
+                    reason_code="lot_not_released",
+                    before_snapshot=before_snapshot,
+                )
+            if _float_value(lot.get("availableQty")) < delta:
+                _raise_order_denied(
+                    action_name="allocation.adjust",
+                    order_id=order_id,
+                    context=context,
+                    detail=f"Lot {allocation['lotId']} has insufficient available qty ({lot['availableQty']}).",
+                    reason_code="insufficient_lot_qty",
+                    before_snapshot=before_snapshot,
+                )
+            remaining_line_qty = _float_value(line.get("orderedQty")) - _float_value(line.get("allocatedQty"))
+            if delta > remaining_line_qty:
+                _raise_order_denied(
+                    action_name="allocation.adjust",
+                    order_id=order_id,
+                    context=context,
+                    detail=f"OrderLine {allocation['orderLineId']} allocation exceeds remaining qty ({remaining_line_qty}).",
+                    reason_code="order_line_qty_exceeded",
+                    before_snapshot=before_snapshot,
+                )
+            if source_preorder_id:
+                preorder_record = _get_preorder_record(source_preorder_id)
+                if preorder_record is None:
+                    _raise_order_denied(
+                        action_name="allocation.adjust",
+                        order_id=order_id,
+                        context=context,
+                        detail=f"Preorder {source_preorder_id} not found.",
+                        reason_code="preorder_not_found",
+                        status_code=404,
+                        before_snapshot=before_snapshot,
+                    )
+                assert preorder_record is not None
+                if _float_value(preorder_record.get("remainingQty")) < delta:
+                    _raise_order_denied(
+                        action_name="allocation.adjust",
+                        order_id=order_id,
+                        context=context,
+                        detail=f"Preorder {source_preorder_id} has insufficient remaining qty ({preorder_record['remainingQty']}).",
+                        reason_code="preorder_quota_exceeded",
+                        before_snapshot=before_snapshot,
+                    )
+                _increment_preorder_allocated_qty(source_preorder_id, delta)
+
+            line["allocatedQty"] += delta
+            lot["availableQty"] -= delta
+            lot["reservedQty"] = _float_value(lot.get("reservedQty")) + delta
+            _record_inventory_movement(
+                lot_id=allocation["lotId"],
+                movement_type="reserve",
+                qty=delta,
+                order_id=order_id,
+                order_line_id=allocation["orderLineId"],
+                reason="allocation_adjusted_up",
+            )
+        elif delta < 0:
+            release_qty = abs(delta)
+            if source_preorder_id:
+                _decrement_preorder_allocated_qty(source_preorder_id, release_qty)
+            line["allocatedQty"] = max(0.0, _float_value(line.get("allocatedQty")) - release_qty)
+            lot["availableQty"] += release_qty
+            lot["reservedQty"] = max(0.0, _float_value(lot.get("reservedQty")) - release_qty)
+            _record_inventory_movement(
+                lot_id=allocation["lotId"],
+                movement_type="release_reservation",
+                qty=release_qty,
+                order_id=order_id,
+                order_line_id=allocation["orderLineId"],
+                reason="allocation_adjusted_down",
+            )
+
+        allocation["allocatedQty"] = _float_value(payload.newAllocatedQty)
+        next_status = OrderStatus(_derive_order_allocation_status(record["lines"]))
+        record["status"] = next_status.value
+        store.save_lot(allocation["lotId"], lot)
+        store.save_order(order_id, record)
+        store.save_allocations(order_id, allocations)
+        event = _emit_allocation_event(
+            "allocation.adjusted",
+            allocation_id,
+            {
+                "allocationId": allocation_id,
+                "orderId": order_id,
+                "orderLineId": allocation["orderLineId"],
+                "lotId": allocation["lotId"],
+                "oldQty": old_qty,
+                "newQty": payload.newAllocatedQty,
+                "reason": payload.reason,
+                "approvalRef": payload.approvalRef,
+            },
             context,
         )
+        response = AllocationMutationResponse(
+            orderId=order_id,
+            orderStatus=next_status,
+            allocation=AllocationItemResponse(**allocation),
+        )
         _audit_order_decision(
-            "order.allocate",
+            "allocation.adjust",
             order_id,
             "allowed",
             context,
             before_snapshot=before_snapshot,
             after_snapshot=record,
             event=event,
-            metadata={"allocationCount": len(new_allocations)},
+            metadata={"allocationId": allocation_id},
         )
         record_idempotency(
             key,
-            result.model_dump(),
-            operation_name="order.allocate",
-            request_hash=build_request_hash(payload, extra={"action": "order.allocate", "orderId": order_id}),
+            response.model_dump(),
+            operation_name="allocation.adjust",
+            request_hash=build_request_hash(payload, extra={"action": "allocation.adjust", "orderId": order_id, "allocationId": allocation_id}),
         )
-    return result
+        return response
+
+
+def release_allocation(
+    order_id: str,
+    allocation_id: str,
+    payload: ReleaseAllocationRequest,
+) -> AllocationMutationResponse:
+    context = meta_context(payload.meta)
+    record = _get_order_record_or_404(order_id, action_name="allocation.release", context=context)
+    before_snapshot = copy.deepcopy(record)
+
+    key = context["idempotency_key"]
+    if cached := check_idempotency(key):
+        return AllocationMutationResponse(**cached)
+
+    allocation = _get_allocation_for_order_or_404(order_id, allocation_id)
+    if allocation["status"] != AllocationStatus.active.value:
+        _raise_order_denied(
+            action_name="allocation.release",
+            order_id=order_id,
+            context=context,
+            detail=f"Allocation {allocation_id} is not releasable from status {allocation['status']}.",
+            reason_code="allocation_not_releasable",
+            before_snapshot=before_snapshot,
+        )
+
+    release_qty = _float_value(allocation.get("allocatedQty"))
+
+    if postgres_sync.is_enabled():
+        with postgres_transaction():
+            try:
+                released_allocation, next_status = postgres_sync.release_allocation_atomic(order_id, allocation_id)
+            except ValueError as exc:
+                _raise_order_denied(
+                    action_name="allocation.release",
+                    order_id=order_id,
+                    context=context,
+                    detail=str(exc),
+                    reason_code="allocation_release_rejected",
+                    before_snapshot=before_snapshot,
+                )
+            else:
+                order_status = OrderStatus(next_status)
+
+                record = _get_order_record_or_404(order_id)
+                event = _emit_allocation_event(
+                    "allocation.released",
+                    allocation_id,
+                    {
+                        "allocationId": allocation_id,
+                        "orderId": order_id,
+                        "orderLineId": released_allocation["orderLineId"],
+                        "lotId": released_allocation["lotId"],
+                        "releasedQty": release_qty,
+                        "reason": payload.reason,
+                        "approvalRef": payload.approvalRef,
+                    },
+                    context,
+                )
+                response = AllocationMutationResponse(
+                    orderId=order_id,
+                    orderStatus=order_status,
+                    allocation=AllocationItemResponse(**released_allocation),
+                )
+                _audit_order_decision(
+                    "allocation.release",
+                    order_id,
+                    "allowed",
+                    context,
+                    before_snapshot=before_snapshot,
+                    after_snapshot=record,
+                    event=event,
+                    metadata={"allocationId": allocation_id},
+                )
+                record_idempotency(
+                    key,
+                    response.model_dump(),
+                    operation_name="allocation.release",
+                    request_hash=build_request_hash(payload, extra={"action": "allocation.release", "orderId": order_id, "allocationId": allocation_id}),
+                )
+                return response
+
+    with _MEMORY_ALLOCATION_LOCK:
+        record = _get_order_record_or_404(order_id, action_name="allocation.release", context=context)
+        allocations = _get_allocations_for_order(order_id)
+        allocation = _get_allocation_for_order_or_404(order_id, allocation_id)
+        line_map = {ln["orderLineId"]: ln for ln in record["lines"]}
+        line = line_map[allocation["orderLineId"]]
+        lot = _get_lot_record_or_404(allocation["lotId"])
+        source_preorder_id = line.get("sourcePreorderId")
+
+        if source_preorder_id:
+            _decrement_preorder_allocated_qty(source_preorder_id, release_qty)
+        line["allocatedQty"] = max(0.0, _float_value(line.get("allocatedQty")) - release_qty)
+        lot["availableQty"] += release_qty
+        lot["reservedQty"] = max(0.0, _float_value(lot.get("reservedQty")) - release_qty)
+        allocation["status"] = AllocationStatus.released.value
+        next_status = OrderStatus(_derive_order_allocation_status(record["lines"]))
+        record["status"] = next_status.value
+        store.save_lot(allocation["lotId"], lot)
+        store.save_order(order_id, record)
+        store.save_allocations(order_id, allocations)
+        _record_inventory_movement(
+            lot_id=allocation["lotId"],
+            movement_type="release_reservation",
+            qty=release_qty,
+            order_id=order_id,
+            order_line_id=allocation["orderLineId"],
+            reason="allocation_released",
+        )
+        event = _emit_allocation_event(
+            "allocation.released",
+            allocation_id,
+            {
+                "allocationId": allocation_id,
+                "orderId": order_id,
+                "orderLineId": allocation["orderLineId"],
+                "lotId": allocation["lotId"],
+                "releasedQty": release_qty,
+                "reason": payload.reason,
+                "approvalRef": payload.approvalRef,
+            },
+            context,
+        )
+        response = AllocationMutationResponse(
+            orderId=order_id,
+            orderStatus=next_status,
+            allocation=AllocationItemResponse(**allocation),
+        )
+        _audit_order_decision(
+            "allocation.release",
+            order_id,
+            "allowed",
+            context,
+            before_snapshot=before_snapshot,
+            after_snapshot=record,
+            event=event,
+            metadata={"allocationId": allocation_id},
+        )
+        record_idempotency(
+            key,
+            response.model_dump(),
+            operation_name="allocation.release",
+            request_hash=build_request_hash(payload, extra={"action": "allocation.release", "orderId": order_id, "allocationId": allocation_id}),
+        )
+        return response
 
 
 def pack_order(order_id: str, payload: PackOrderRequest) -> OrderResponse:
@@ -919,6 +1520,19 @@ def cancel_order(order_id: str, payload: CancelOrderRequest | None) -> OrderResp
                 source_preorder_id = preorder_by_line_id.get(alloc.get("orderLineId"))
                 if source_preorder_id:
                     _decrement_preorder_allocated_qty(source_preorder_id, alloc.get("allocatedQty", 0.0))
+                _emit_allocation_event(
+                    "allocation.released",
+                    alloc["allocationId"],
+                    {
+                        "allocationId": alloc["allocationId"],
+                        "orderId": order_id,
+                        "orderLineId": alloc["orderLineId"],
+                        "lotId": alloc["lotId"],
+                        "releasedQty": alloc.get("allocatedQty", 0.0),
+                        "reason": payload.reason if payload else None,
+                    },
+                    context,
+                )
             event = _emit_order_event(
                 "order.cancelled",
                 order_id,
@@ -941,41 +1555,70 @@ def cancel_order(order_id: str, payload: CancelOrderRequest | None) -> OrderResp
                 request_hash=build_request_hash(payload or {}, extra={"action": "order.cancel", "orderId": order_id}),
             )
     else:
-        for alloc in allocations:
-            lot = _get_lot_record_or_404(alloc["lotId"])
-            if lot:
+        with _MEMORY_ALLOCATION_LOCK:
+            record = _get_order_record_or_404(order_id, action_name="order.cancel", context=context)
+            allocations = _get_allocations_for_order(order_id)
+            preorder_by_line_id = {
+                line["orderLineId"]: line.get("sourcePreorderId") for line in record.get("lines", [])
+            }
+            lots_by_id = {alloc["lotId"]: _get_lot_record_or_404(alloc["lotId"]) for alloc in allocations}
+
+            for alloc in allocations:
+                lot = lots_by_id[alloc["lotId"]]
                 lot["availableQty"] += alloc.get("allocatedQty", 0.0)
                 lot["reservedQty"] = max(0.0, lot.get("reservedQty", 0.0) - alloc.get("allocatedQty", 0.0))
-                postgres_sync.upsert_lot(lot)
-            source_preorder_id = preorder_by_line_id.get(alloc.get("orderLineId"))
-            if source_preorder_id:
-                _decrement_preorder_allocated_qty(source_preorder_id, alloc.get("allocatedQty", 0.0))
+                store.save_lot(alloc["lotId"], lot)
+                _record_inventory_movement(
+                    lot_id=alloc["lotId"],
+                    movement_type="release_reservation",
+                    qty=float(alloc.get("allocatedQty", 0.0)),
+                    order_id=order_id,
+                    order_line_id=alloc["orderLineId"],
+                    reason="allocation_cancelled",
+                )
+                source_preorder_id = preorder_by_line_id.get(alloc.get("orderLineId"))
+                if source_preorder_id:
+                    _decrement_preorder_allocated_qty(source_preorder_id, alloc.get("allocatedQty", 0.0))
 
-        record["status"] = next_status
-        postgres_sync.upsert_order(record)
-        for alloc in allocations:
-            alloc["status"] = AllocationStatus.cancelled.value
-        postgres_sync.replace_allocations_for_order(order_id, allocations)
-        store.save_allocations(order_id, allocations)
-        event = _emit_order_event(
-            "order.cancelled",
-            order_id,
-            {"orderId": order_id, "reason": payload.reason if payload else None},
-            context,
-        )
-        _audit_order_decision(
-            "order.cancel",
-            order_id,
-            "allowed",
-            context,
-            before_snapshot=before_snapshot,
-            after_snapshot=record,
-            event=event,
-        )
-        record_idempotency(
-            key,
-            result.model_dump(),
-            operation_name="order.cancel",
-            request_hash=build_request_hash(payload or {}, extra={"action": "order.cancel", "orderId": order_id}),
-        )
+            record["status"] = next_status
+            postgres_sync.upsert_order(record)
+            for alloc in allocations:
+                alloc["status"] = AllocationStatus.cancelled.value
+            postgres_sync.replace_allocations_for_order(order_id, allocations)
+            store.save_allocations(order_id, allocations)
+            for alloc in allocations:
+                _emit_allocation_event(
+                    "allocation.released",
+                    alloc["allocationId"],
+                    {
+                        "allocationId": alloc["allocationId"],
+                        "orderId": order_id,
+                        "orderLineId": alloc["orderLineId"],
+                        "lotId": alloc["lotId"],
+                        "releasedQty": alloc.get("allocatedQty", 0.0),
+                        "reason": payload.reason if payload else None,
+                    },
+                    context,
+                )
+            event = _emit_order_event(
+                "order.cancelled",
+                order_id,
+                {"orderId": order_id, "reason": payload.reason if payload else None},
+                context,
+            )
+            _audit_order_decision(
+                "order.cancel",
+                order_id,
+                "allowed",
+                context,
+                before_snapshot=before_snapshot,
+                after_snapshot=record,
+                event=event,
+            )
+            record_idempotency(
+                key,
+                result.model_dump(),
+                operation_name="order.cancel",
+                request_hash=build_request_hash(payload or {}, extra={"action": "order.cancel", "orderId": order_id}),
+            )
     return result

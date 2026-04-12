@@ -40,6 +40,7 @@ def _preorder_record_from_row(row: Any) -> dict[str, Any]:
         "notes": row["notes"],
         "status": row["status"],
         "startDate": row["start_date"].isoformat() if row["start_date"] else None,
+        "version": int(row["version"]) if row["version"] is not None else 1,
     }
 
 
@@ -106,6 +107,7 @@ def upsert_preorder(record: dict[str, Any]) -> None:
                     deposit_amount = EXCLUDED.deposit_amount,
                     notes = EXCLUDED.notes,
                     status = EXCLUDED.status,
+                    version = preorders.version + 1,
                     updated_at = now()
                 """
             ),
@@ -154,7 +156,8 @@ def fetch_preorder(preorder_id: str) -> dict[str, Any] | None:
                     deposit_amount,
                     notes,
                     status,
-                    start_date
+                    start_date,
+                    version
                 FROM preorders
                 WHERE preorder_id = :preorder_id
                 """
@@ -239,6 +242,7 @@ def increment_allocated_qty_atomic(preorder_id: str, qty_increment: float) -> di
                 SET
                     allocated_qty = allocated_qty + :qty_increment,
                     remaining_qty = GREATEST(0, committed_qty - (allocated_qty + :qty_increment) - delivered_qty - cancelled_qty),
+                    version = version + 1,
                     updated_at = now()
                 WHERE preorder_id = :preorder_id
                 RETURNING
@@ -256,7 +260,8 @@ def increment_allocated_qty_atomic(preorder_id: str, qty_increment: float) -> di
                     deposit_amount,
                     notes,
                     status,
-                    start_date
+                    start_date,
+                    version
                 """
             ),
             {
@@ -286,6 +291,7 @@ def decrement_allocated_qty_atomic(preorder_id: str, qty_decrement: float) -> di
                 SET
                     allocated_qty = GREATEST(0, allocated_qty - :qty_decrement),
                     remaining_qty = GREATEST(0, committed_qty - GREATEST(0, allocated_qty - :qty_decrement) - delivered_qty - cancelled_qty),
+                    version = version + 1,
                     updated_at = now()
                 WHERE preorder_id = :preorder_id
                 RETURNING
@@ -303,7 +309,8 @@ def decrement_allocated_qty_atomic(preorder_id: str, qty_decrement: float) -> di
                     deposit_amount,
                     notes,
                     status,
-                    start_date
+                    start_date,
+                    version
                 """
             ),
             {
@@ -349,6 +356,7 @@ def increment_delivered_qty_atomic(preorder_id: str, qty_increment: float) -> di
                         WHEN committed_qty <= (delivered_qty + :qty_increment + cancelled_qty) THEN 'completed'
                         ELSE status
                     END,
+                    version = version + 1,
                     updated_at = now()
                 WHERE preorder_id = :preorder_id
                 RETURNING
@@ -366,7 +374,8 @@ def increment_delivered_qty_atomic(preorder_id: str, qty_increment: float) -> di
                     deposit_amount,
                     notes,
                     status,
-                    start_date
+                    start_date,
+                    version
                 """
             ),
             {

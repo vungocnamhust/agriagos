@@ -287,6 +287,7 @@ Từ nhu cầu giao cụ thể, hệ phải:
 - chỉ allocate từ lot `released`
 - không allocate vượt available quantity
 - không consume delivered quantity của preorder cho đến khi order thật sự delivered
+- adjust/release allocation là public commands của phase 1; không sửa tay allocation record trực tiếp
 - policy chọn lot phải rõ: FIFO / FEFO / theo chất lượng / theo vùng
 - allocation override hoặc cancel sau `packed` không được coi là action thường; phải đi qua approval policy
 - AI chỉ được suggest allocation hoặc cancel path, không được tự approve
@@ -309,6 +310,13 @@ Từ nhu cầu giao cụ thể, hệ phải:
 ### Ghi chú
 Đây là chỗ dễ để AI “thấy hợp lý rồi tự làm bừa”.  
 Trong phase đầu, AI chỉ được **gợi ý allocation**, không được chốt thay core.
+
+Public allocation commands trong phase 1:
+- `POST /api/v1/orders/{order_id}/allocate`
+- `POST /api/v1/orders/{order_id}/allocations/{allocation_id}/adjust`
+- `POST /api/v1/orders/{order_id}/allocations/{allocation_id}/release`
+
+`adjust` có thể đưa order về `partially_allocated` nếu line chưa đủ reserve; `release` có thể đưa order về `confirmed` nếu không còn active allocation nào.
 
 Nếu workflow cần hủy sau `packed`, phải phát sinh `OrderCancelRequested` trước khi đi tới `OrderCancelled`.
 

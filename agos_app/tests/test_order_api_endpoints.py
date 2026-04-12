@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.store import memory
+from app.models.enums import LotStatus
 
 
 client = TestClient(app)
@@ -55,6 +56,19 @@ def _create_preorder(customer_id: str) -> str:
     )
     assert activated.status_code == 200
     return preorder_id
+
+
+def _seed_released_lot(*, lot_id: str, available_qty: float) -> None:
+    memory.save_lot(
+        lot_id,
+        {
+            "lotId": lot_id,
+            "status": LotStatus.released.value,
+            "availableQty": available_qty,
+            "reservedQty": 0.0,
+            "releasedQty": available_qty,
+        },
+    )
 
 
 def test_order_routes_create_get_and_confirm_preserve_line_level_linkage() -> None:
@@ -140,3 +154,76 @@ def test_order_create_route_rejects_missing_source_preorder() -> None:
     body = response.json()
     assert body["code"] == "NOT_FOUND"
     assert body["message"] == "Preorder missing-preorder-id not found."
+
+
+def test_order_allocation_adjust_and_release_routes() -> None:
+    customer_id = _create_customer()
+    preorder_id = _create_preorder(customer_id)
+    _seed_released_lot(lot_id="lot-api-1", available_qty=10)
+
+    created = client.post(
+        "/api/v1/orders",
+        json={
+            "customerId": customer_id,
+            "channel": "direct",
+            "lines": [
+                {
+                    "productSkuId": "sku-1",
+                    "orderedQty": 4,
+                    "unit": "kg",
+                    "sourcePreorderId": preorder_id,
+                }
+            ],
+            "meta": {
+                "correlationId": "corr-api-adjust-order-create",
+                "idempotencyKey": "idem-api-adjust-order-create",
+            },
+        },
+    )
+    assert created.status_code == 201
+    order_id = created.json()["data"]["orderId"]
+    order_line_id = created.json()["data"]["lines"][0]["orderLineId"]
+
+    confirmed = client.post(
+        f"/api/v1/orders/{order_id}/confirm",
+        json={"meta": {"correlationId": "corr-api-adjust-order-confirm", "idempotencyKey": "idem-api-adjust-order-confirm"}},
+    )
+    assert confirmed.status_code == 200
+
+    allocated = client.post(
+        f"/api/v1/orders/{order_id}/allocate",
+        json={
+            "allocations": [
+                {"orderLineId": order_line_id, "lotId": "lot-api-1", "allocatedQty": 4}
+            ],
+            "meta": {"correlationId": "corr-api-adjust-order-allocate", "idempotencyKey": "idem-api-adjust-order-allocate"},
+        },
+    )
+    assert allocated.status_code == 200
+    allocation_id = allocated.json()["allocations"][0]["allocationId"]
+
+    adjusted = client.post(
+        f"/api/v1/orders/{order_id}/allocations/{allocation_id}/adjust",
+        json={
+            "newAllocatedQty": 2,
+            "reason": "customer_reduced_qty",
+            "meta": {"correlationId": "corr-api-adjust-order-adjust", "idempotencyKey": "idem-api-adjust-order-adjust"},
+        },
+    )
+    assert adjusted.status_code == 200
+    adjusted_body = adjusted.json()
+    assert adjusted_body["orderStatus"] == "partially_allocated"
+    assert adjusted_body["allocation"]["allocatedQty"] == 2
+    assert adjusted_body["allocation"]["status"] == "active"
+
+    released = client.post(
+        f"/api/v1/orders/{order_id}/allocations/{allocation_id}/release",
+        json={
+            "reason": "lot_reassigned",
+            "meta": {"correlationId": "corr-api-adjust-order-release", "idempotencyKey": "idem-api-adjust-order-release"},
+        },
+    )
+    assert released.status_code == 200
+    released_body = released.json()
+    assert released_body["orderStatus"] == "confirmed"
+    assert released_body["allocation"]["status"] == "released"

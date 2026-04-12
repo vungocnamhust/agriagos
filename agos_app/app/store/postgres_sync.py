@@ -19,10 +19,14 @@ from app.store.lots import (
     upsert_lot,
 )
 from app.store.orders import (
+    adjust_allocation_atomic,
     allocate_order_atomic,
+    append_inventory_movement,
     cancel_order_atomic,
+    fetch_allocation_for_order,
     fetch_allocations_for_order,
     fetch_order,
+    release_allocation_atomic,
     replace_allocations_for_order,
     upsert_order,
 )
@@ -58,8 +62,12 @@ __all__ = [
     "unblock_lot_atomic",
     "upsert_order",
     "fetch_order",
+    "fetch_allocation_for_order",
     "fetch_allocations_for_order",
     "replace_allocations_for_order",
+    "append_inventory_movement",
     "allocate_order_atomic",
+    "adjust_allocation_atomic",
+    "release_allocation_atomic",
     "cancel_order_atomic",
 ]

@@ -8,7 +8,7 @@ Scope: applies to `agos_app/app/api/**` and the service layer those routes call.
 - Keep one route module per domain under `app/api/routes/`.
 - Route handlers are thin adapters: parse params/body, call one service function, return a typed DTO.
 - Use explicit `response_model` and status codes on every route.
-- Use lifecycle verbs only for state transitions such as `/confirm`, `/allocate`, `/ship`, and `/deliver`.
+- Use lifecycle verbs only for state transitions such as `/confirm`, `/allocate`, `/allocations/{allocation_id}/adjust`, `/allocations/{allocation_id}/release`, `/ship`, and `/deliver`.
 - Do not import `store`, build events, or enforce business rules inside route handlers.
 
 ## Service-Layer Boundaries
