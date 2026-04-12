@@ -389,3 +389,58 @@ def test_order_failed_delivery_route_preserves_preorder_and_purchase_history() -
     customer = memory.get_customer(customer_id)
     assert customer is not None
     assert customer.get("lastOrderAt") is None
+
+
+def test_order_deliver_route_rejects_transition_before_ship() -> None:
+    customer_id = _create_customer()
+    _seed_released_lot(lot_id="lot-api-before-ship", available_qty=10)
+
+    created = client.post(
+        "/api/v1/orders",
+        json={
+            "customerId": customer_id,
+            "channel": "direct",
+            "lines": [{"productSkuId": "sku-1", "orderedQty": 4, "unit": "kg"}],
+            "meta": {
+                "correlationId": "corr-api-before-ship-create",
+                "idempotencyKey": "idem-api-before-ship-create",
+            },
+        },
+    )
+    assert created.status_code == 201
+    order_id = created.json()["data"]["orderId"]
+    order_line_id = created.json()["data"]["lines"][0]["orderLineId"]
+
+    assert client.post(
+        f"/api/v1/orders/{order_id}/confirm",
+        json={"meta": {"correlationId": "corr-api-before-ship-confirm", "idempotencyKey": "idem-api-before-ship-confirm"}},
+    ).status_code == 200
+
+    assert client.post(
+        f"/api/v1/orders/{order_id}/allocate",
+        json={
+            "allocations": [{"orderLineId": order_line_id, "lotId": "lot-api-before-ship", "allocatedQty": 4}],
+            "meta": {"correlationId": "corr-api-before-ship-allocate", "idempotencyKey": "idem-api-before-ship-allocate"},
+        },
+    ).status_code == 200
+
+    assert client.post(
+        f"/api/v1/orders/{order_id}/pack",
+        json={
+            "packedQtySummary": [{"orderLineId": order_line_id, "packedQty": 4}],
+            "meta": {"correlationId": "corr-api-before-ship-pack", "idempotencyKey": "idem-api-before-ship-pack"},
+        },
+    ).status_code == 200
+
+    response = client.post(
+        f"/api/v1/orders/{order_id}/deliver",
+        json={
+            "deliveredAt": "2026-04-12T11:00:00Z",
+            "proofRef": "proof-api-before-ship",
+            "meta": {"correlationId": "corr-api-before-ship-deliver", "idempotencyKey": "idem-api-before-ship-deliver"},
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "VALIDATION_ERROR"
+    assert response.json()["message"] == "Order transition 'deliver' not allowed from state 'packed'."

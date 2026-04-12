@@ -538,6 +538,152 @@ def test_pack_order_sets_partially_packed_when_actual_qty_is_short(monkeypatch: 
     assert packed_event["payload"]["orderId"] == created.data.orderId
 
 
+def test_pack_order_keeps_partially_allocated_order_in_partially_packed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(orders.postgres_sync, "is_enabled", lambda: False)
+    memory.save_customer("customer-1", {"customerId": "customer-1", "fullName": "Alice"})
+    created = orders.create_order(
+        CreateOrderRequest(
+            customerId="customer-1",
+            channel="direct",
+            lines=[CreateOrderLineRequest(productSkuId="sku-1", orderedQty=4, unit="kg")],
+        )
+    )
+    orders.confirm_order(created.data.orderId, ConfirmOrderRequest())
+    _seed_released_lot(lot_id="lot-pack-partial", available_qty=10)
+    orders.allocate_order(
+        created.data.orderId,
+        AllocateOrderRequest(
+            allocations=[
+                AllocateItem(orderLineId=created.data.lines[0].orderLineId, lotId="lot-pack-partial", allocatedQty=2)
+            ],
+            meta=Meta(correlationId="corr-pack-partial-allocate"),
+        ),
+    )
+
+    response = orders.pack_order(
+        created.data.orderId,
+        PackOrderRequest(
+            packedQtySummary=[PackQtyItem(orderLineId=created.data.lines[0].orderLineId, packedQty=2)],
+            meta=Meta(correlationId="corr-pack-partial-pack"),
+        ),
+    )
+
+    assert response.data.status == "partially_packed"
+    assert response.data.lines[0].packedQty == 2
+
+
+def test_deliver_order_rejects_before_ship_and_writes_transition_audit(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(orders.postgres_sync, "is_enabled", lambda: False)
+    memory.save_customer("customer-1", {"customerId": "customer-1", "fullName": "Alice"})
+    created = orders.create_order(
+        CreateOrderRequest(
+            customerId="customer-1",
+            channel="direct",
+            lines=[CreateOrderLineRequest(productSkuId="sku-1", orderedQty=4, unit="kg")],
+        )
+    )
+    orders.confirm_order(created.data.orderId, ConfirmOrderRequest())
+    _seed_released_lot(lot_id="lot-1", available_qty=10)
+    orders.allocate_order(
+        created.data.orderId,
+        AllocateOrderRequest(
+            allocations=[
+                AllocateItem(orderLineId=created.data.lines[0].orderLineId, lotId="lot-1", allocatedQty=4)
+            ],
+            meta=Meta(correlationId="corr-deliver-before-ship-allocate"),
+        ),
+    )
+    orders.pack_order(
+        created.data.orderId,
+        PackOrderRequest(
+            packedQtySummary=[PackQtyItem(orderLineId=created.data.lines[0].orderLineId, packedQty=4)],
+            meta=Meta(correlationId="corr-deliver-before-ship-pack"),
+        ),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        orders.deliver_order(
+            created.data.orderId,
+            DeliverOrderRequest(
+                deliveredAt="2026-04-12T11:00:00Z",
+                proofRef="proof-early",
+                meta=Meta(correlationId="corr-deliver-before-ship"),
+            ),
+        )
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail == "Order transition 'deliver' not allowed from state 'packed'."
+    assert memory.list_audit_logs()[-1]["reasonCode"] == "state_transition_rejected"
+    order_record = memory.get_order(created.data.orderId)
+    assert order_record is not None
+    assert order_record["status"] == "packed"
+    assert order_record["lines"][0].get("deliveredQty", 0.0) == 0.0
+
+
+def test_ship_order_does_not_auto_deliver_or_consume_quota(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(orders.postgres_sync, "is_enabled", lambda: False)
+    memory.save_customer(
+        "customer-1",
+        {"customerId": "customer-1", "customerCode": "KH-001", "fullName": "Alice", "phone": "0901"},
+    )
+    _seed_preorder(preorder_id="preorder-ship-only", remaining_qty=6)
+    created = orders.create_order(
+        CreateOrderRequest(
+            customerId="customer-1",
+            channel="direct",
+            lines=[
+                CreateOrderLineRequest(
+                    productSkuId="sku-1",
+                    orderedQty=6,
+                    unit="kg",
+                    sourcePreorderId="preorder-ship-only",
+                )
+            ],
+        )
+    )
+    orders.confirm_order(created.data.orderId, ConfirmOrderRequest())
+    _seed_released_lot(lot_id="lot-ship-only", available_qty=6)
+    orders.allocate_order(
+        created.data.orderId,
+        AllocateOrderRequest(
+            allocations=[
+                AllocateItem(orderLineId=created.data.lines[0].orderLineId, lotId="lot-ship-only", allocatedQty=6)
+            ],
+            meta=Meta(correlationId="corr-ship-only-allocate"),
+        ),
+    )
+    orders.pack_order(
+        created.data.orderId,
+        PackOrderRequest(
+            packedQtySummary=[PackQtyItem(orderLineId=created.data.lines[0].orderLineId, packedQty=6)],
+            meta=Meta(correlationId="corr-ship-only-pack"),
+        ),
+    )
+
+    response = orders.ship_order(
+        created.data.orderId,
+        ShipOrderRequest(
+            carrier="gha",
+            trackingRef="TRK-SHIP-ONLY",
+            shippedAt="2026-04-12T10:00:00Z",
+            meta=Meta(correlationId="corr-ship-only"),
+        ),
+    )
+
+    assert response.data.status == "shipped"
+    assert response.data.deliveredAt is None
+
+    preorder = memory.get_preorder("preorder-ship-only")
+    assert preorder is not None
+    assert preorder["allocatedQty"] == 6
+    assert preorder["deliveredQty"] == 0
+    assert preorder["remainingQty"] == 0
+
+    customer = memory.get_customer("customer-1")
+    assert customer is not None
+    assert customer.get("lastOrderAt") is None
+
+
 def test_deliver_order_consumes_preorder_using_delivered_delta(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(orders.postgres_sync, "is_enabled", lambda: False)
     memory.save_customer(
@@ -675,6 +821,83 @@ def test_deliver_order_allows_partial_then_final_delivery(monkeypatch: pytest.Mo
 
     assert final.data.status == "delivered"
     assert final.data.lines[0].deliveredQty == 10
+
+
+def test_deliver_order_rejects_repeated_partial_delivery_from_partially_delivered(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(orders.postgres_sync, "is_enabled", lambda: False)
+    memory.save_customer(
+        "customer-1",
+        {"customerId": "customer-1", "customerCode": "KH-001", "fullName": "Alice", "phone": "0901"},
+    )
+    created = orders.create_order(
+        CreateOrderRequest(
+            customerId="customer-1",
+            channel="direct",
+            lines=[CreateOrderLineRequest(productSkuId="sku-1", orderedQty=10, unit="kg")],
+        )
+    )
+    orders.confirm_order(created.data.orderId, ConfirmOrderRequest())
+    _seed_released_lot(lot_id="lot-deliver-repeat", available_qty=10)
+    orders.allocate_order(
+        created.data.orderId,
+        AllocateOrderRequest(
+            allocations=[
+                AllocateItem(orderLineId=created.data.lines[0].orderLineId, lotId="lot-deliver-repeat", allocatedQty=10)
+            ],
+            meta=Meta(correlationId="corr-deliver-repeat-allocate"),
+        ),
+    )
+    orders.pack_order(
+        created.data.orderId,
+        PackOrderRequest(
+            packedQtySummary=[PackQtyItem(orderLineId=created.data.lines[0].orderLineId, packedQty=10)],
+            meta=Meta(correlationId="corr-deliver-repeat-pack"),
+        ),
+    )
+    orders.ship_order(
+        created.data.orderId,
+        ShipOrderRequest(
+            carrier="gha",
+            trackingRef="TRK-REPEAT-DELIVER",
+            shippedAt="2026-04-12T10:00:00Z",
+            meta=Meta(correlationId="corr-deliver-repeat-ship"),
+        ),
+    )
+    partial = orders.deliver_order(
+        created.data.orderId,
+        DeliverOrderRequest(
+            deliveredQtySummary=[
+                DeliveredQtyItem(orderLineId=created.data.lines[0].orderLineId, deliveredQty=4)
+            ],
+            deliveredAt="2026-04-12T11:00:00Z",
+            meta=Meta(correlationId="corr-deliver-repeat-first"),
+        ),
+    )
+
+    assert partial.data.status == "partially_delivered"
+
+    with pytest.raises(HTTPException) as exc_info:
+        orders.deliver_order(
+            created.data.orderId,
+            DeliverOrderRequest(
+                deliveredQtySummary=[
+                    DeliveredQtyItem(orderLineId=created.data.lines[0].orderLineId, deliveredQty=6)
+                ],
+                deliveredAt="2026-04-12T12:00:00Z",
+                meta=Meta(correlationId="corr-deliver-repeat-second"),
+            ),
+        )
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail == "Order transition 'deliver' not allowed from state 'partially_delivered'."
+    assert memory.list_audit_logs()[-1]["reasonCode"] == "state_transition_rejected"
+
+    order_record = memory.get_order(created.data.orderId)
+    assert order_record is not None
+    assert order_record["status"] == "partially_delivered"
+    assert order_record["lines"][0]["deliveredQty"] == 4
 
 
 def test_deliver_order_can_mark_delivery_failed_without_consuming_preorder(monkeypatch: pytest.MonkeyPatch) -> None:

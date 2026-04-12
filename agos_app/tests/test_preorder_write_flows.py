@@ -285,3 +285,39 @@ def test_cancel_preorder_consumes_outstanding_quota_and_emits_event(monkeypatch:
     assert response.data.cancelledQty == 8.0
     assert response.data.remainingQty == 0.0
     assert memory.list_events()[-1]["eventName"] == "preorder.cancelled"
+
+
+def test_completed_preorder_rejects_activate_and_writes_transition_audit(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(preorders.postgres_sync, "is_enabled", lambda: False)
+    preorder_id = "preorder-completed"
+    memory.save_preorder(
+        preorder_id,
+        {
+            "preorderId": preorder_id,
+            "tenantId": "default",
+            "preorderCode": "DT-005",
+            "customerId": "customer-1",
+            "productSkuId": "sku-1",
+            "committedQty": 10.0,
+            "allocatedQty": 0.0,
+            "deliveredQty": 10.0,
+            "cancelledQty": 0.0,
+            "remainingQty": 0.0,
+            "deliveryCadence": None,
+            "depositAmount": None,
+            "notes": None,
+            "status": PreorderStatus.completed.value,
+            "startDate": None,
+            "adjustmentHistory": [],
+        },
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        preorders.activate_preorder(
+            preorder_id,
+            ActivatePreorderRequest(meta=Meta(correlationId="corr-preorder-completed-activate")),
+        )
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail == "Preorder transition 'activate' not allowed from state 'completed'."
+    assert memory.list_audit_logs()[-1]["reasonCode"] == "state_transition_rejected"

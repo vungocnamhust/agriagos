@@ -243,3 +243,35 @@ def test_harvested_lot_route_rejects_processing_batch_source() -> None:
 
     assert response.status_code == 422
     assert response.json()["message"] == "Request validation failed"
+
+
+def test_lot_release_route_rejects_blocked_transition() -> None:
+    memory.save_lot(
+        "lot-api-blocked",
+        {
+            "lotId": "lot-api-blocked",
+            "tenantId": "default",
+            "lotCode": "LOT-API-BLOCKED-001",
+            "productSkuId": "sku-1",
+            "sourceType": "crop_cycle",
+            "sourceRefId": "cycle-api-blocked",
+            "harvestOrProductionDate": "2026-04-11",
+            "actualQty": 10.0,
+            "availableQty": 0.0,
+            "reservedQty": 0.0,
+            "releasedQty": 0.0,
+            "status": "blocked",
+        },
+    )
+
+    response = client.post(
+        "/api/v1/lots/lot-api-blocked/release",
+        json={
+            "releasedQty": 5,
+            "meta": {"correlationId": "corr-lot-api-blocked-release", "idempotencyKey": "idem-lot-api-blocked-release"},
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "VALIDATION_ERROR"
+    assert response.json()["message"] == "Lot transition 'release' not allowed from state 'blocked'."

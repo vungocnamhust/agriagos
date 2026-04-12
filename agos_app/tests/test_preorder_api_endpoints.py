@@ -3,6 +3,8 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.models.enums import PreorderStatus
+from app.store import memory
 
 
 client = TestClient(app)
@@ -83,3 +85,36 @@ def test_preorder_routes_support_draft_lifecycle_adjust_and_cancel() -> None:
     assert cancelled.json()["data"]["status"] == "cancelled"
     assert cancelled.json()["data"]["cancelledQty"] == 10.0
     assert cancelled.json()["data"]["remainingQty"] == 0.0
+
+
+def test_preorder_activate_route_rejects_completed_transition() -> None:
+    memory.save_preorder(
+        "preorder-api-completed",
+        {
+            "preorderId": "preorder-api-completed",
+            "tenantId": "default",
+            "preorderCode": "DT-API-001",
+            "customerId": "customer-1",
+            "productSkuId": "sku-1",
+            "committedQty": 5.0,
+            "allocatedQty": 0.0,
+            "deliveredQty": 5.0,
+            "cancelledQty": 0.0,
+            "remainingQty": 0.0,
+            "deliveryCadence": None,
+            "depositAmount": None,
+            "notes": None,
+            "status": PreorderStatus.completed.value,
+            "startDate": None,
+            "adjustmentHistory": [],
+        },
+    )
+
+    response = client.post(
+        "/api/v1/preorders/preorder-api-completed/activate",
+        json={"meta": {"correlationId": "corr-preorder-api-completed", "idempotencyKey": "idem-preorder-api-completed"}},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "VALIDATION_ERROR"
+    assert response.json()["message"] == "Preorder transition 'activate' not allowed from state 'completed'."

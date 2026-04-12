@@ -79,6 +79,8 @@ stateDiagram-v2
 > **Điểm khác so với diagram cũ:**
 > - `draft` có thể cancel trực tiếp → `cancelled` (đã có trong code)
 > - `confirmed` có thể cancel trực tiếp → `cancelled` (không qua `cancel_requested`)
+> - `confirmed -> allocate` và `allocated -> pack` có thể ra full hoặc partial outcome tùy line-level facts, nhưng `partially_allocated -> pack` chỉ đi vào `partially_packed`
+> - `deliver` là explicit action sau `ship`; `shipped` không auto thành `delivered`
 > - `RejectCancel` transition (cancel_requested → confirmed/allocated/packed) **chưa implement** [Phase 2 🔜]
 
 ```mermaid
@@ -88,11 +90,19 @@ stateDiagram-v2
     draft --> confirmed: ConfirmOrder
     draft --> cancelled: CancelOrder
 
-    confirmed --> allocated: AllocateOrderLine
+    confirmed --> allocated: AllocateOrderLine(full)
+    confirmed --> partially_allocated: AllocateOrderLine(partial)
     confirmed --> cancelled: CancelOrder
 
-    allocated --> packed: PackOrder
+    partially_allocated --> allocated: AllocateOrderLine
+    partially_allocated --> partially_packed: PackOrder
+    partially_allocated --> cancel_requested: RequestCancelOrder
+
+    allocated --> packed: PackOrder(full)
+    allocated --> partially_packed: PackOrder(partial)
     allocated --> cancel_requested: RequestCancelOrder
+
+    partially_packed --> packed: PackOrder
 
     packed --> shipped: ShipOrder
     packed --> cancel_requested: RequestCancelOrder
@@ -100,9 +110,15 @@ stateDiagram-v2
     cancel_requested --> cancelled: CancelOrder
     %% RejectCancel (cancel_requested → confirmed/allocated/packed) is Phase 2 🔜
 
-    shipped --> delivered: DeliverOrder
+    shipped --> delivered: DeliverOrder(full)
+    shipped --> partially_delivered: DeliverOrder(partial)
+    shipped --> failed: FailDelivery
+
+    partially_delivered --> delivered: DeliverOrder
+    partially_delivered --> failed: FailDelivery
 
     delivered --> [*]
+    failed --> [*]
     cancelled --> [*]
 ```
 
@@ -112,15 +128,19 @@ stateDiagram-v2
 
 > Source: `gateway.py::PREORDER_TRANSITIONS`
 >
-> **Phase 1:** Preorder được tạo trực tiếp ở trạng thái `active`. `adjust` giữ nguyên state.
+> **Phase 1:** Preorder được tạo ở `draft`, sau đó đi qua `confirm` và `activate`. `adjust` giữ nguyên state ở `confirmed` hoặc `active`.
 > **Phase 1.5 (planned):** Full lifecycle `draft → confirmed → active → completed`.
 
 ### 5.4a Phase 1 — Implemented `[Phase 1 ✅]`
 
 ```mermaid
 stateDiagram-v2
-    [*] --> active: CreatePreorder
-
+    [*] --> draft: CreatePreorder
+    draft --> confirmed: ConfirmPreorder
+    draft --> cancelled: CancelPreorder
+    confirmed --> active: ActivatePreorder
+    confirmed --> confirmed: AdjustPreorder
+    confirmed --> cancelled: CancelPreorder
     active --> active: AdjustPreorder (committed_qty thay đổi)
     active --> cancelled: CancelPreorder
 

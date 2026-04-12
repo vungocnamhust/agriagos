@@ -1489,8 +1489,117 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/audit:
+    get:
+      tags:
+      - Audit
+      summary: List Audit Logs
+      operationId: list_audit_logs_api_v1_audit_get
+      parameters:
+      - name: targetType
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Targettype
+      - name: targetId
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Targetid
+      - name: actionName
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Actionname
+      - name: decision
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            pattern: ^(allowed|denied|escalated|failed)$
+          - type: 'null'
+          title: Decision
+      - name: reasonCode
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reasoncode
+      - name: correlationId
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Correlationid
+      - name: actorId
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Actorid
+      - name: actorRole
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Actorrole
+      - name: from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: From
+      - name: to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: To
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
 components:
   schemas:
+    ActivatePreorderRequest:
+      properties:
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      title: ActivatePreorderRequest
     AddLotEvidenceRequest:
       properties:
         evidenceType:
@@ -1514,6 +1623,29 @@ components:
       required:
       - evidenceType
       title: AddLotEvidenceRequest
+    AdjustAllocationRequest:
+      properties:
+        newAllocatedQty:
+          type: number
+          title: Newallocatedqty
+        reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reason
+        approvalRef:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Approvalref
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - newAllocatedQty
+      title: AdjustAllocationRequest
     AdjustLotQuantityRequest:
       properties:
         newActualQty:
@@ -1548,35 +1680,6 @@ components:
       - newCommittedQty
       - reason
       title: AdjustPreorderRequest
-    ActivatePreorderRequest:
-      properties:
-        meta:
-          anyOf:
-          - $ref: '#/components/schemas/Meta'
-          - type: 'null'
-      type: object
-      title: ActivatePreorderRequest
-    CancelPreorderRequest:
-      properties:
-        reason:
-          type: string
-          title: Reason
-        meta:
-          anyOf:
-          - $ref: '#/components/schemas/Meta'
-          - type: 'null'
-      type: object
-      required:
-      - reason
-      title: CancelPreorderRequest
-    ConfirmPreorderRequest:
-      properties:
-        meta:
-          anyOf:
-          - $ref: '#/components/schemas/Meta'
-          - type: 'null'
-      type: object
-      title: ConfirmPreorderRequest
     AllocateItem:
       properties:
         orderLineId:
@@ -1613,29 +1716,6 @@ components:
       required:
       - allocations
       title: AllocateOrderRequest
-    AdjustAllocationRequest:
-      properties:
-        newAllocatedQty:
-          type: number
-          title: Newallocatedqty
-        reason:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Reason
-        approvalRef:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Approvalref
-        meta:
-          anyOf:
-          - $ref: '#/components/schemas/Meta'
-          - type: 'null'
-      type: object
-      required:
-      - newAllocatedQty
-      title: AdjustAllocationRequest
     AllocationItemResponse:
       properties:
         allocationId:
@@ -1703,24 +1783,91 @@ components:
       - consumed
       - cancelled
       title: AllocationStatus
-    ReleaseAllocationRequest:
+    AuditLogEntry:
       properties:
-        reason:
+        auditId:
+          type: string
+          title: Auditid
+        actorId:
           anyOf:
           - type: string
           - type: 'null'
-          title: Reason
-        approvalRef:
+          title: Actorid
+        actorRole:
           anyOf:
           - type: string
           - type: 'null'
-          title: Approvalref
-        meta:
+          title: Actorrole
+        actionName:
+          type: string
+          title: Actionname
+        targetType:
+          type: string
+          title: Targettype
+        targetId:
+          type: string
+          title: Targetid
+        decision:
+          type: string
+          enum:
+          - allowed
+          - denied
+          - escalated
+          - failed
+          title: Decision
+        reasonCode:
           anyOf:
-          - $ref: '#/components/schemas/Meta'
+          - type: string
           - type: 'null'
+          title: Reasoncode
+        beforeSnapshot:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Beforesnapshot
+        afterSnapshot:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Aftersnapshot
+        metadata:
+          additionalProperties: true
+          type: object
+          title: Metadata
+        correlationId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Correlationid
+        createdAt:
+          type: string
+          title: Createdat
       type: object
-      title: ReleaseAllocationRequest
+      required:
+      - auditId
+      - actionName
+      - targetType
+      - targetId
+      - decision
+      - createdAt
+      title: AuditLogEntry
+    AuditLogListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/AuditLogEntry'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+      type: object
+      required:
+      - items
+      - total
+      title: AuditLogListResponse
     AvailableLotListResponse:
       properties:
         items:
@@ -1773,19 +1920,6 @@ components:
       required:
       - reason
       title: BlockLotRequest
-    UnblockLotRequest:
-      properties:
-        reason:
-          type: string
-          title: Reason
-        meta:
-          anyOf:
-          - $ref: '#/components/schemas/Meta'
-          - type: 'null'
-      type: object
-      required:
-      - reason
-      title: UnblockLotRequest
     CancelOrderRequest:
       properties:
         reason:
@@ -1804,6 +1938,19 @@ components:
           - type: 'null'
       type: object
       title: CancelOrderRequest
+    CancelPreorderRequest:
+      properties:
+        reason:
+          type: string
+          title: Reason
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - reason
+      title: CancelPreorderRequest
     ConfirmOrderRequest:
       properties:
         meta:
@@ -1812,6 +1959,14 @@ components:
           - type: 'null'
       type: object
       title: ConfirmOrderRequest
+    ConfirmPreorderRequest:
+      properties:
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      title: ConfirmPreorderRequest
     CreateCustomerRequest:
       properties:
         fullName:
@@ -1866,8 +2021,7 @@ components:
           title: Productskuid
         sourceType:
           type: string
-          enum:
-          - crop_cycle
+          const: crop_cycle
           title: Sourcetype
         sourceRefId:
           type: string
@@ -1911,52 +2065,6 @@ components:
       - actualQty
       - harvestOrProductionDate
       title: CreateHarvestedLotRequest
-    CreateProcessedLotRequest:
-      properties:
-        productSkuId:
-          type: string
-          title: Productskuid
-        processRefId:
-          type: string
-          title: Processrefid
-        actualQty:
-          type: number
-          title: Actualqty
-        unit:
-          anyOf:
-          - type: string
-            pattern: (?i)^kg$
-          - type: 'null'
-          title: Unit
-        harvestOrProductionDate:
-          type: string
-          title: Harvestorproductiondate
-        qualityNote:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Qualitynote
-        attachments:
-          items:
-            type: string
-          type: array
-          title: Attachments
-          default: []
-        requiresQc:
-          type: boolean
-          title: Requiresqc
-          default: false
-        meta:
-          anyOf:
-          - $ref: '#/components/schemas/Meta'
-          - type: 'null'
-      type: object
-      required:
-      - productSkuId
-      - processRefId
-      - actualQty
-      - harvestOrProductionDate
-      title: CreateProcessedLotRequest
     CreateOrderLineRequest:
       properties:
         productSkuId:
@@ -1973,7 +2081,6 @@ components:
           - type: string
           - type: 'null'
           title: Sourcepreorderid
-          description: When present, links this order line to a specific preorder. Null means the line was created independently of any preorder.
       type: object
       required:
       - productSkuId
@@ -2064,6 +2171,52 @@ components:
       - productSkuId
       - committedQty
       title: CreatePreorderRequest
+    CreateProcessedLotRequest:
+      properties:
+        productSkuId:
+          type: string
+          title: Productskuid
+        processRefId:
+          type: string
+          title: Processrefid
+        actualQty:
+          type: number
+          title: Actualqty
+        unit:
+          anyOf:
+          - type: string
+            pattern: (?i)^kg$
+          - type: 'null'
+          title: Unit
+        harvestOrProductionDate:
+          type: string
+          title: Harvestorproductiondate
+        qualityNote:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Qualitynote
+        attachments:
+          items:
+            type: string
+          type: array
+          title: Attachments
+          default: []
+        requiresQc:
+          type: boolean
+          title: Requiresqc
+          default: false
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - productSkuId
+      - processRefId
+      - actualQty
+      - harvestOrProductionDate
+      title: CreateProcessedLotRequest
     CreateQCReviewRequest:
       properties:
         checklistVersion:
@@ -2354,19 +2507,6 @@ components:
       - phone
       - status
       title: CustomerSummary
-    DeliveredQtyItem:
-      properties:
-        orderLineId:
-          type: string
-          title: Orderlineid
-        deliveredQty:
-          type: number
-          title: Deliveredqty
-      type: object
-      required:
-      - orderLineId
-      - deliveredQty
-      title: DeliveredQtyItem
     DeliverOrderRequest:
       properties:
         deliveredQtySummary:
@@ -2396,24 +2536,19 @@ components:
           - type: 'null'
       type: object
       title: DeliverOrderRequest
-    FailDeliveryRequest:
+    DeliveredQtyItem:
       properties:
-        failureReason:
+        orderLineId:
           type: string
-          title: Failurereason
-        note:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Note
-        meta:
-          anyOf:
-          - $ref: '#/components/schemas/Meta'
-          - type: 'null'
+          title: Orderlineid
+        deliveredQty:
+          type: number
+          title: Deliveredqty
       type: object
       required:
-      - failureReason
-      title: FailDeliveryRequest
+      - orderLineId
+      - deliveredQty
+      title: DeliveredQtyItem
     DomainEvent:
       properties:
         eventId:
@@ -2534,6 +2669,24 @@ components:
       - system_job
       - agent
       title: EventSource
+    FailDeliveryRequest:
+      properties:
+        failureReason:
+          type: string
+          title: Failurereason
+        note:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Note
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - failureReason
+      title: FailDeliveryRequest
     FarmSummaryBoardItem:
       properties:
         plotId:
@@ -2709,12 +2862,15 @@ components:
           title: Reservedqty
         unit:
           type: string
-          enum:
-          - kg
+          const: kg
           title: Unit
           default: kg
         status:
           $ref: '#/components/schemas/LotStatus'
+        version:
+          type: integer
+          title: Version
+          default: 1
       type: object
       required:
       - lotId
@@ -2917,8 +3073,11 @@ components:
         sourcePreorderFlag:
           type: boolean
           title: Sourcepreorderflag
-          description: Derived summary flag indicating whether any order line carries a sourcePreorderId. This does not replace line-level linkage as the canonical source of truth.
           default: false
+        version:
+          type: integer
+          title: Version
+          default: 1
         lines:
           items:
             $ref: '#/components/schemas/OrderLine'
@@ -2968,7 +3127,6 @@ components:
           - type: string
           - type: 'null'
           title: Sourcepreorderid
-          description: When present, links this order line to a specific preorder. Null means the line was created independently of any preorder.
       type: object
       required:
       - orderLineId
@@ -3224,6 +3382,10 @@ components:
           - type: string
           - type: 'null'
           title: Startdate
+        version:
+          type: integer
+          title: Version
+          default: 1
         adjustmentHistory:
           items:
             $ref: '#/components/schemas/PreorderAdjustmentEntry'
@@ -3312,6 +3474,24 @@ components:
       required:
       - data
       title: QCReviewResponse
+    ReleaseAllocationRequest:
+      properties:
+        reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reason
+        approvalRef:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Approvalref
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      title: ReleaseAllocationRequest
     ReleaseLotRequest:
       properties:
         releasedQty:
@@ -3322,7 +3502,6 @@ components:
           - type: string
           - type: 'null'
           title: Approvalref
-          description: Required for sensitive harvested-lane releases initiated by Farm Manager or Ops roles.
         qualityStatus:
           anyOf:
           - type: string
@@ -3394,6 +3573,19 @@ components:
       required:
       - carrier
       title: ShipOrderRequest
+    UnblockLotRequest:
+      properties:
+        reason:
+          type: string
+          title: Reason
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - reason
+      title: UnblockLotRequest
     UpdateCustomerRequest:
       properties:
         fullName:

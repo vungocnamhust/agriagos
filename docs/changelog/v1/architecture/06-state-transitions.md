@@ -92,10 +92,12 @@ Phase đầu không cần làm customer state quá phức tạp.
 
 ### Guard quan trọng
 - không đi từ `completed` về `active`
+- `completed` là terminal state trong Phase 1 gateway-enforced subset
 - nếu quantity thay đổi sau `confirmed`, phải có event log
 - chỉ `delivered` mới được consume quota thật
 - `remaining_qty` là quota còn có thể allocate, không phải điều kiện duy nhất để `completed`
 - `completed` chỉ đúng khi nghĩa vụ giao còn lại theo `committed_qty - delivered_qty - cancelled_qty` về 0
+- trong runtime Phase 1 hiện tại, `completed` phát sinh từ flow giao hàng/quota consumption chứ không có command gateway action riêng để chuyển vào state này
 
 ### Gateway-enforced subset hiện tại
 Trong implementation hiện tại của `app/core/gateway.py`, preorder đang enforce các transition sau:
@@ -143,21 +145,30 @@ Trong implementation hiện tại của `app/core/gateway.py`, preorder đang en
 - draft → confirmed
 - confirmed → allocated
 - confirmed → partially_allocated
+- partially_allocated → allocated
 - allocated → packed
+- allocated → partially_packed
 - partially_allocated → partially_packed
+- partially_packed → packed
 - packed → shipped
 - shipped → delivered
 - shipped → partially_delivered
-- confirmed → cancel_requested
+- partially_delivered → delivered
 - allocated → cancel_requested
+- partially_allocated → cancel_requested
 - packed → cancel_requested
 - cancel_requested → cancelled
 - shipped → failed
+- partially_delivered → failed
 
 ### Guard quan trọng
 - chỉ allocate nếu lot `released`
 - chỉ pack nếu order có allocation hợp lệ
-- chỉ ship nếu order đã packed ở mức chấp nhận được
+- `partially_allocated` không được nhảy thẳng sang `packed`; lane hiện tại phải đi qua `partially_packed`
+- chỉ ship nếu order đã ở `packed`
+- `shipped` không tự chuyển thành `delivered`; phải đi qua explicit action `deliver`
+- chỉ cho phép `deliver` sau `shipped` hoặc `partially_delivered`
+- chỉ cho phép `fail_delivery` sau `shipped` hoặc `partially_delivered`
 - chỉ `delivered` mới tăng lịch sử mua thật
 - cancel sau packed thường phải approval
 
@@ -180,6 +191,8 @@ Trong implementation hiện tại của `app/core/gateway.py`, preorder đang en
 - `shipped -> failed` qua action `fail_delivery`
 - `partially_delivered -> delivered`
 - `partially_delivered -> failed` qua action `fail_delivery`
+
+Delivery lane trong Phase 1 là một phần của `order fulfillment`, không phải aggregate `delivery` riêng. Side effects liên quan preorder quota và customer purchase history chỉ chạy trong command `deliver`, không chạy ở `ship` hay `fail_delivery`.
 
 State `failed` hiện đã nằm trong gateway-enforced subset của phase đầu cho lane giao hàng thất bại sau khi đã ship.
 

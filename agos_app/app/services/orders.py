@@ -11,6 +11,7 @@ from app.core import events
 from app.core.codegen import generate_order_code
 from app.core.gateway import (
     assert_order_transition,
+    assert_order_transition_outcome,
     check_idempotency,
     record_idempotency,
 )
@@ -35,6 +36,7 @@ from app.models.orders import (
     RequestCancelOrderRequest,
     ShipOrderRequest,
 )
+from app.services import audit as audit_service
 from app.store import postgres_sync
 from app.store import memory as store
 from app.store._db import transaction as postgres_transaction
@@ -212,11 +214,12 @@ def _derive_order_pack_status(lines: list[dict[str, Any]]) -> str:
     has_any_packed_qty = False
     is_fully_packed = True
     for line in lines:
+        ordered_qty = _float_value(line.get("orderedQty"))
         allocated_qty = _float_value(line.get("allocatedQty"))
         packed_qty = _float_value(line.get("packedQty"))
         if packed_qty > 0:
             has_any_packed_qty = True
-        if allocated_qty > packed_qty:
+        if allocated_qty > packed_qty or allocated_qty < ordered_qty:
             is_fully_packed = False
 
     if has_any_packed_qty and is_fully_packed:
@@ -295,7 +298,7 @@ def _audit_order_decision(
     event: dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> None:
-    append_audit_decision(
+    audit_service.append_domain_audit_decision(
         action_name=action_name,
         target_type="Order",
         target_id=order_id,
@@ -829,6 +832,8 @@ def allocate_order(order_id: str, payload: AllocateOrderRequest) -> AllocationRe
         with _MEMORY_ALLOCATION_LOCK:
             record = _get_order_record_or_404(order_id, action_name="order.allocate", context=context)
             line_map = {ln["orderLineId"]: ln for ln in record["lines"]}
+            preview_lines = copy.deepcopy(record["lines"])
+            preview_line_map = {ln["orderLineId"]: ln for ln in preview_lines}
             lots_by_id, _ = _validate_allocation_request(
                 order_id=order_id,
                 allocations=payload.allocations,
@@ -839,6 +844,24 @@ def allocate_order(order_id: str, payload: AllocateOrderRequest) -> AllocationRe
             existing_allocations = _get_allocations_for_order(order_id)
             all_allocations = list(existing_allocations)
             new_allocations: list[dict[str, Any]] = []
+
+            for item in payload.allocations:
+                preview_line_map[item.orderLineId]["allocatedQty"] += item.allocatedQty
+
+            next_status = _derive_order_allocation_status(preview_lines)
+            try:
+                assert_order_transition_outcome(record, "allocate", next_status)
+            except HTTPException as exc:
+                _audit_order_decision(
+                    "order.allocate",
+                    order_id,
+                    "denied",
+                    context,
+                    before_snapshot=before_snapshot,
+                    reason_code="state_transition_rejected",
+                    metadata={"message": str(exc.detail)},
+                )
+                raise
 
             for item in payload.allocations:
                 lot = lots_by_id[item.lotId]
@@ -869,7 +892,6 @@ def allocate_order(order_id: str, payload: AllocateOrderRequest) -> AllocationRe
                     reason="allocation_reserved",
                 )
 
-            next_status = _derive_order_allocation_status(record["lines"])
             result = AllocationResponse(
                 orderId=order_id,
                 allocations=[AllocationItemResponse(**a) for a in new_allocations],
@@ -924,6 +946,19 @@ def allocate_order(order_id: str, payload: AllocateOrderRequest) -> AllocationRe
         new_allocations.append(alloc_record)
 
     next_status = _derive_order_allocation_status(list(line_map.values()))
+    try:
+        assert_order_transition_outcome(record, "allocate", next_status)
+    except HTTPException as exc:
+        _audit_order_decision(
+            "order.allocate",
+            order_id,
+            "denied",
+            context,
+            before_snapshot=before_snapshot,
+            reason_code="state_transition_rejected",
+            metadata={"message": str(exc.detail)},
+        )
+        raise
 
     result = AllocationResponse(
         orderId=order_id,
@@ -1367,10 +1402,12 @@ def pack_order(order_id: str, payload: PackOrderRequest) -> OrderResponse:
             metadata={"message": str(exc.detail)},
         )
         raise
+    preview_lines = copy.deepcopy(record["lines"])
     line_map = {ln["orderLineId"]: ln for ln in record["lines"]}
+    preview_line_map = {ln["orderLineId"]: ln for ln in preview_lines}
 
     for item in payload.packedQtySummary:
-        if item.orderLineId not in line_map:
+        if item.orderLineId not in preview_line_map:
             _raise_order_denied(
                 action_name="order.pack",
                 order_id=order_id,
@@ -1379,7 +1416,7 @@ def pack_order(order_id: str, payload: PackOrderRequest) -> OrderResponse:
                 reason_code="order_line_not_found",
                 before_snapshot=before_snapshot,
             )
-        allocated_qty = _float_value(line_map[item.orderLineId].get("allocatedQty"))
+        allocated_qty = _float_value(preview_line_map[item.orderLineId].get("allocatedQty"))
         packed_qty = _float_value(item.packedQty)
         if packed_qty < 0 or packed_qty > allocated_qty:
             _raise_order_denied(
@@ -1393,12 +1430,33 @@ def pack_order(order_id: str, payload: PackOrderRequest) -> OrderResponse:
                 before_snapshot=before_snapshot,
                 metadata={"orderLineId": item.orderLineId, "packedQty": packed_qty},
             )
+        preview_line_map[item.orderLineId]["packedQty"] = item.packedQty
+        preview_line_map[item.orderLineId]["status"] = (
+            "packed" if packed_qty == allocated_qty and allocated_qty > 0 else line_map[item.orderLineId].get("status", "open")
+        )
+
+    next_status = _derive_order_pack_status(preview_lines)
+    try:
+        assert_order_transition_outcome(record, "pack", next_status)
+    except HTTPException as exc:
+        _audit_order_decision(
+            "order.pack",
+            order_id,
+            "denied",
+            context,
+            before_snapshot=before_snapshot,
+            reason_code="state_transition_rejected",
+            metadata={"message": str(exc.detail)},
+        )
+        raise
+
+    for item in payload.packedQtySummary:
+        allocated_qty = _float_value(line_map[item.orderLineId].get("allocatedQty"))
+        packed_qty = _float_value(item.packedQty)
         line_map[item.orderLineId]["packedQty"] = item.packedQty
         line_map[item.orderLineId]["status"] = (
             "packed" if packed_qty == allocated_qty and allocated_qty > 0 else line_map[item.orderLineId].get("status", "open")
         )
-
-    next_status = _derive_order_pack_status(record["lines"])
     record["status"] = next_status
     result = OrderResponse(data=_build_order_detail(record))
     with postgres_transaction() if postgres_sync.is_enabled() else nullcontext():
@@ -1514,11 +1572,13 @@ def deliver_order(order_id: str, payload: DeliverOrderRequest) -> OrderResponse:
         )
         raise
 
+    preview_lines = copy.deepcopy(record["lines"])
     line_map = {ln["orderLineId"]: ln for ln in record["lines"]}
-    delivered_deltas: list[tuple[dict[str, Any], float]] = []
+    preview_line_map = {ln["orderLineId"]: ln for ln in preview_lines}
+    delivered_delta_by_line_id: dict[str, float] = {}
     if payload.deliveredQtySummary:
         for item in payload.deliveredQtySummary:
-            if item.orderLineId not in line_map:
+            if item.orderLineId not in preview_line_map:
                 _raise_order_denied(
                     action_name="order.deliver",
                     order_id=order_id,
@@ -1527,7 +1587,7 @@ def deliver_order(order_id: str, payload: DeliverOrderRequest) -> OrderResponse:
                     reason_code="order_line_not_found",
                     before_snapshot=before_snapshot,
                 )
-            line = line_map[item.orderLineId]
+            line = preview_line_map[item.orderLineId]
             current_delivered_qty = _float_value(line.get("deliveredQty"))
             target_delivered_qty = _float_value(item.deliveredQty)
             packed_qty = _float_value(line.get("packedQty") or line.get("allocatedQty"))
@@ -1545,20 +1605,37 @@ def deliver_order(order_id: str, payload: DeliverOrderRequest) -> OrderResponse:
                 )
             line["deliveredQty"] = target_delivered_qty
             line["status"] = "delivered" if target_delivered_qty == packed_qty and packed_qty > 0 else line.get("status", "packed")
-            delivered_delta = target_delivered_qty - current_delivered_qty
-            if delivered_delta > 0:
-                delivered_deltas.append((line, delivered_delta))
+            delivered_delta_by_line_id[item.orderLineId] = max(target_delivered_qty - current_delivered_qty, 0.0)
     else:
-        for line in record["lines"]:
+        for line in preview_lines:
             current_delivered_qty = _float_value(line.get("deliveredQty"))
             target_delivered_qty = _float_value(line.get("packedQty") or line.get("allocatedQty"))
             line["deliveredQty"] = target_delivered_qty
             line["status"] = "delivered" if target_delivered_qty > 0 else line.get("status", "packed")
-            delivered_delta = target_delivered_qty - current_delivered_qty
-            if delivered_delta > 0:
-                delivered_deltas.append((line, delivered_delta))
+            delivered_delta_by_line_id[line["orderLineId"]] = max(target_delivered_qty - current_delivered_qty, 0.0)
 
-    next_status = _derive_order_delivery_status(record["lines"])
+    next_status = _derive_order_delivery_status(preview_lines)
+    try:
+        assert_order_transition_outcome(record, "deliver", next_status)
+    except HTTPException as exc:
+        _audit_order_decision(
+            "order.deliver",
+            order_id,
+            "denied",
+            context,
+            before_snapshot=before_snapshot,
+            reason_code="state_transition_rejected",
+            metadata={"message": str(exc.detail)},
+        )
+        raise
+
+    record["lines"] = preview_lines
+    line_map = {ln["orderLineId"]: ln for ln in record["lines"]}
+    delivered_deltas = [
+        (line_map[line_id], delivered_delta)
+        for line_id, delivered_delta in delivered_delta_by_line_id.items()
+        if delivered_delta > 0
+    ]
     record["status"] = next_status
     record["deliveredAt"] = payload.deliveredAt
     record["proofRef"] = payload.proofRef

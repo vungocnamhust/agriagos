@@ -16,21 +16,41 @@ from app.store._db import is_enabled as postgres_enabled
 
 # ── State machines ────────────────────────────────────────────────────────────
 
-# Maps current_state → set of allowed transitions (action name → next_state)
-ORDER_TRANSITIONS: dict[str, dict[str, str]] = {
-    OrderStatus.draft.value: {"confirm": OrderStatus.confirmed.value, "cancel": OrderStatus.cancelled.value},
-    OrderStatus.confirmed.value: {"allocate": OrderStatus.allocated.value, "cancel": OrderStatus.cancelled.value},
-    OrderStatus.partially_allocated.value: {
-        "allocate": OrderStatus.allocated.value,
-        "pack": OrderStatus.partially_packed.value,
-        "request_cancel": OrderStatus.cancel_requested.value,
+# Maps current_state → allowed transitions (action name → allowed next states)
+ORDER_TRANSITIONS: dict[str, dict[str, tuple[str, ...]]] = {
+    OrderStatus.draft.value: {
+        "confirm": (OrderStatus.confirmed.value,),
+        "cancel": (OrderStatus.cancelled.value,),
     },
-    OrderStatus.allocated.value: {"pack": OrderStatus.packed.value, "request_cancel": OrderStatus.cancel_requested.value},
-    OrderStatus.partially_packed.value: {"pack": OrderStatus.packed.value, "request_cancel": OrderStatus.cancel_requested.value},
-    OrderStatus.packed.value: {"ship": OrderStatus.shipped.value, "request_cancel": OrderStatus.cancel_requested.value},
-    OrderStatus.cancel_requested.value: {"cancel": OrderStatus.cancelled.value},
-    OrderStatus.shipped.value: {"deliver": OrderStatus.delivered.value, "fail_delivery": OrderStatus.failed.value},
-    OrderStatus.partially_delivered.value: {"deliver": OrderStatus.delivered.value, "fail_delivery": OrderStatus.failed.value},
+    OrderStatus.confirmed.value: {
+        "allocate": (OrderStatus.allocated.value, OrderStatus.partially_allocated.value),
+        "cancel": (OrderStatus.cancelled.value,),
+    },
+    OrderStatus.partially_allocated.value: {
+        "allocate": (OrderStatus.allocated.value,),
+        "pack": (OrderStatus.partially_packed.value,),
+        "request_cancel": (OrderStatus.cancel_requested.value,),
+    },
+    OrderStatus.allocated.value: {
+        "pack": (OrderStatus.packed.value, OrderStatus.partially_packed.value),
+        "request_cancel": (OrderStatus.cancel_requested.value,),
+    },
+    OrderStatus.partially_packed.value: {
+        "pack": (OrderStatus.packed.value,),
+    },
+    OrderStatus.packed.value: {
+        "ship": (OrderStatus.shipped.value,),
+        "request_cancel": (OrderStatus.cancel_requested.value,),
+    },
+    OrderStatus.cancel_requested.value: {"cancel": (OrderStatus.cancelled.value,)},
+    OrderStatus.shipped.value: {
+        "deliver": (OrderStatus.delivered.value, OrderStatus.partially_delivered.value),
+        "fail_delivery": (OrderStatus.failed.value,),
+    },
+    OrderStatus.partially_delivered.value: {
+        "deliver": (OrderStatus.delivered.value,),
+        "fail_delivery": (OrderStatus.failed.value,),
+    },
     OrderStatus.delivered.value: {},
     OrderStatus.failed.value: {},
     OrderStatus.cancelled.value: {},
@@ -125,7 +145,21 @@ def assert_order_transition(order: dict[str, Any], action: str) -> str:
             status_code=422,
             detail=f"Order transition '{action}' not allowed from state '{original}'.",
         )
-    return allowed[action]
+    return allowed[action][0]
+
+
+def assert_order_transition_outcome(order: dict[str, Any], action: str, next_state: str) -> str:
+    """Return the validated next state or raise 422 if the target outcome is not allowed."""
+    original = order.get("status", "")
+    current = _normalize_legacy_order_state(original)
+    allowed = ORDER_TRANSITIONS.get(current, {})
+    allowed_targets = allowed.get(action)
+    if allowed_targets is None or next_state not in allowed_targets:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Order transition '{action}' not allowed from state '{original}'.",
+        )
+    return next_state
 
 
 def assert_lot_transition(lot: dict[str, Any], action: str) -> str:

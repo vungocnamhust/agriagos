@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
+
 import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
@@ -262,6 +264,69 @@ def test_adjust_lot_quantity_rejects_qty_below_released(monkeypatch: pytest.Monk
     assert memory.list_audit_logs()[-1]["reasonCode"] == "adjusted_qty_below_released_qty"
 
 
+def test_unblock_lot_moves_blocked_status_back_to_qc_pending(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(lots.postgres_sync, "is_enabled", lambda: False)
+    memory.save_lot(
+        "lot-blocked-1",
+        {
+            "lotId": "lot-blocked-1",
+            "tenantId": "default",
+            "lotCode": "LOT-BLOCKED-001",
+            "productSkuId": "sku-1",
+            "sourceType": "crop_cycle",
+            "sourceRefId": "cycle-1",
+            "harvestOrProductionDate": "2026-04-11",
+            "status": "blocked",
+            "actualQty": 10.0,
+            "releasedQty": 0.0,
+            "availableQty": 0.0,
+            "reservedQty": 0.0,
+        },
+    )
+
+    response = lots.unblock_lot(
+        "lot-blocked-1",
+        UnblockLotRequest(
+            reason="needs_reinspection",
+            meta=Meta(correlationId="corr-lot-unblock"),
+        ),
+    )
+
+    assert response.data.status == "qc_pending"
+    assert memory.list_events()[-1]["eventName"] == "lot.unblocked"
+
+
+def test_release_lot_rejects_blocked_to_released_transition(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(lots.postgres_sync, "is_enabled", lambda: False)
+    memory.save_lot(
+        "lot-blocked-2",
+        {
+            "lotId": "lot-blocked-2",
+            "tenantId": "default",
+            "lotCode": "LOT-BLOCKED-002",
+            "productSkuId": "sku-1",
+            "sourceType": "crop_cycle",
+            "sourceRefId": "cycle-2",
+            "harvestOrProductionDate": "2026-04-11",
+            "status": "blocked",
+            "actualQty": 10.0,
+            "releasedQty": 0.0,
+            "availableQty": 0.0,
+            "reservedQty": 0.0,
+        },
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        lots.release_lot(
+            "lot-blocked-2",
+            ReleaseLotRequest(releasedQty=5, meta=Meta(correlationId="corr-lot-blocked-release")),
+        )
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail == "Lot transition 'release' not allowed from state 'blocked'."
+    assert memory.list_audit_logs()[-1]["reasonCode"] == "state_transition_rejected"
+
+
 def test_block_lot_closes_available_inventory(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(lots.postgres_sync, "is_enabled", lambda: False)
     memory.save_crop_cycle(
@@ -410,6 +475,12 @@ def test_release_lot_from_harvested_requires_approval_for_sensitive_case(monkeyp
 
     assert exc_info.value.status_code == 403
     assert exc_info.value.detail == "Sensitive lot release requires approvalRef."
+    escalated_audit = memory.list_audit_logs()[-1]
+    assert escalated_audit["decision"] == "escalated"
+    assert escalated_audit["reasonCode"] == "approval_required"
+    assert escalated_audit["afterSnapshot"] is None
+    assert escalated_audit["beforeSnapshot"]["status"] == "harvested"
+    assert escalated_audit["metadata"]["requiredApprovalRef"] is True
 
     released = lots.release_lot(
         created.data.lotId,
@@ -427,6 +498,51 @@ def test_release_lot_from_harvested_requires_approval_for_sensitive_case(monkeyp
 
     assert released.data.status == "released"
     assert memory.list_events()[-1]["payload"]["approvalRef"] == "APR-LOT-001"
+
+
+def test_release_lot_persistence_failure_writes_failed_audit(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(lots.postgres_sync, "is_enabled", lambda: True)
+    monkeypatch.setattr(lots, "postgres_transaction", nullcontext)
+
+    record = {
+        "lotId": "lot-persist-fail",
+        "tenantId": "default",
+        "lotCode": "LOT-PERSIST-FAIL",
+        "productSkuId": "sku-1",
+        "sourceType": "crop_cycle",
+        "sourceRefId": "cycle-1",
+        "harvestOrProductionDate": "2026-04-11",
+        "actualQty": 10.0,
+        "availableQty": 0.0,
+        "reservedQty": 0.0,
+        "releasedQty": 0.0,
+        "status": "harvested",
+        "unit": "kg",
+    }
+    monkeypatch.setattr(lots.postgres_sync, "fetch_lot", lambda lot_id: dict(record))
+    monkeypatch.setattr(
+        lots.postgres_sync,
+        "release_lot_atomic",
+        lambda lot_id, next_status, released_qty, expected_version=None: None,
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        lots.release_lot(
+            "lot-persist-fail",
+            ReleaseLotRequest(
+                releasedQty=5,
+                approvalRef="APR-PERSIST-FAIL",
+                meta=Meta(correlationId="corr-lot-persist-fail", actorId="admin-1", actorRole="admin"),
+            ),
+        )
+
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.detail == "Failed to persist lot release."
+    failed_audit = memory.list_audit_logs()[-1]
+    assert failed_audit["decision"] == "failed"
+    assert failed_audit["reasonCode"] == "persistence_failed"
+    assert failed_audit["beforeSnapshot"]["status"] == "harvested"
+    assert failed_audit["afterSnapshot"] is None
 
 
 def test_unblock_lot_returns_to_qc_pending_and_keeps_inventory_closed(monkeypatch: pytest.MonkeyPatch) -> None:
