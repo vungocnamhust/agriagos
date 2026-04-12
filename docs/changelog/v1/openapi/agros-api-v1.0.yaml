@@ -2342,6 +2342,15 @@ components:
           type: array
           title: Deliveredqtysummary
           default: []
+        deliveryResult:
+          anyOf:
+          - type: string
+            enum:
+            - delivered
+            - partially_delivered
+            - failed
+          - type: 'null'
+          title: Deliveryresult
         deliveredAt:
           anyOf:
           - type: string
@@ -2352,6 +2361,11 @@ components:
           - type: string
           - type: 'null'
           title: Proofref
+        failureReason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Failurereason
         note:
           anyOf:
           - type: string

@@ -1498,6 +1498,63 @@ def deliver_order(order_id: str, payload: DeliverOrderRequest) -> OrderResponse:
     if cached := check_idempotency(key):
         return OrderResponse(**cached)
 
+    if payload.deliveryResult == "failed":
+        if not payload.failureReason:
+            _raise_order_denied(
+                action_name="order.deliver",
+                order_id=order_id,
+                context=context,
+                detail="failureReason is required when deliveryResult is failed.",
+                reason_code="delivery_failure_reason_required",
+                before_snapshot=before_snapshot,
+            )
+        try:
+            next_status = assert_order_transition(record, "fail_delivery")
+        except HTTPException as exc:
+            _audit_order_decision(
+                "order.deliver",
+                order_id,
+                "denied",
+                context,
+                before_snapshot=before_snapshot,
+                reason_code="state_transition_rejected",
+                metadata={"message": str(exc.detail)},
+            )
+            raise
+
+        record["status"] = next_status
+        record["deliveryNote"] = payload.note
+        record["failureReason"] = payload.failureReason
+        result = OrderResponse(data=_build_order_detail(record))
+        with postgres_transaction() if postgres_sync.is_enabled() else nullcontext():
+            postgres_sync.upsert_order(record)
+            event = _emit_order_event(
+                "order.delivery_failed",
+                order_id,
+                {
+                    "orderId": order_id,
+                    "reason": payload.failureReason,
+                    "note": payload.note,
+                },
+                context,
+            )
+            _audit_order_decision(
+                "order.deliver",
+                order_id,
+                "allowed",
+                context,
+                before_snapshot=before_snapshot,
+                after_snapshot=record,
+                event=event,
+            )
+            record_idempotency(
+                key,
+                result.model_dump(),
+                operation_name="order.deliver",
+                request_hash=build_request_hash(payload, extra={"action": "order.deliver", "orderId": order_id}),
+            )
+        return result
+
     try:
         assert_order_transition(record, "deliver")
     except HTTPException as exc:

@@ -29,9 +29,10 @@ ORDER_TRANSITIONS: dict[str, dict[str, str]] = {
     OrderStatus.partially_packed.value: {"pack": OrderStatus.packed.value, "request_cancel": OrderStatus.cancel_requested.value},
     OrderStatus.packed.value: {"ship": OrderStatus.shipped.value, "request_cancel": OrderStatus.cancel_requested.value},
     OrderStatus.cancel_requested.value: {"cancel": OrderStatus.cancelled.value},
-    OrderStatus.shipped.value: {"deliver": OrderStatus.delivered.value},
-    OrderStatus.partially_delivered.value: {"deliver": OrderStatus.delivered.value},
+    OrderStatus.shipped.value: {"deliver": OrderStatus.delivered.value, "fail_delivery": OrderStatus.failed.value},
+    OrderStatus.partially_delivered.value: {"deliver": OrderStatus.delivered.value, "fail_delivery": OrderStatus.failed.value},
     OrderStatus.delivered.value: {},
+    OrderStatus.failed.value: {},
     OrderStatus.cancelled.value: {},
 }
 

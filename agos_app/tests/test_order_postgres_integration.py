@@ -661,3 +661,165 @@ def test_fulfillment_metadata_and_last_purchase_persist_on_postgres_path(
         {"customer_id": "00000000-0000-0000-0000-00000000c003"},
     ).mappings().one()
     assert customer_row["last_order_at"] is not None
+
+
+@pytest.mark.postgres_integration
+def test_failed_delivery_persists_failed_status_without_customer_purchase_update(
+    postgres_db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_db, "is_enabled", lambda: True)
+    monkeypatch.setattr(_db, "read_session", lambda session=None: _bound_read_session(postgres_db_session))
+    monkeypatch.setattr(_db, "write_session", lambda session=None: _bound_write_session(postgres_db_session))
+    monkeypatch.setattr(order_service.postgres_sync, "is_enabled", lambda: True)
+    monkeypatch.setattr(order_service, "postgres_transaction", lambda: _bound_transaction(postgres_db_session))
+
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO customers (
+                customer_id,
+                tenant_id,
+                customer_code,
+                full_name,
+                phone,
+                phone_normalized,
+                channel_source,
+                status,
+                tags,
+                notes
+            ) VALUES (
+                :customer_id,
+                'default',
+                'KH-FAIL-001',
+                'Failed Delivery PG User',
+                '+84981234567',
+                '84981234567',
+                'internal_ui',
+                'active',
+                '[]'::jsonb,
+                null
+            )
+            """
+        ),
+        {"customer_id": "00000000-0000-0000-0000-00000000c004"},
+    )
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO product_skus (product_sku_id, tenant_id, sku_code, sku_name, unit, status)
+            VALUES (:product_sku_id, 'default', 'SKU-FAIL-1', 'Failed Delivery SKU', 'kg', 'active')
+            """
+        ),
+        {"product_sku_id": "00000000-0000-0000-0000-000000000504"},
+    )
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO lots (
+                lot_id,
+                tenant_id,
+                lot_code,
+                product_sku_id,
+                source_type,
+                source_ref_id,
+                harvest_or_production_date,
+                actual_qty,
+                available_qty,
+                reserved_qty,
+                released_qty,
+                status,
+                updated_at
+            ) VALUES (
+                :lot_id,
+                'default',
+                'LOT-FAIL-001',
+                :product_sku_id,
+                'processing_batch',
+                'PROC-FAIL-001',
+                now(),
+                6,
+                6,
+                0,
+                6,
+                'released',
+                now()
+            )
+            """
+        ),
+        {
+            "lot_id": "00000000-0000-0000-0000-000000000704",
+            "product_sku_id": "00000000-0000-0000-0000-000000000504",
+        },
+    )
+
+    created = order_service.create_order(
+        CreateOrderRequest(
+            customerId="00000000-0000-0000-0000-00000000c004",
+            channel="web",
+            lines=[CreateOrderLineRequest(productSkuId="00000000-0000-0000-0000-000000000504", orderedQty=6, unit="kg")],
+            meta=Meta(correlationId="corr-pg-fail-create", idempotencyKey="idem-pg-fail-create"),
+        )
+    )
+    order_id = created.data.orderId
+    order_line_id = created.data.lines[0].orderLineId
+
+    order_service.confirm_order(
+        order_id,
+        ConfirmOrderRequest(meta=Meta(correlationId="corr-pg-fail-confirm", idempotencyKey="idem-pg-fail-confirm")),
+    )
+    order_service.allocate_order(
+        order_id,
+        AllocateOrderRequest(
+            allocations=[
+                AllocateItem(orderLineId=order_line_id, lotId="00000000-0000-0000-0000-000000000704", allocatedQty=6)
+            ],
+            meta=Meta(correlationId="corr-pg-fail-allocate", idempotencyKey="idem-pg-fail-allocate"),
+        ),
+    )
+    order_service.pack_order(
+        order_id,
+        PackOrderRequest(
+            packedQtySummary=[PackQtyItem(orderLineId=order_line_id, packedQty=6)],
+            meta=Meta(correlationId="corr-pg-fail-pack", idempotencyKey="idem-pg-fail-pack"),
+        ),
+    )
+    order_service.ship_order(
+        order_id,
+        ShipOrderRequest(
+            carrier="gha",
+            trackingRef="TRK-PG-FAIL-1",
+            shippedAt="2026-04-12T10:00:00Z",
+            meta=Meta(correlationId="corr-pg-fail-ship", idempotencyKey="idem-pg-fail-ship"),
+        ),
+    )
+    failed = order_service.deliver_order(
+        order_id,
+        DeliverOrderRequest(
+            deliveryResult="failed",
+            failureReason="customer_unreachable",
+            note="carrier could not complete handoff",
+            meta=Meta(correlationId="corr-pg-fail-deliver", idempotencyKey="idem-pg-fail-deliver"),
+        ),
+    )
+
+    assert failed.data.status == "failed"
+
+    order_row = postgres_db_session.execute(
+        text("SELECT status, delivered_at FROM sales_orders WHERE order_id = :order_id"),
+        {"order_id": order_id},
+    ).mappings().one()
+    assert order_row["status"] == "failed"
+    assert order_row["delivered_at"] is None
+
+    line_row = postgres_db_session.execute(
+        text("SELECT delivered_qty FROM sales_order_lines WHERE order_line_id = :order_line_id"),
+        {"order_line_id": order_line_id},
+    ).mappings().one()
+    assert float(line_row["delivered_qty"]) == 0.0
+
+    customer_row = postgres_db_session.execute(
+        text("SELECT last_order_at FROM customers WHERE customer_id = :customer_id"),
+        {"customer_id": "00000000-0000-0000-0000-00000000c004"},
+    ).mappings().one()
+    assert customer_row["last_order_at"] is None

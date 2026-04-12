@@ -177,9 +177,11 @@ Trong implementation hiện tại của `app/core/gateway.py`, preorder đang en
 - `packed -> cancel_requested`
 - `cancel_requested -> cancelled`
 - `shipped -> delivered | partially_delivered`
+- `shipped -> failed` qua action `fail_delivery`
 - `partially_delivered -> delivered`
+- `partially_delivered -> failed` qua action `fail_delivery`
 
-State `failed` vẫn thuộc canonical vocabulary của domain, nhưng chưa phải gateway-enforced subset của phase đầu.
+State `failed` hiện đã nằm trong gateway-enforced subset của phase đầu cho lane giao hàng thất bại sau khi đã ship.
 
 ---
 

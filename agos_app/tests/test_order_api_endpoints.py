@@ -309,3 +309,83 @@ def test_order_pack_ship_and_partial_deliver_routes() -> None:
     assert delivered_body["deliveredAt"] == "2026-04-12T11:00:00Z"
     assert delivered_body["proofRef"] == "proof-api-1"
     assert delivered_body["lines"][0]["deliveredQty"] == 4
+
+
+def test_order_failed_delivery_route_preserves_preorder_and_purchase_history() -> None:
+    customer_id = _create_customer()
+    preorder_id = _create_preorder(customer_id)
+    _seed_released_lot(lot_id="lot-api-3", available_qty=10)
+
+    created = client.post(
+        "/api/v1/orders",
+        json={
+            "customerId": customer_id,
+            "channel": "direct",
+            "lines": [
+                {
+                    "productSkuId": "sku-1",
+                    "orderedQty": 6,
+                    "unit": "kg",
+                    "sourcePreorderId": preorder_id,
+                }
+            ],
+            "meta": {
+                "correlationId": "corr-api-failed-order-create",
+                "idempotencyKey": "idem-api-failed-order-create",
+            },
+        },
+    )
+    assert created.status_code == 201
+    order_id = created.json()["data"]["orderId"]
+    order_line_id = created.json()["data"]["lines"][0]["orderLineId"]
+
+    client.post(
+        f"/api/v1/orders/{order_id}/confirm",
+        json={"meta": {"correlationId": "corr-api-failed-order-confirm", "idempotencyKey": "idem-api-failed-order-confirm"}},
+    )
+    client.post(
+        f"/api/v1/orders/{order_id}/allocate",
+        json={
+            "allocations": [{"orderLineId": order_line_id, "lotId": "lot-api-3", "allocatedQty": 6}],
+            "meta": {"correlationId": "corr-api-failed-order-allocate", "idempotencyKey": "idem-api-failed-order-allocate"},
+        },
+    )
+    client.post(
+        f"/api/v1/orders/{order_id}/pack",
+        json={
+            "packedQtySummary": [{"orderLineId": order_line_id, "packedQty": 6}],
+            "meta": {"correlationId": "corr-api-failed-order-pack", "idempotencyKey": "idem-api-failed-order-pack"},
+        },
+    )
+    client.post(
+        f"/api/v1/orders/{order_id}/ship",
+        json={
+            "carrier": "gha",
+            "trackingRef": "TRK-API-FAIL-1",
+            "shippedAt": "2026-04-12T10:00:00Z",
+            "meta": {"correlationId": "corr-api-failed-order-ship", "idempotencyKey": "idem-api-failed-order-ship"},
+        },
+    )
+
+    failed = client.post(
+        f"/api/v1/orders/{order_id}/deliver",
+        json={
+            "deliveryResult": "failed",
+            "failureReason": "customer_unreachable",
+            "note": "carrier could not complete handoff",
+            "meta": {"correlationId": "corr-api-failed-order-deliver", "idempotencyKey": "idem-api-failed-order-deliver"},
+        },
+    )
+    assert failed.status_code == 200
+    failed_body = failed.json()["data"]
+    assert failed_body["status"] == "failed"
+    assert failed_body["deliveredAt"] is None
+    assert failed_body["lines"][0]["deliveredQty"] == 0
+
+    preorder = memory.get_preorder(preorder_id)
+    assert preorder is not None
+    assert preorder["deliveredQty"] == 0
+
+    customer = memory.get_customer(customer_id)
+    assert customer is not None
+    assert customer.get("lastOrderAt") is None

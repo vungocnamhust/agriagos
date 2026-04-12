@@ -674,3 +674,168 @@ def test_deliver_order_allows_partial_then_final_delivery(monkeypatch: pytest.Mo
 
     assert final.data.status == "delivered"
     assert final.data.lines[0].deliveredQty == 10
+
+
+def test_deliver_order_can_mark_delivery_failed_without_consuming_preorder(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(orders.postgres_sync, "is_enabled", lambda: False)
+    memory.save_customer(
+        "customer-1",
+        {"customerId": "customer-1", "customerCode": "KH-001", "fullName": "Alice", "phone": "0901"},
+    )
+    _seed_preorder(preorder_id="preorder-1", remaining_qty=8)
+    created = orders.create_order(
+        CreateOrderRequest(
+            customerId="customer-1",
+            channel="direct",
+            lines=[
+                CreateOrderLineRequest(
+                    productSkuId="sku-1",
+                    orderedQty=8,
+                    unit="kg",
+                    sourcePreorderId="preorder-1",
+                )
+            ],
+        )
+    )
+    orders.confirm_order(created.data.orderId, ConfirmOrderRequest())
+    _seed_released_lot(lot_id="lot-1", available_qty=8)
+    orders.allocate_order(
+        created.data.orderId,
+        AllocateOrderRequest(
+            allocations=[
+                AllocateItem(orderLineId=created.data.lines[0].orderLineId, lotId="lot-1", allocatedQty=8)
+            ],
+            meta=Meta(correlationId="corr-failed-delivery-allocate"),
+        ),
+    )
+    orders.pack_order(
+        created.data.orderId,
+        PackOrderRequest(
+            packedQtySummary=[PackQtyItem(orderLineId=created.data.lines[0].orderLineId, packedQty=8)],
+            meta=Meta(correlationId="corr-failed-delivery-pack"),
+        ),
+    )
+    orders.ship_order(
+        created.data.orderId,
+        ShipOrderRequest(
+            carrier="gha",
+            trackingRef="TRK-FAIL-1",
+            shippedAt="2026-04-12T10:00:00Z",
+            meta=Meta(correlationId="corr-failed-delivery-ship"),
+        ),
+    )
+
+    failed = orders.deliver_order(
+        created.data.orderId,
+        DeliverOrderRequest(
+            deliveryResult="failed",
+            failureReason="customer_unreachable",
+            note="carrier could not complete handoff",
+            meta=Meta(correlationId="corr-failed-delivery"),
+        ),
+    )
+
+    assert failed.data.status == "failed"
+    assert failed.data.deliveredAt is None
+    assert failed.data.lines[0].deliveredQty == 0
+
+    preorder = memory.get_preorder("preorder-1")
+    assert preorder is not None
+    assert preorder["allocatedQty"] == 8
+    assert preorder["deliveredQty"] == 0
+    assert preorder["remainingQty"] == 0
+
+    customer = memory.get_customer("customer-1")
+    assert customer is not None
+    assert customer.get("lastOrderAt") is None
+
+    failed_event = next(event for event in memory.list_events() if event["eventName"] == "order.delivery_failed")
+    assert failed_event["payload"]["reason"] == "customer_unreachable"
+
+
+def test_failed_delivery_after_partial_delivery_preserves_prior_delivery_facts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(orders.postgres_sync, "is_enabled", lambda: False)
+    memory.save_customer(
+        "customer-2",
+        {"customerId": "customer-2", "customerCode": "KH-002", "fullName": "Bob", "phone": "0902"},
+    )
+    _seed_preorder(preorder_id="preorder-2", remaining_qty=8)
+    created = orders.create_order(
+        CreateOrderRequest(
+            customerId="customer-2",
+            channel="direct",
+            lines=[
+                CreateOrderLineRequest(
+                    productSkuId="sku-1",
+                    orderedQty=8,
+                    unit="kg",
+                    sourcePreorderId="preorder-2",
+                )
+            ],
+        )
+    )
+    orders.confirm_order(created.data.orderId, ConfirmOrderRequest())
+    _seed_released_lot(lot_id="lot-2", available_qty=8)
+    orders.allocate_order(
+        created.data.orderId,
+        AllocateOrderRequest(
+            allocations=[
+                AllocateItem(orderLineId=created.data.lines[0].orderLineId, lotId="lot-2", allocatedQty=8)
+            ],
+            meta=Meta(correlationId="corr-partial-then-failed-allocate"),
+        ),
+    )
+    orders.pack_order(
+        created.data.orderId,
+        PackOrderRequest(
+            packedQtySummary=[PackQtyItem(orderLineId=created.data.lines[0].orderLineId, packedQty=8)],
+            meta=Meta(correlationId="corr-partial-then-failed-pack"),
+        ),
+    )
+    orders.ship_order(
+        created.data.orderId,
+        ShipOrderRequest(
+            carrier="gha",
+            trackingRef="TRK-FAIL-2",
+            shippedAt="2026-04-12T10:00:00Z",
+            meta=Meta(correlationId="corr-partial-then-failed-ship"),
+        ),
+    )
+    partial = orders.deliver_order(
+        created.data.orderId,
+        DeliverOrderRequest(
+            deliveredQtySummary=[DeliveredQtyItem(orderLineId=created.data.lines[0].orderLineId, deliveredQty=3)],
+            deliveredAt="2026-04-12T12:00:00Z",
+            proofRef="proof-partial-1",
+            meta=Meta(correlationId="corr-partial-then-failed-deliver-1"),
+        ),
+    )
+
+    assert partial.data.status == "partially_delivered"
+    assert partial.data.deliveredAt == "2026-04-12T12:00:00Z"
+    assert partial.data.lines[0].deliveredQty == 3
+
+    failed = orders.deliver_order(
+        created.data.orderId,
+        DeliverOrderRequest(
+            deliveryResult="failed",
+            failureReason="customer_rejected_remaining_qty",
+            note="only partial handoff completed",
+            meta=Meta(correlationId="corr-partial-then-failed-deliver-2"),
+        ),
+    )
+
+    assert failed.data.status == "failed"
+    assert failed.data.deliveredAt == "2026-04-12T12:00:00Z"
+    assert failed.data.lines[0].deliveredQty == 3
+
+    preorder = memory.get_preorder("preorder-2")
+    assert preorder is not None
+    assert preorder["deliveredQty"] == 3
+    assert preorder["remainingQty"] == 0
+
+    customer = memory.get_customer("customer-2")
+    assert customer is not None
+    assert customer.get("lastOrderAt") == "2026-04-12T12:00:00Z"
