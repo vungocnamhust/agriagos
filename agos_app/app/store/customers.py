@@ -101,6 +101,7 @@ def upsert_customer(record: dict[str, Any]) -> None:
                     tags,
                     notes,
                     status,
+                    last_order_at,
                     tenant_id,
                     updated_at
                 ) VALUES (
@@ -116,6 +117,7 @@ def upsert_customer(record: dict[str, Any]) -> None:
                     CAST(:tags AS jsonb),
                     :notes,
                     :status,
+                    CAST(:last_order_at AS timestamptz),
                     :tenant_id,
                     now()
                 )
@@ -131,6 +133,7 @@ def upsert_customer(record: dict[str, Any]) -> None:
                     tags = EXCLUDED.tags,
                     notes = EXCLUDED.notes,
                     status = EXCLUDED.status,
+                    last_order_at = EXCLUDED.last_order_at,
                     updated_at = now()
                 """
             ),
@@ -147,6 +150,7 @@ def upsert_customer(record: dict[str, Any]) -> None:
                 "tags": json.dumps(record.get("tags", [])),
                 "notes": record.get("notes"),
                 "status": record["status"],
+                "last_order_at": record.get("lastOrderAt"),
                 "tenant_id": record.get("tenantId", "default"),
             },
         )

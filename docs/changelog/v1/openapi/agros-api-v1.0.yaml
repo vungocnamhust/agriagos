@@ -2321,8 +2321,27 @@ components:
       - phone
       - status
       title: CustomerSummary
+    DeliveredQtyItem:
+      properties:
+        orderLineId:
+          type: string
+          title: Orderlineid
+        deliveredQty:
+          type: number
+          title: Deliveredqty
+      type: object
+      required:
+      - orderLineId
+      - deliveredQty
+      title: DeliveredQtyItem
     DeliverOrderRequest:
       properties:
+        deliveredQtySummary:
+          items:
+            $ref: '#/components/schemas/DeliveredQtyItem'
+          type: array
+          title: Deliveredqtysummary
+          default: []
         deliveredAt:
           anyOf:
           - type: string
@@ -2804,6 +2823,31 @@ components:
           - type: string
           - type: 'null'
           title: Shippingaddress
+        carrier:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Carrier
+        trackingRef:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Trackingref
+        shippedAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Shippedat
+        deliveredAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Deliveredat
+        proofRef:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Proofref
         note:
           anyOf:
           - type: string

@@ -227,3 +227,85 @@ def test_order_allocation_adjust_and_release_routes() -> None:
     released_body = released.json()
     assert released_body["orderStatus"] == "confirmed"
     assert released_body["allocation"]["status"] == "released"
+
+
+def test_order_pack_ship_and_partial_deliver_routes() -> None:
+    customer_id = _create_customer()
+    _seed_released_lot(lot_id="lot-api-2", available_qty=10)
+
+    created = client.post(
+        "/api/v1/orders",
+        json={
+            "customerId": customer_id,
+            "channel": "direct",
+            "lines": [{"productSkuId": "sku-1", "orderedQty": 6, "unit": "kg"}],
+            "meta": {
+                "correlationId": "corr-api-full-order-create",
+                "idempotencyKey": "idem-api-full-order-create",
+            },
+        },
+    )
+    assert created.status_code == 201
+    order_id = created.json()["data"]["orderId"]
+    order_line_id = created.json()["data"]["lines"][0]["orderLineId"]
+
+    confirmed = client.post(
+        f"/api/v1/orders/{order_id}/confirm",
+        json={"meta": {"correlationId": "corr-api-full-order-confirm", "idempotencyKey": "idem-api-full-order-confirm"}},
+    )
+    assert confirmed.status_code == 200
+
+    allocated = client.post(
+        f"/api/v1/orders/{order_id}/allocate",
+        json={
+            "allocations": [
+                {"orderLineId": order_line_id, "lotId": "lot-api-2", "allocatedQty": 6}
+            ],
+            "meta": {"correlationId": "corr-api-full-order-allocate", "idempotencyKey": "idem-api-full-order-allocate"},
+        },
+    )
+    assert allocated.status_code == 200
+
+    packed = client.post(
+        f"/api/v1/orders/{order_id}/pack",
+        json={
+            "packedQtySummary": [{"orderLineId": order_line_id, "packedQty": 6}],
+            "meta": {"correlationId": "corr-api-full-order-pack", "idempotencyKey": "idem-api-full-order-pack"},
+        },
+    )
+    assert packed.status_code == 200
+    assert packed.json()["data"]["status"] == "packed"
+
+    shipped = client.post(
+        f"/api/v1/orders/{order_id}/ship",
+        json={
+            "carrier": "gha",
+            "trackingRef": "TRK-API-1",
+            "shippedAt": "2026-04-12T10:00:00Z",
+            "meta": {"correlationId": "corr-api-full-order-ship", "idempotencyKey": "idem-api-full-order-ship"},
+        },
+    )
+    assert shipped.status_code == 200
+    shipped_body = shipped.json()["data"]
+    assert shipped_body["status"] == "shipped"
+    assert shipped_body["carrier"] == "gha"
+    assert shipped_body["trackingRef"] == "TRK-API-1"
+    assert shipped_body["shippedAt"] == "2026-04-12T10:00:00Z"
+
+    delivered = client.post(
+        f"/api/v1/orders/{order_id}/deliver",
+        json={
+            "deliveredQtySummary": [{"orderLineId": order_line_id, "deliveredQty": 4}],
+            "deliveredAt": "2026-04-12T11:00:00Z",
+            "proofRef": "proof-api-1",
+            "meta": {"correlationId": "corr-api-full-order-deliver", "idempotencyKey": "idem-api-full-order-deliver"},
+        },
+    )
+    assert delivered.status_code == 200
+    delivered_body = delivered.json()["data"]
+    assert delivered_body["status"] == "partially_delivered"
+    assert delivered_body["carrier"] == "gha"
+    assert delivered_body["trackingRef"] == "TRK-API-1"
+    assert delivered_body["deliveredAt"] == "2026-04-12T11:00:00Z"
+    assert delivered_body["proofRef"] == "proof-api-1"
+    assert delivered_body["lines"][0]["deliveredQty"] == 4

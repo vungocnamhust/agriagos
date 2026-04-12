@@ -15,6 +15,11 @@ from app.models.orders import (
     ConfirmOrderRequest,
     CreateOrderLineRequest,
     CreateOrderRequest,
+    DeliverOrderRequest,
+    DeliveredQtyItem,
+    PackOrderRequest,
+    PackQtyItem,
+    ShipOrderRequest,
     RequestCancelOrderRequest,
     ReleaseAllocationRequest,
 )
@@ -493,3 +498,179 @@ def test_release_allocation_returns_order_to_confirmed_and_marks_release(monkeyp
     assert preorder is not None
     assert preorder["allocatedQty"] == 0
     assert preorder["remainingQty"] == 5
+
+
+def test_pack_order_sets_partially_packed_when_actual_qty_is_short(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(orders.postgres_sync, "is_enabled", lambda: False)
+    memory.save_customer("customer-1", {"customerId": "customer-1", "fullName": "Alice"})
+    created = orders.create_order(
+        CreateOrderRequest(
+            customerId="customer-1",
+            channel="direct",
+            lines=[CreateOrderLineRequest(productSkuId="sku-1", orderedQty=4, unit="kg")],
+        )
+    )
+    orders.confirm_order(created.data.orderId, ConfirmOrderRequest())
+    _seed_released_lot(lot_id="lot-1", available_qty=10)
+    orders.allocate_order(
+        created.data.orderId,
+        AllocateOrderRequest(
+            allocations=[
+                AllocateItem(orderLineId=created.data.lines[0].orderLineId, lotId="lot-1", allocatedQty=4)
+            ],
+            meta=Meta(correlationId="corr-pack-seed"),
+        ),
+    )
+
+    response = orders.pack_order(
+        created.data.orderId,
+        PackOrderRequest(
+            packedQtySummary=[PackQtyItem(orderLineId=created.data.lines[0].orderLineId, packedQty=2)],
+            meta=Meta(correlationId="corr-pack-partial"),
+        ),
+    )
+
+    assert response.data.status == "partially_packed"
+    assert response.data.lines[0].packedQty == 2
+
+    packed_event = next(event for event in memory.list_events() if event["eventName"] == "order.partially_packed")
+    assert packed_event["payload"]["orderId"] == created.data.orderId
+
+
+def test_deliver_order_consumes_preorder_using_delivered_delta(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(orders.postgres_sync, "is_enabled", lambda: False)
+    memory.save_customer(
+        "customer-1",
+        {"customerId": "customer-1", "customerCode": "KH-001", "fullName": "Alice", "phone": "0901"},
+    )
+    _seed_preorder(preorder_id="preorder-1", remaining_qty=20)
+    created = orders.create_order(
+        CreateOrderRequest(
+            customerId="customer-1",
+            channel="direct",
+            lines=[
+                CreateOrderLineRequest(
+                    productSkuId="sku-1",
+                    orderedQty=15,
+                    unit="kg",
+                    sourcePreorderId="preorder-1",
+                )
+            ],
+        )
+    )
+    orders.confirm_order(created.data.orderId, ConfirmOrderRequest())
+    _seed_released_lot(lot_id="lot-1", available_qty=20)
+    orders.allocate_order(
+        created.data.orderId,
+        AllocateOrderRequest(
+            allocations=[
+                AllocateItem(orderLineId=created.data.lines[0].orderLineId, lotId="lot-1", allocatedQty=15)
+            ],
+            meta=Meta(correlationId="corr-deliver-seed"),
+        ),
+    )
+    orders.pack_order(
+        created.data.orderId,
+        PackOrderRequest(
+            packedQtySummary=[PackQtyItem(orderLineId=created.data.lines[0].orderLineId, packedQty=15)],
+            meta=Meta(correlationId="corr-pack-full"),
+        ),
+    )
+    orders.ship_order(
+        created.data.orderId,
+        ShipOrderRequest(carrier="gha", trackingRef="TRK-1", shippedAt="2026-04-12T10:00:00Z", meta=Meta(correlationId="corr-ship")),
+    )
+
+    response = orders.deliver_order(
+        created.data.orderId,
+        DeliverOrderRequest(
+            deliveredQtySummary=[
+                DeliveredQtyItem(orderLineId=created.data.lines[0].orderLineId, deliveredQty=12)
+            ],
+            deliveredAt="2026-04-12T11:00:00Z",
+            proofRef="proof-1",
+            meta=Meta(correlationId="corr-deliver"),
+        ),
+    )
+
+    assert response.data.status == "partially_delivered"
+    assert response.data.lines[0].deliveredQty == 12
+
+    preorder = memory.get_preorder("preorder-1")
+    assert preorder is not None
+    assert preorder["allocatedQty"] == 3
+    assert preorder["deliveredQty"] == 12
+    assert preorder["remainingQty"] == 5
+
+    customer = memory.get_customer("customer-1")
+    assert customer is not None
+    assert customer["lastOrderAt"] == "2026-04-12T11:00:00Z"
+
+    consumed_event = next(event for event in memory.list_events() if event["eventName"] == "preorder.quota_consumed")
+    assert consumed_event["payload"]["consumedQty"] == 12
+
+    purchase_event = next(event for event in memory.list_events() if event["eventName"] == "customer.last_purchase_updated")
+    assert purchase_event["payload"]["lastOrderId"] == created.data.orderId
+
+
+def test_deliver_order_allows_partial_then_final_delivery(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(orders.postgres_sync, "is_enabled", lambda: False)
+    memory.save_customer(
+        "customer-1",
+        {"customerId": "customer-1", "customerCode": "KH-001", "fullName": "Alice", "phone": "0901"},
+    )
+    created = orders.create_order(
+        CreateOrderRequest(
+            customerId="customer-1",
+            channel="direct",
+            lines=[CreateOrderLineRequest(productSkuId="sku-1", orderedQty=10, unit="kg")],
+        )
+    )
+    orders.confirm_order(created.data.orderId, ConfirmOrderRequest())
+    _seed_released_lot(lot_id="lot-1", available_qty=10)
+    orders.allocate_order(
+        created.data.orderId,
+        AllocateOrderRequest(
+            allocations=[
+                AllocateItem(orderLineId=created.data.lines[0].orderLineId, lotId="lot-1", allocatedQty=10)
+            ],
+            meta=Meta(correlationId="corr-deliver-seed-2"),
+        ),
+    )
+    orders.pack_order(
+        created.data.orderId,
+        PackOrderRequest(
+            packedQtySummary=[PackQtyItem(orderLineId=created.data.lines[0].orderLineId, packedQty=10)],
+            meta=Meta(correlationId="corr-pack-2"),
+        ),
+    )
+    orders.ship_order(
+        created.data.orderId,
+        ShipOrderRequest(carrier="gha", trackingRef="TRK-2", shippedAt="2026-04-12T10:00:00Z", meta=Meta(correlationId="corr-ship-2")),
+    )
+
+    partial = orders.deliver_order(
+        created.data.orderId,
+        DeliverOrderRequest(
+            deliveredQtySummary=[
+                DeliveredQtyItem(orderLineId=created.data.lines[0].orderLineId, deliveredQty=4)
+            ],
+            deliveredAt="2026-04-12T11:00:00Z",
+            meta=Meta(correlationId="corr-deliver-partial-2"),
+        ),
+    )
+    assert partial.data.status == "partially_delivered"
+
+    final = orders.deliver_order(
+        created.data.orderId,
+        DeliverOrderRequest(
+            deliveredQtySummary=[
+                DeliveredQtyItem(orderLineId=created.data.lines[0].orderLineId, deliveredQty=10)
+            ],
+            deliveredAt="2026-04-12T12:00:00Z",
+            meta=Meta(correlationId="corr-deliver-final-2"),
+        ),
+    )
+
+    assert final.data.status == "delivered"
+    assert final.data.lines[0].deliveredQty == 10

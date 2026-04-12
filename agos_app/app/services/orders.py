@@ -58,9 +58,15 @@ def _build_order_detail(record: dict[str, Any]) -> OrderDetail:
         paymentStatus=record["paymentStatus"],
         deliveryDateExpected=record.get("deliveryDateExpected"),
         shippingAddress=record.get("shippingAddress"),
+        carrier=record.get("carrier"),
+        trackingRef=record.get("trackingRef"),
+        shippedAt=record.get("shippedAt"),
+        deliveredAt=record.get("deliveredAt"),
+        proofRef=record.get("proofRef"),
         note=record.get("note"),
         createdBy=record.get("createdBy"),
         sourcePreorderFlag=bool(record.get("sourcePreorderFlag", False)),
+        version=int(record.get("version", 1) or 1),
         lines=lines,
     )
 
@@ -195,6 +201,78 @@ def _derive_order_allocation_status(lines: list[dict[str, Any]]) -> str:
     if is_fully_allocated:
         return OrderStatus.allocated.value
     return OrderStatus.partially_allocated.value
+
+
+def _derive_order_pack_status(lines: list[dict[str, Any]]) -> str:
+    if not lines:
+        return OrderStatus.allocated.value
+
+    has_any_packed_qty = False
+    is_fully_packed = True
+    for line in lines:
+        allocated_qty = _float_value(line.get("allocatedQty"))
+        packed_qty = _float_value(line.get("packedQty"))
+        if packed_qty > 0:
+            has_any_packed_qty = True
+        if allocated_qty > packed_qty:
+            is_fully_packed = False
+
+    if has_any_packed_qty and is_fully_packed:
+        return OrderStatus.packed.value
+    return OrderStatus.partially_packed.value
+
+
+def _derive_order_delivery_status(lines: list[dict[str, Any]]) -> str:
+    if not lines:
+        return OrderStatus.delivered.value
+
+    has_any_delivered_qty = False
+    is_fully_delivered = True
+    for line in lines:
+        packed_qty = _float_value(line.get("packedQty"))
+        delivered_qty = _float_value(line.get("deliveredQty"))
+        if delivered_qty > 0:
+            has_any_delivered_qty = True
+        if delivered_qty < packed_qty:
+            is_fully_delivered = False
+
+    if has_any_delivered_qty and is_fully_delivered:
+        return OrderStatus.delivered.value
+    return OrderStatus.partially_delivered.value
+
+
+def _update_customer_last_purchase(
+    customer_id: str,
+    order_id: str,
+    delivered_at: str | None,
+    context: dict[str, Any],
+) -> dict[str, Any] | None:
+    customer_record = postgres_sync.fetch_customer(customer_id) if postgres_sync.is_enabled() else store.get_customer(customer_id)
+    if customer_record is None:
+        return None
+
+    updated_customer = copy.deepcopy(customer_record)
+    updated_customer["lastOrderAt"] = delivered_at or store.now_iso()
+
+    if postgres_sync.is_enabled():
+        postgres_sync.upsert_customer(updated_customer)
+    else:
+        store.save_customer(customer_id, updated_customer)
+
+    return events.emit(
+        event_name="customer.last_purchase_updated",
+        aggregate_type="Customer",
+        aggregate_id=customer_id,
+        payload={
+            "customerId": customer_id,
+            "lastOrderId": order_id,
+            "lastPurchaseAt": updated_customer["lastOrderAt"],
+        },
+        actor_id=context.get("actor_id"),
+        correlation_id=context.get("correlation_id"),
+        causation_id=context.get("causation_id"),
+        idempotency_key=context.get("idempotency_key"),
+    )
 
 
 def _allocation_order_event_name(order_status: str) -> str:
@@ -1275,7 +1353,7 @@ def pack_order(order_id: str, payload: PackOrderRequest) -> OrderResponse:
         return OrderResponse(**cached)
 
     try:
-        next_status = assert_order_transition(record, "pack")
+        assert_order_transition(record, "pack")
     except HTTPException as exc:
         _audit_order_decision(
             "order.pack",
@@ -1299,13 +1377,47 @@ def pack_order(order_id: str, payload: PackOrderRequest) -> OrderResponse:
                 reason_code="order_line_not_found",
                 before_snapshot=before_snapshot,
             )
+        allocated_qty = _float_value(line_map[item.orderLineId].get("allocatedQty"))
+        packed_qty = _float_value(item.packedQty)
+        if packed_qty < 0 or packed_qty > allocated_qty:
+            _raise_order_denied(
+                action_name="order.pack",
+                order_id=order_id,
+                context=context,
+                detail=(
+                    f"OrderLine {item.orderLineId} packed qty must be between 0 and allocated qty ({allocated_qty})."
+                ),
+                reason_code="packed_qty_invalid",
+                before_snapshot=before_snapshot,
+                metadata={"orderLineId": item.orderLineId, "packedQty": packed_qty},
+            )
         line_map[item.orderLineId]["packedQty"] = item.packedQty
+        line_map[item.orderLineId]["status"] = (
+            "packed" if packed_qty == allocated_qty and allocated_qty > 0 else line_map[item.orderLineId].get("status", "open")
+        )
 
+    next_status = _derive_order_pack_status(record["lines"])
     record["status"] = next_status
     result = OrderResponse(data=_build_order_detail(record))
     with postgres_transaction() if postgres_sync.is_enabled() else nullcontext():
         postgres_sync.upsert_order(record)
-        event = _emit_order_event("order.packed", order_id, {"orderId": order_id, "status": next_status}, context)
+        event_name = "order.packed" if next_status == OrderStatus.packed.value else "order.partially_packed"
+        event = _emit_order_event(
+            event_name,
+            order_id,
+            {
+                "orderId": order_id,
+                "status": next_status,
+                "packedQtySummary": [
+                    {
+                        "orderLineId": line["orderLineId"],
+                        "packedQty": _float_value(line.get("packedQty")),
+                    }
+                    for line in record["lines"]
+                ],
+            },
+            context,
+        )
         _audit_order_decision(
             "order.pack",
             order_id,
@@ -1387,7 +1499,7 @@ def deliver_order(order_id: str, payload: DeliverOrderRequest) -> OrderResponse:
         return OrderResponse(**cached)
 
     try:
-        next_status = assert_order_transition(record, "deliver")
+        assert_order_transition(record, "deliver")
     except HTTPException as exc:
         _audit_order_decision(
             "order.deliver",
@@ -1399,20 +1511,79 @@ def deliver_order(order_id: str, payload: DeliverOrderRequest) -> OrderResponse:
             metadata={"message": str(exc.detail)},
         )
         raise
+
+    line_map = {ln["orderLineId"]: ln for ln in record["lines"]}
+    delivered_deltas: list[tuple[dict[str, Any], float]] = []
+    if payload.deliveredQtySummary:
+        for item in payload.deliveredQtySummary:
+            if item.orderLineId not in line_map:
+                _raise_order_denied(
+                    action_name="order.deliver",
+                    order_id=order_id,
+                    context=context,
+                    detail=f"OrderLine {item.orderLineId} not found.",
+                    reason_code="order_line_not_found",
+                    before_snapshot=before_snapshot,
+                )
+            line = line_map[item.orderLineId]
+            current_delivered_qty = _float_value(line.get("deliveredQty"))
+            target_delivered_qty = _float_value(item.deliveredQty)
+            packed_qty = _float_value(line.get("packedQty") or line.get("allocatedQty"))
+            if target_delivered_qty < current_delivered_qty or target_delivered_qty > packed_qty:
+                _raise_order_denied(
+                    action_name="order.deliver",
+                    order_id=order_id,
+                    context=context,
+                    detail=(
+                        f"OrderLine {item.orderLineId} delivered qty must stay between current delivered qty ({current_delivered_qty}) and packed qty ({packed_qty})."
+                    ),
+                    reason_code="delivered_qty_invalid",
+                    before_snapshot=before_snapshot,
+                    metadata={"orderLineId": item.orderLineId, "deliveredQty": target_delivered_qty},
+                )
+            line["deliveredQty"] = target_delivered_qty
+            line["status"] = "delivered" if target_delivered_qty == packed_qty and packed_qty > 0 else line.get("status", "packed")
+            delivered_delta = target_delivered_qty - current_delivered_qty
+            if delivered_delta > 0:
+                delivered_deltas.append((line, delivered_delta))
+    else:
+        for line in record["lines"]:
+            current_delivered_qty = _float_value(line.get("deliveredQty"))
+            target_delivered_qty = _float_value(line.get("packedQty") or line.get("allocatedQty"))
+            line["deliveredQty"] = target_delivered_qty
+            line["status"] = "delivered" if target_delivered_qty > 0 else line.get("status", "packed")
+            delivered_delta = target_delivered_qty - current_delivered_qty
+            if delivered_delta > 0:
+                delivered_deltas.append((line, delivered_delta))
+
+    next_status = _derive_order_delivery_status(record["lines"])
     record["status"] = next_status
     record["deliveredAt"] = payload.deliveredAt
     record["proofRef"] = payload.proofRef
     result = OrderResponse(data=_build_order_detail(record))
     with postgres_transaction() if postgres_sync.is_enabled() else nullcontext():
         postgres_sync.upsert_order(record)
-        for line in record["lines"]:
+        for line, delivered_delta in delivered_deltas:
             if line.get("sourcePreorderId"):
-                qty = line.get("deliveredQty", 0.0) or line.get("allocatedQty", 0.0)
-                _record_preorder_delivery(line["sourcePreorderId"], qty, order_id, context)
+                _record_preorder_delivery(line["sourcePreorderId"], delivered_delta, order_id, context)
+        if delivered_deltas:
+            _update_customer_last_purchase(record["customerId"], order_id, payload.deliveredAt, context)
+        event_name = "order.delivered" if next_status == OrderStatus.delivered.value else "order.partially_delivered"
         event = _emit_order_event(
-            "order.delivered",
+            event_name,
             order_id,
-            {"orderId": order_id, "deliveredAt": payload.deliveredAt},
+            {
+                "orderId": order_id,
+                "deliveredAt": payload.deliveredAt,
+                "proofRef": payload.proofRef,
+                "deliveredQtySummary": [
+                    {
+                        "orderLineId": line["orderLineId"],
+                        "deliveredQty": _float_value(line.get("deliveredQty")),
+                    }
+                    for line in record["lines"]
+                ],
+            },
             context,
         )
         _audit_order_decision(

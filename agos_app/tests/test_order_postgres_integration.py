@@ -16,8 +16,13 @@ from app.models.orders import (
     ConfirmOrderRequest,
     CreateOrderLineRequest,
     CreateOrderRequest,
+    DeliverOrderRequest,
+    DeliveredQtyItem,
+    PackOrderRequest,
+    PackQtyItem,
     ReleaseAllocationRequest,
     RequestCancelOrderRequest,
+    ShipOrderRequest,
 )
 from app.services import orders as order_service
 from app.store import _db
@@ -483,3 +488,176 @@ def test_order_cancel_releases_preorder_quota_on_postgres_path(
     ).mappings().one()
     assert float(preorder_after_cancel["allocated_qty"]) == 0.0
     assert float(preorder_after_cancel["remaining_qty"]) == 10.0
+
+
+@pytest.mark.postgres_integration
+def test_fulfillment_metadata_and_last_purchase_persist_on_postgres_path(
+    postgres_db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_db, "is_enabled", lambda: True)
+    monkeypatch.setattr(_db, "read_session", lambda session=None: _bound_read_session(postgres_db_session))
+    monkeypatch.setattr(_db, "write_session", lambda session=None: _bound_write_session(postgres_db_session))
+    monkeypatch.setattr(order_service.postgres_sync, "is_enabled", lambda: True)
+    monkeypatch.setattr(order_service, "postgres_transaction", lambda: _bound_transaction(postgres_db_session))
+
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO customers (
+                customer_id,
+                tenant_id,
+                customer_code,
+                full_name,
+                phone,
+                phone_normalized,
+                channel_source,
+                status,
+                tags,
+                notes
+            ) VALUES (
+                :customer_id,
+                'default',
+                'KH-FULL-001',
+                'Fulfillment PG User',
+                '+84987654321',
+                '84987654321',
+                'internal_ui',
+                'active',
+                '[]'::jsonb,
+                null
+            )
+            """
+        ),
+        {"customer_id": "00000000-0000-0000-0000-00000000c003"},
+    )
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO product_skus (product_sku_id, tenant_id, sku_code, sku_name, unit, status)
+            VALUES (:product_sku_id, 'default', 'SKU-FULL-1', 'Fulfillment SKU', 'kg', 'active')
+            """
+        ),
+        {"product_sku_id": "00000000-0000-0000-0000-000000000503"},
+    )
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO lots (
+                lot_id,
+                tenant_id,
+                lot_code,
+                product_sku_id,
+                source_type,
+                source_ref_id,
+                harvest_or_production_date,
+                actual_qty,
+                available_qty,
+                reserved_qty,
+                released_qty,
+                status,
+                updated_at
+            ) VALUES (
+                :lot_id,
+                'default',
+                'LOT-FULL-001',
+                :product_sku_id,
+                'processing_batch',
+                'PROC-FULL-001',
+                now(),
+                10,
+                10,
+                0,
+                10,
+                'released',
+                now()
+            )
+            """
+        ),
+        {
+            "lot_id": "00000000-0000-0000-0000-000000000703",
+            "product_sku_id": "00000000-0000-0000-0000-000000000503",
+        },
+    )
+
+    created = order_service.create_order(
+        CreateOrderRequest(
+            customerId="00000000-0000-0000-0000-00000000c003",
+            channel="web",
+            lines=[CreateOrderLineRequest(productSkuId="00000000-0000-0000-0000-000000000503", orderedQty=6, unit="kg")],
+            meta=Meta(correlationId="corr-pg-full-create", idempotencyKey="idem-pg-full-create"),
+        )
+    )
+    order_id = created.data.orderId
+    order_line_id = created.data.lines[0].orderLineId
+
+    order_service.confirm_order(
+        order_id,
+        ConfirmOrderRequest(meta=Meta(correlationId="corr-pg-full-confirm", idempotencyKey="idem-pg-full-confirm")),
+    )
+    order_service.allocate_order(
+        order_id,
+        AllocateOrderRequest(
+            allocations=[
+                AllocateItem(orderLineId=order_line_id, lotId="00000000-0000-0000-0000-000000000703", allocatedQty=6)
+            ],
+            meta=Meta(correlationId="corr-pg-full-allocate", idempotencyKey="idem-pg-full-allocate"),
+        ),
+    )
+    order_service.pack_order(
+        order_id,
+        PackOrderRequest(
+            packedQtySummary=[PackQtyItem(orderLineId=order_line_id, packedQty=6)],
+            meta=Meta(correlationId="corr-pg-full-pack", idempotencyKey="idem-pg-full-pack"),
+        ),
+    )
+    order_service.ship_order(
+        order_id,
+        ShipOrderRequest(
+            carrier="gha",
+            trackingRef="TRK-PG-1",
+            shippedAt="2026-04-12T10:00:00Z",
+            meta=Meta(correlationId="corr-pg-full-ship", idempotencyKey="idem-pg-full-ship"),
+        ),
+    )
+    delivered = order_service.deliver_order(
+        order_id,
+        DeliverOrderRequest(
+            deliveredQtySummary=[DeliveredQtyItem(orderLineId=order_line_id, deliveredQty=4)],
+            deliveredAt="2026-04-12T11:00:00Z",
+            proofRef="proof-pg-1",
+            meta=Meta(correlationId="corr-pg-full-deliver", idempotencyKey="idem-pg-full-deliver"),
+        ),
+    )
+
+    assert delivered.data.status == "partially_delivered"
+
+    order_row = postgres_db_session.execute(
+        text(
+            """
+            SELECT status, carrier, tracking_ref, shipped_at, delivered_at, proof_ref
+            FROM sales_orders
+            WHERE order_id = :order_id
+            """
+        ),
+        {"order_id": order_id},
+    ).mappings().one()
+    assert order_row["status"] == "partially_delivered"
+    assert order_row["carrier"] == "gha"
+    assert order_row["tracking_ref"] == "TRK-PG-1"
+    assert order_row["shipped_at"] is not None
+    assert order_row["delivered_at"] is not None
+    assert order_row["proof_ref"] == "proof-pg-1"
+
+    line_row = postgres_db_session.execute(
+        text("SELECT packed_qty, delivered_qty FROM sales_order_lines WHERE order_line_id = :order_line_id"),
+        {"order_line_id": order_line_id},
+    ).mappings().one()
+    assert float(line_row["packed_qty"]) == 6.0
+    assert float(line_row["delivered_qty"]) == 4.0
+
+    customer_row = postgres_db_session.execute(
+        text("SELECT last_order_at FROM customers WHERE customer_id = :customer_id"),
+        {"customer_id": "00000000-0000-0000-0000-00000000c003"},
+    ).mappings().one()
+    assert customer_row["last_order_at"] is not None

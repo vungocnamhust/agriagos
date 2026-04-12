@@ -23,6 +23,11 @@ class OrderDetail(BaseModel):
     paymentStatus: PaymentStatus  # (06-state-transitions.md)
     deliveryDateExpected: str | None = None
     shippingAddress: str | None = None
+    carrier: str | None = None
+    trackingRef: str | None = None
+    shippedAt: str | None = None
+    deliveredAt: str | None = None
+    proofRef: str | None = None
     note: str | None = None
     createdBy: str | None = None
     sourcePreorderFlag: bool = False
@@ -108,7 +113,14 @@ class ShipOrderRequest(BaseModel):
     shippedAt: str | None = None
     meta: Meta | None = None
 
+
+class DeliveredQtyItem(BaseModel):
+    orderLineId: str
+    deliveredQty: float
+
+
 class DeliverOrderRequest(BaseModel):
+    deliveredQtySummary: list[DeliveredQtyItem] = []
     deliveredAt: str | None = None
     proofRef: str | None = None
     note: str | None = None

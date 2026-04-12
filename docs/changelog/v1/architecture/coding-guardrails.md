@@ -157,7 +157,7 @@ Cần implement draft → confirmed → active flow hoặc xóa bớt states kh�
 | Enum | States trong enum | States có transitions | States chưa có transitions | Lý do |
 |------|-------------------|-----------------------|---------------------------|-------|
 | `LotStatus` | draft, harvested, qc_pending, released, blocked, depleted, closed | harvested, qc_pending, released, blocked | draft, depleted, closed | Phase 1 có release/unblock lane tối thiểu; depleted/closed vẫn để Phase 2 |
-| `OrderStatus` | draft, confirmed, allocated, partially_allocated, packed, partially_packed, shipped, delivered, partially_delivered, cancel_requested, cancelled, failed | draft, confirmed, allocated, partially_allocated, packed, cancel_requested, shipped, delivered, cancelled | partially_packed, partially_delivered, failed | `partially_allocated` is now active in the Phase 1 allocation adjust/release flow; the remaining partial-fulfillment states stay Phase 2 |
+| `OrderStatus` | draft, confirmed, allocated, partially_allocated, packed, partially_packed, shipped, delivered, partially_delivered, cancel_requested, cancelled, failed | draft, confirmed, allocated, partially_allocated, packed, partially_packed, cancel_requested, shipped, delivered, partially_delivered, cancelled | failed | Partial packing and partial delivery are now active in the Phase 1 fulfillment flow; `failed` remains deferred |
 | `PreorderStatus` | draft, confirmed, active, completed, cancelled | active, completed, cancelled | draft, confirmed | Phase 1.5 (full preorder lifecycle chưa implement) |
 
 ---

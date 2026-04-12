@@ -22,12 +22,15 @@ ORDER_TRANSITIONS: dict[str, dict[str, str]] = {
     OrderStatus.confirmed.value: {"allocate": OrderStatus.allocated.value, "cancel": OrderStatus.cancelled.value},
     OrderStatus.partially_allocated.value: {
         "allocate": OrderStatus.allocated.value,
+        "pack": OrderStatus.partially_packed.value,
         "request_cancel": OrderStatus.cancel_requested.value,
     },
     OrderStatus.allocated.value: {"pack": OrderStatus.packed.value, "request_cancel": OrderStatus.cancel_requested.value},
+    OrderStatus.partially_packed.value: {"pack": OrderStatus.packed.value, "request_cancel": OrderStatus.cancel_requested.value},
     OrderStatus.packed.value: {"ship": OrderStatus.shipped.value, "request_cancel": OrderStatus.cancel_requested.value},
     OrderStatus.cancel_requested.value: {"cancel": OrderStatus.cancelled.value},
     OrderStatus.shipped.value: {"deliver": OrderStatus.delivered.value},
+    OrderStatus.partially_delivered.value: {"deliver": OrderStatus.delivered.value},
     OrderStatus.delivered.value: {},
     OrderStatus.cancelled.value: {},
 }
