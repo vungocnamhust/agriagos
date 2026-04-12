@@ -56,6 +56,9 @@ PREORDER_AUDIT_REASON_CODES = COMMON_AUDIT_REASON_CODES | frozenset(
 
 LOT_AUDIT_REASON_CODES = COMMON_AUDIT_REASON_CODES | frozenset(
     {
+        "forbidden_lot_read",
+        "forbidden_lot_write",
+        "forbidden_qc_review_write",
         "lot_not_found",
         "invalid_quantity",
         "invalid_source_type",

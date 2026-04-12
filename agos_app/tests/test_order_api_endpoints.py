@@ -18,6 +18,14 @@ def _auth_headers(role: str = "admin", actor_id: str | None = None) -> dict[str,
     }
 
 
+def _delegated_agent_headers(delegated_role: str, actor_id: str = "agent-actor") -> dict[str, str]:
+    return {
+        "X-Actor-Id": actor_id,
+        "X-Actor-Role": "agent",
+        "X-Delegated-Actor-Role": delegated_role,
+    }
+
+
 def _create_customer() -> str:
     response = client.post(
         "/api/v1/customers",
@@ -168,6 +176,34 @@ def test_order_create_route_rejects_missing_source_preorder() -> None:
     body = response.json()
     assert body["code"] == "NOT_FOUND"
     assert body["message"] == "Preorder missing-preorder-id not found."
+
+
+def test_raw_order_detail_route_denies_delegated_agent() -> None:
+    customer_id = _create_customer()
+
+    created = client.post(
+        "/api/v1/orders",
+        headers=_auth_headers(),
+        json={
+            "customerId": customer_id,
+            "channel": "direct",
+            "lines": [{"productSkuId": "sku-1", "orderedQty": 1, "unit": "kg"}],
+            "meta": {
+                "correlationId": "corr-api-order-agent-create",
+                "idempotencyKey": "idem-api-order-agent-create",
+            },
+        },
+    )
+    assert created.status_code == 201
+    order_id = created.json()["data"]["orderId"]
+
+    detail = client.get(
+        f"/api/v1/orders/{order_id}",
+        headers=_delegated_agent_headers("sales"),
+    )
+
+    assert detail.status_code == 403
+    assert detail.json()["message"] == "Actor is not allowed to read order details."
 
 
 def test_order_allocation_adjust_and_release_routes() -> None:

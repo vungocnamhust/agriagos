@@ -39,6 +39,15 @@ def _bound_transaction(session: Session) -> Iterator[Session]:
     yield session
 
 
+def _admin_meta(correlation_id: str, idempotency_key: str) -> Meta:
+    return Meta(
+        correlationId=correlation_id,
+        idempotencyKey=idempotency_key,
+        actorId="admin-pg-1",
+        actorRole="admin",
+    )
+
+
 @pytest.mark.postgres_integration
 def test_harvested_lot_persists_unit_on_postgres_path(
     postgres_db_session: Session,
@@ -105,7 +114,7 @@ def test_harvested_lot_persists_unit_on_postgres_path(
             actualQty=25,
             unit="KG",
             harvestOrProductionDate="2026-04-11T00:00:00+00:00",
-            meta=Meta(correlationId="corr-lot-pg-create", idempotencyKey="idem-lot-pg-create"),
+            meta=_admin_meta("corr-lot-pg-create", "idem-lot-pg-create"),
         )
     )
 
@@ -146,7 +155,7 @@ def test_processed_lot_persists_processing_batch_source_on_postgres_path(
             actualQty=12,
             unit="KG",
             harvestOrProductionDate="2026-04-12T00:00:00+00:00",
-            meta=Meta(correlationId="corr-lot-pg-processed", idempotencyKey="idem-lot-pg-processed"),
+            meta=_admin_meta("corr-lot-pg-processed", "idem-lot-pg-processed"),
         )
     )
 
@@ -226,7 +235,7 @@ def test_lot_release_block_unblock_persists_quantity_snapshots_on_postgres_path(
             unit="KG",
             harvestOrProductionDate="2026-04-11T00:00:00+00:00",
             requiresQc=True,
-            meta=Meta(correlationId="corr-lot-pg-snapshots-create", idempotencyKey="idem-lot-pg-snapshots-create"),
+            meta=_admin_meta("corr-lot-pg-snapshots-create", "idem-lot-pg-snapshots-create"),
         )
     )
 
@@ -235,7 +244,7 @@ def test_lot_release_block_unblock_persists_quantity_snapshots_on_postgres_path(
         CreateQCReviewRequest(
             checklistVersion="v1",
             result="passed",
-            meta=Meta(correlationId="corr-lot-pg-snapshots-qc", idempotencyKey="idem-lot-pg-snapshots-qc"),
+            meta=_admin_meta("corr-lot-pg-snapshots-qc", "idem-lot-pg-snapshots-qc"),
         ),
     )
 
@@ -243,7 +252,7 @@ def test_lot_release_block_unblock_persists_quantity_snapshots_on_postgres_path(
         created.data.lotId,
         ReleaseLotRequest(
             releasedQty=10,
-            meta=Meta(correlationId="corr-lot-pg-snapshots-release", idempotencyKey="idem-lot-pg-snapshots-release"),
+            meta=_admin_meta("corr-lot-pg-snapshots-release", "idem-lot-pg-snapshots-release"),
         ),
     )
 
@@ -258,7 +267,7 @@ def test_lot_release_block_unblock_persists_quantity_snapshots_on_postgres_path(
         created.data.lotId,
         BlockLotRequest(
             reason="hold for review",
-            meta=Meta(correlationId="corr-lot-pg-snapshots-block", idempotencyKey="idem-lot-pg-snapshots-block"),
+            meta=_admin_meta("corr-lot-pg-snapshots-block", "idem-lot-pg-snapshots-block"),
         ),
     )
 
@@ -273,7 +282,7 @@ def test_lot_release_block_unblock_persists_quantity_snapshots_on_postgres_path(
         created.data.lotId,
         UnblockLotRequest(
             reason="review restarted",
-            meta=Meta(correlationId="corr-lot-pg-snapshots-unblock", idempotencyKey="idem-lot-pg-snapshots-unblock"),
+            meta=_admin_meta("corr-lot-pg-snapshots-unblock", "idem-lot-pg-snapshots-unblock"),
         ),
     )
 

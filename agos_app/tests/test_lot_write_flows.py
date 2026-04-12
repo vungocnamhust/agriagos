@@ -8,6 +8,7 @@ from pydantic import ValidationError
 
 from app.models.common import Meta
 from app.models.lots import (
+    AddLotEvidenceRequest,
     AdjustLotQuantityRequest,
     BlockLotRequest,
     CreateHarvestedLotRequest,
@@ -18,6 +19,15 @@ from app.models.lots import (
 )
 from app.services import lots
 from app.store import memory
+
+
+def _admin_meta(correlation_id: str, idempotency_key: str | None = None) -> Meta:
+    return Meta(
+        correlationId=correlation_id,
+        idempotencyKey=idempotency_key,
+        actorId="admin-1",
+        actorRole="admin",
+    )
 
 
 def test_create_lot_records_event_audit_and_idempotency(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -40,7 +50,7 @@ def test_create_lot_records_event_audit_and_idempotency(monkeypatch: pytest.Monk
             sourceRefId="cycle-1",
             actualQty=25,
             harvestOrProductionDate="2026-04-11",
-            meta=Meta(correlationId="corr-lot", idempotencyKey="idem-lot"),
+            meta=_admin_meta("corr-lot", "idem-lot"),
         )
     )
 
@@ -59,7 +69,7 @@ def test_create_processed_lot_records_processed_event(monkeypatch: pytest.Monkey
             processRefId="batch-1",
             actualQty=18,
             harvestOrProductionDate="2026-04-11",
-            meta=Meta(correlationId="corr-lot-process", idempotencyKey="idem-lot-process"),
+            meta=_admin_meta("corr-lot-process", "idem-lot-process"),
         )
     )
 
@@ -77,7 +87,7 @@ def test_create_processed_lot_rejects_blank_process_ref(monkeypatch: pytest.Monk
                 processRefId="   ",
                 actualQty=18,
                 harvestOrProductionDate="2026-04-11",
-                meta=Meta(correlationId="corr-lot-process-blank", idempotencyKey="idem-lot-process-blank"),
+                meta=_admin_meta("corr-lot-process-blank", "idem-lot-process-blank"),
             )
         )
 
@@ -105,7 +115,7 @@ def test_release_lot_missing_aggregate_writes_denied_audit(monkeypatch: pytest.M
     with pytest.raises(HTTPException) as exc_info:
         lots.release_lot(
             "missing-lot",
-            ReleaseLotRequest(releasedQty=5, meta=Meta(correlationId="corr-release")),
+            ReleaseLotRequest(releasedQty=5, meta=_admin_meta("corr-release")),
         )
 
     assert exc_info.value.status_code == 404
@@ -125,7 +135,7 @@ def test_create_lot_rejects_non_positive_quantity(monkeypatch: pytest.MonkeyPatc
                 sourceRefId="cycle-1",
                 actualQty=0,
                 harvestOrProductionDate="2026-04-11",
-                meta=Meta(correlationId="corr-lot-invalid-qty", idempotencyKey="idem-lot-invalid-qty"),
+                meta=_admin_meta("corr-lot-invalid-qty", "idem-lot-invalid-qty"),
             )
         )
 
@@ -145,13 +155,121 @@ def test_create_lot_validates_crop_cycle_source_exists(monkeypatch: pytest.Monke
                 sourceRefId="missing-cycle",
                 actualQty=25,
                 harvestOrProductionDate="2026-04-11",
-                meta=Meta(correlationId="corr-lot-missing-cycle", idempotencyKey="idem-lot-missing-cycle"),
+                meta=_admin_meta("corr-lot-missing-cycle", "idem-lot-missing-cycle"),
             )
         )
 
     assert exc_info.value.status_code == 422
     assert memory.list_audit_logs()[-1]["actionName"] == "lot.create"
     assert memory.list_audit_logs()[-1]["reasonCode"] == "source_ref_not_found"
+
+
+def test_create_lot_denies_viewer_actor(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(lots.postgres_sync, "is_enabled", lambda: False)
+    memory.save_crop_cycle(
+        "cycle-denied-1",
+        {
+            "cropCycleId": "cycle-denied-1",
+            "plotId": "plot-1",
+            "cropName": "rice",
+            "growthStage": "harvested",
+            "status": "harvested",
+        },
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        lots.create_harvested_lot(
+            CreateHarvestedLotRequest(
+                productSkuId="sku-1",
+                sourceType="crop_cycle",
+                sourceRefId="cycle-denied-1",
+                actualQty=25,
+                harvestOrProductionDate="2026-04-11",
+                meta=Meta(
+                    correlationId="corr-lot-create-denied",
+                    idempotencyKey="idem-lot-create-denied",
+                    actorId="viewer-1",
+                    actorRole="viewer",
+                ),
+            )
+        )
+
+    assert exc_info.value.status_code == 403
+    assert memory.list_audit_logs()[-1]["reasonCode"] == "forbidden_lot_write"
+
+
+def test_qc_reviewer_can_add_evidence_and_review_but_cannot_release(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(lots.postgres_sync, "is_enabled", lambda: False)
+    memory.save_crop_cycle(
+        "cycle-qc-1",
+        {
+            "cropCycleId": "cycle-qc-1",
+            "plotId": "plot-1",
+            "cropName": "rice",
+            "growthStage": "harvested",
+            "status": "harvested",
+        },
+    )
+
+    created = lots.create_harvested_lot(
+        CreateHarvestedLotRequest(
+            productSkuId="sku-1",
+            sourceType="crop_cycle",
+            sourceRefId="cycle-qc-1",
+            actualQty=25,
+            harvestOrProductionDate="2026-04-11",
+            requiresQc=True,
+            meta=_admin_meta("corr-lot-qc-reviewer-create", "idem-lot-qc-reviewer-create"),
+        )
+    )
+
+    evidence = lots.add_lot_evidence(
+        created.data.lotId,
+        AddLotEvidenceRequest(
+            evidenceType="photo",
+            objectStorageKey="evidence/qc-1.jpg",
+            meta=Meta(
+                correlationId="corr-lot-qc-reviewer-evidence",
+                idempotencyKey="idem-lot-qc-reviewer-evidence",
+                actorId="qc-1",
+                actorRole="qc_reviewer",
+            ),
+        ),
+    )
+    assert evidence.data.evidenceType == "photo"
+
+    review = lots.create_lot_qc_review(
+        created.data.lotId,
+        CreateQCReviewRequest(
+            checklistVersion="v1",
+            result="passed",
+            meta=Meta(
+                correlationId="corr-lot-qc-reviewer-review",
+                idempotencyKey="idem-lot-qc-reviewer-review",
+                actorId="qc-1",
+                actorRole="qc_reviewer",
+            ),
+        ),
+    )
+    assert review.data.result == "passed"
+
+    with pytest.raises(HTTPException) as exc_info:
+        lots.release_lot(
+            created.data.lotId,
+            ReleaseLotRequest(
+                releasedQty=10,
+                approvalRef="APR-QC-REVIEWER-001",
+                meta=Meta(
+                    correlationId="corr-lot-qc-reviewer-release",
+                    idempotencyKey="idem-lot-qc-reviewer-release",
+                    actorId="qc-1",
+                    actorRole="qc_reviewer",
+                ),
+            ),
+        )
+
+    assert exc_info.value.status_code == 403
+    assert memory.list_audit_logs()[-1]["reasonCode"] == "forbidden_lot_write"
 
 
 def test_create_lot_initializes_qc_pending_when_requested(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -175,7 +293,7 @@ def test_create_lot_initializes_qc_pending_when_requested(monkeypatch: pytest.Mo
             actualQty=25,
             harvestOrProductionDate="2026-04-11",
             requiresQc=True,
-            meta=Meta(correlationId="corr-lot-qc", idempotencyKey="idem-lot-qc"),
+            meta=_admin_meta("corr-lot-qc", "idem-lot-qc"),
         )
     )
 
@@ -201,7 +319,7 @@ def test_adjust_lot_quantity_emits_event_and_updates_detail(monkeypatch: pytest.
             sourceRefId="cycle-3",
             actualQty=25,
             harvestOrProductionDate="2026-04-11",
-            meta=Meta(correlationId="corr-lot-adjust-create", idempotencyKey="idem-lot-adjust-create"),
+            meta=_admin_meta("corr-lot-adjust-create", "idem-lot-adjust-create"),
         )
     )
 
@@ -210,7 +328,7 @@ def test_adjust_lot_quantity_emits_event_and_updates_detail(monkeypatch: pytest.
         AdjustLotQuantityRequest(
             newActualQty=30,
             reason="reweighed after intake",
-            meta=Meta(correlationId="corr-lot-adjust", idempotencyKey="idem-lot-adjust", actorId="ops-1"),
+            meta=_admin_meta("corr-lot-adjust", "idem-lot-adjust"),
         ),
     )
 
@@ -238,7 +356,7 @@ def test_adjust_lot_quantity_rejects_qty_below_released(monkeypatch: pytest.Monk
             sourceRefId="cycle-4",
             actualQty=25,
             harvestOrProductionDate="2026-04-11",
-            meta=Meta(correlationId="corr-lot-adjust-limit-create", idempotencyKey="idem-lot-adjust-limit-create"),
+            meta=_admin_meta("corr-lot-adjust-limit-create", "idem-lot-adjust-limit-create"),
         )
     )
     lots.release_lot(
@@ -246,7 +364,7 @@ def test_adjust_lot_quantity_rejects_qty_below_released(monkeypatch: pytest.Monk
         ReleaseLotRequest(
             releasedQty=10,
             approvalRef="APR-LOT-ADJUST-001",
-            meta=Meta(correlationId="corr-lot-adjust-limit-release", idempotencyKey="idem-lot-adjust-limit-release"),
+            meta=_admin_meta("corr-lot-adjust-limit-release", "idem-lot-adjust-limit-release"),
         ),
     )
 
@@ -256,7 +374,7 @@ def test_adjust_lot_quantity_rejects_qty_below_released(monkeypatch: pytest.Monk
             AdjustLotQuantityRequest(
                 newActualQty=5,
                 reason="bad recount",
-                meta=Meta(correlationId="corr-lot-adjust-limit", idempotencyKey="idem-lot-adjust-limit", actorId="ops-1"),
+                meta=_admin_meta("corr-lot-adjust-limit", "idem-lot-adjust-limit"),
             ),
         )
 
@@ -288,7 +406,7 @@ def test_unblock_lot_moves_blocked_status_back_to_qc_pending(monkeypatch: pytest
         "lot-blocked-1",
         UnblockLotRequest(
             reason="needs_reinspection",
-            meta=Meta(correlationId="corr-lot-unblock"),
+            meta=_admin_meta("corr-lot-unblock"),
         ),
     )
 
@@ -319,7 +437,7 @@ def test_release_lot_rejects_blocked_to_released_transition(monkeypatch: pytest.
     with pytest.raises(HTTPException) as exc_info:
         lots.release_lot(
             "lot-blocked-2",
-            ReleaseLotRequest(releasedQty=5, meta=Meta(correlationId="corr-lot-blocked-release")),
+            ReleaseLotRequest(releasedQty=5, meta=_admin_meta("corr-lot-blocked-release")),
         )
 
     assert exc_info.value.status_code == 422
@@ -346,7 +464,7 @@ def test_block_lot_closes_available_inventory(monkeypatch: pytest.MonkeyPatch) -
             sourceRefId="cycle-block-release",
             actualQty=25,
             harvestOrProductionDate="2026-04-11",
-            meta=Meta(correlationId="corr-lot-block-release-create", idempotencyKey="idem-lot-block-release-create"),
+            meta=_admin_meta("corr-lot-block-release-create", "idem-lot-block-release-create"),
         )
     )
     lots.release_lot(
@@ -354,7 +472,7 @@ def test_block_lot_closes_available_inventory(monkeypatch: pytest.MonkeyPatch) -
         ReleaseLotRequest(
             releasedQty=10,
             approvalRef="APR-LOT-BLOCK-001",
-            meta=Meta(correlationId="corr-lot-block-release-release", idempotencyKey="idem-lot-block-release-release"),
+            meta=_admin_meta("corr-lot-block-release-release", "idem-lot-block-release-release"),
         ),
     )
 
@@ -362,7 +480,7 @@ def test_block_lot_closes_available_inventory(monkeypatch: pytest.MonkeyPatch) -
         created.data.lotId,
         BlockLotRequest(
             reason="qc failed",
-            meta=Meta(correlationId="corr-lot-block-release-block", idempotencyKey="idem-lot-block-release-block"),
+            meta=_admin_meta("corr-lot-block-release-block", "idem-lot-block-release-block"),
         ),
     )
 
@@ -392,7 +510,7 @@ def test_release_lot_from_qc_pending_requires_passed_review(monkeypatch: pytest.
             actualQty=25,
             harvestOrProductionDate="2026-04-11",
             requiresQc=True,
-            meta=Meta(correlationId="corr-lot-release-guard-create", idempotencyKey="idem-lot-release-guard-create"),
+            meta=_admin_meta("corr-lot-release-guard-create", "idem-lot-release-guard-create"),
         )
     )
 
@@ -401,7 +519,7 @@ def test_release_lot_from_qc_pending_requires_passed_review(monkeypatch: pytest.
             created.data.lotId,
             ReleaseLotRequest(
                 releasedQty=10,
-                meta=Meta(correlationId="corr-lot-release-guard", idempotencyKey="idem-lot-release-guard"),
+                meta=_admin_meta("corr-lot-release-guard", "idem-lot-release-guard"),
             ),
         )
 
@@ -413,7 +531,7 @@ def test_release_lot_from_qc_pending_requires_passed_review(monkeypatch: pytest.
         CreateQCReviewRequest(
             checklistVersion="v1",
             result="passed",
-            meta=Meta(correlationId="corr-lot-release-guard-review", idempotencyKey="idem-lot-release-guard-review"),
+            meta=_admin_meta("corr-lot-release-guard-review", "idem-lot-release-guard-review"),
         ),
     )
 
@@ -423,7 +541,7 @@ def test_release_lot_from_qc_pending_requires_passed_review(monkeypatch: pytest.
         created.data.lotId,
         ReleaseLotRequest(
             releasedQty=10,
-            meta=Meta(correlationId="corr-lot-release-guard-allowed", idempotencyKey="idem-lot-release-guard-allowed"),
+            meta=_admin_meta("corr-lot-release-guard-allowed", "idem-lot-release-guard-allowed"),
         ),
     )
 
@@ -565,14 +683,14 @@ def test_unblock_lot_returns_to_qc_pending_and_keeps_inventory_closed(monkeypatc
             actualQty=25,
             harvestOrProductionDate="2026-04-11",
             requiresQc=True,
-            meta=Meta(correlationId="corr-lot-unblock-create", idempotencyKey="idem-lot-unblock-create"),
+            meta=_admin_meta("corr-lot-unblock-create", "idem-lot-unblock-create"),
         )
     )
     lots.block_lot(
         created.data.lotId,
         BlockLotRequest(
             reason="missing evidence",
-            meta=Meta(correlationId="corr-lot-unblock-block", idempotencyKey="idem-lot-unblock-block"),
+            meta=_admin_meta("corr-lot-unblock-block", "idem-lot-unblock-block"),
         ),
     )
 
@@ -580,7 +698,7 @@ def test_unblock_lot_returns_to_qc_pending_and_keeps_inventory_closed(monkeypatc
         created.data.lotId,
         UnblockLotRequest(
             reason="evidence supplied",
-            meta=Meta(correlationId="corr-lot-unblock", idempotencyKey="idem-lot-unblock"),
+            meta=_admin_meta("corr-lot-unblock", "idem-lot-unblock"),
         ),
     )
 
@@ -594,7 +712,7 @@ def test_unblock_lot_returns_to_qc_pending_and_keeps_inventory_closed(monkeypatc
             created.data.lotId,
             ReleaseLotRequest(
                 releasedQty=10,
-                meta=Meta(correlationId="corr-lot-unblock-release-denied", idempotencyKey="idem-lot-unblock-release-denied"),
+                meta=_admin_meta("corr-lot-unblock-release-denied", "idem-lot-unblock-release-denied"),
             ),
         )
 

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Request
 
-from app.api.routes._meta import apply_request_correlation
+from app.api.routes._meta import apply_request_correlation, request_meta
 from app.models.common import ErrorResponse
 from app.models.lots import (
     AddLotEvidenceRequest,
@@ -24,6 +24,7 @@ router = APIRouter()
 
 
 LOT_ERROR_RESPONSES = {
+    403: {"model": ErrorResponse, "description": "Forbidden"},
     404: {"model": ErrorResponse, "description": "Aggregate not found"},
     422: {"model": ErrorResponse, "description": "Validation error"},
 }
@@ -45,8 +46,8 @@ def create_processed_lot(request: Request, payload: CreateProcessedLotRequest) -
 
 
 @router.get("/{lot_id}", response_model=LotDetail, responses=LOT_ERROR_RESPONSES)
-def get_lot(lot_id: str) -> LotDetail:
-    return svc.get_lot(lot_id)
+def get_lot(lot_id: str, request: Request) -> LotDetail:
+    return svc.get_lot(lot_id, meta=request_meta(request))
 
 
 @router.post("/{lot_id}/release", response_model=LotResponse, responses=RELEASE_ERROR_RESPONSES)
@@ -75,8 +76,8 @@ def add_lot_evidence(lot_id: str, request: Request, payload: AddLotEvidenceReque
 
 
 @router.get("/{lot_id}/evidence", response_model=LotEvidenceListResponse, responses=LOT_ERROR_RESPONSES)
-def get_lot_evidence(lot_id: str) -> LotEvidenceListResponse:
-    return svc.get_lot_evidence(lot_id)
+def get_lot_evidence(lot_id: str, request: Request) -> LotEvidenceListResponse:
+    return svc.get_lot_evidence(lot_id, meta=request_meta(request))
 
 
 @router.post("/{lot_id}/qc-reviews", response_model=QCReviewResponse, status_code=201, responses=LOT_ERROR_RESPONSES)
@@ -85,5 +86,5 @@ def create_lot_qc_review(lot_id: str, request: Request, payload: CreateQCReviewR
 
 
 @router.get("/{lot_id}/qc-reviews", response_model=QCReviewListResponse, responses=LOT_ERROR_RESPONSES)
-def get_lot_qc_reviews(lot_id: str) -> QCReviewListResponse:
-    return svc.get_lot_qc_reviews(lot_id)
+def get_lot_qc_reviews(lot_id: str, request: Request) -> QCReviewListResponse:
+    return svc.get_lot_qc_reviews(lot_id, meta=request_meta(request))

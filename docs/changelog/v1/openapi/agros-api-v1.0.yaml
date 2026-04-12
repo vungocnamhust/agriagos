@@ -1077,6 +1077,11 @@ paths:
       - Lots
       summary: Create Harvested Lot
       operationId: create_harvested_lot_api_v1_lots_post
+      parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       requestBody:
         content:
           application/json:
@@ -1090,6 +1095,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LotResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Validation error
           content:
@@ -1102,6 +1113,11 @@ paths:
       - Lots
       summary: Create Processed Lot
       operationId: create_processed_lot_api_v1_lots_processed_post
+      parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       requestBody:
         content:
           application/json:
@@ -1115,6 +1131,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LotResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Validation error
           content:
@@ -1128,6 +1150,10 @@ paths:
       summary: Get Lot
       operationId: get_lot_api_v1_lots__lot_id__get
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: lot_id
         in: path
         required: true
@@ -1141,6 +1167,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LotDetail'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Aggregate not found
           content:
@@ -1160,6 +1192,10 @@ paths:
       summary: Release Lot
       operationId: release_lot_api_v1_lots__lot_id__release_post
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: lot_id
         in: path
         required: true
@@ -1204,6 +1240,10 @@ paths:
       summary: Block Lot
       operationId: block_lot_api_v1_lots__lot_id__block_post
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: lot_id
         in: path
         required: true
@@ -1223,6 +1263,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LotResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Aggregate not found
           content:
@@ -1242,6 +1288,10 @@ paths:
       summary: Unblock Lot
       operationId: unblock_lot_api_v1_lots__lot_id__unblock_post
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: lot_id
         in: path
         required: true
@@ -1261,6 +1311,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LotResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Aggregate not found
           content:
@@ -1280,6 +1336,10 @@ paths:
       summary: Adjust Lot Quantity
       operationId: adjust_lot_quantity_api_v1_lots__lot_id__adjust_post
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: lot_id
         in: path
         required: true
@@ -1299,6 +1359,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LotResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Aggregate not found
           content:
@@ -1318,6 +1384,10 @@ paths:
       summary: Add Lot Evidence
       operationId: add_lot_evidence_api_v1_lots__lot_id__evidence_post
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: lot_id
         in: path
         required: true
@@ -1337,6 +1407,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LotEvidenceResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Aggregate not found
           content:
@@ -1355,6 +1431,10 @@ paths:
       summary: Get Lot Evidence
       operationId: get_lot_evidence_api_v1_lots__lot_id__evidence_get
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: lot_id
         in: path
         required: true
@@ -1368,6 +1448,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LotEvidenceListResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Aggregate not found
           content:
@@ -1387,6 +1473,10 @@ paths:
       summary: Create Lot Qc Review
       operationId: create_lot_qc_review_api_v1_lots__lot_id__qc_reviews_post
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: lot_id
         in: path
         required: true
@@ -1406,6 +1496,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/QCReviewResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Aggregate not found
           content:
@@ -1424,6 +1520,10 @@ paths:
       summary: Get Lot Qc Reviews
       operationId: get_lot_qc_reviews_api_v1_lots__lot_id__qc_reviews_get
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: lot_id
         in: path
         required: true
@@ -1437,6 +1537,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/QCReviewListResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Aggregate not found
           content:

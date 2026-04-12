@@ -827,7 +827,6 @@ def get_order(order_id: str, meta: Meta | None = None) -> OrderDetail:
         allowed_roles=_ORDER_READ_ROLES,
         reason_code="forbidden_order_read",
         detail="Actor is not allowed to read order details.",
-        allow_delegated_agent=True,
     )
     record = _get_order_record_or_404(order_id)
     return _build_order_detail(record)

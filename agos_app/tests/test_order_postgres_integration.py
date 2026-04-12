@@ -44,6 +44,15 @@ def _bound_transaction(session: Session) -> Iterator[Session]:
     yield session
 
 
+def _admin_meta(correlation_id: str, idempotency_key: str) -> Meta:
+    return Meta(
+        correlationId=correlation_id,
+        idempotencyKey=idempotency_key,
+        actorId="admin-pg-1",
+        actorRole="admin",
+    )
+
+
 @pytest.mark.postgres_integration
 def test_allocation_core_adjust_and_release_persist_on_postgres_path(
     postgres_db_session: Session,
@@ -188,7 +197,7 @@ def test_allocation_core_adjust_and_release_persist_on_postgres_path(
                     sourcePreorderId="00000000-0000-0000-0000-000000000601",
                 )
             ],
-            meta=Meta(correlationId="corr-pg-order-create", idempotencyKey="idem-pg-order-create"),
+            meta=_admin_meta("corr-pg-order-create", "idem-pg-order-create"),
         )
     )
     order_id = created.data.orderId
@@ -196,7 +205,7 @@ def test_allocation_core_adjust_and_release_persist_on_postgres_path(
 
     order_service.confirm_order(
         order_id,
-        ConfirmOrderRequest(meta=Meta(correlationId="corr-pg-order-confirm", idempotencyKey="idem-pg-order-confirm")),
+        ConfirmOrderRequest(meta=_admin_meta("corr-pg-order-confirm", "idem-pg-order-confirm")),
     )
     allocated = order_service.allocate_order(
         order_id,
@@ -204,7 +213,7 @@ def test_allocation_core_adjust_and_release_persist_on_postgres_path(
             allocations=[
                 AllocateItem(orderLineId=order_line_id, lotId="00000000-0000-0000-0000-000000000701", allocatedQty=4)
             ],
-            meta=Meta(correlationId="corr-pg-order-allocate", idempotencyKey="idem-pg-order-allocate"),
+            meta=_admin_meta("corr-pg-order-allocate", "idem-pg-order-allocate"),
         ),
     )
 
@@ -221,7 +230,7 @@ def test_allocation_core_adjust_and_release_persist_on_postgres_path(
         AdjustAllocationRequest(
             newAllocatedQty=2,
             reason="customer_reduced_qty",
-            meta=Meta(correlationId="corr-pg-order-adjust", idempotencyKey="idem-pg-order-adjust"),
+            meta=_admin_meta("corr-pg-order-adjust", "idem-pg-order-adjust"),
         ),
     )
     assert adjusted.orderStatus == "partially_allocated"
@@ -239,7 +248,7 @@ def test_allocation_core_adjust_and_release_persist_on_postgres_path(
         allocated.allocations[0].allocationId,
         ReleaseAllocationRequest(
             reason="lot_reassigned",
-            meta=Meta(correlationId="corr-pg-order-release", idempotencyKey="idem-pg-order-release"),
+            meta=_admin_meta("corr-pg-order-release", "idem-pg-order-release"),
         ),
     )
     assert released.orderStatus == "confirmed"
@@ -441,7 +450,7 @@ def test_order_cancel_releases_preorder_quota_on_postgres_path(
                     sourcePreorderId="00000000-0000-0000-0000-000000000602",
                 )
             ],
-            meta=Meta(correlationId="corr-pg-order2-create", idempotencyKey="idem-pg-order2-create"),
+            meta=_admin_meta("corr-pg-order2-create", "idem-pg-order2-create"),
         )
     )
     order_id = created.data.orderId
@@ -449,7 +458,7 @@ def test_order_cancel_releases_preorder_quota_on_postgres_path(
 
     order_service.confirm_order(
         order_id,
-        ConfirmOrderRequest(meta=Meta(correlationId="corr-pg-order2-confirm", idempotencyKey="idem-pg-order2-confirm")),
+        ConfirmOrderRequest(meta=_admin_meta("corr-pg-order2-confirm", "idem-pg-order2-confirm")),
     )
     order_service.allocate_order(
         order_id,
@@ -457,7 +466,7 @@ def test_order_cancel_releases_preorder_quota_on_postgres_path(
             allocations=[
                 AllocateItem(orderLineId=order_line_id, lotId="00000000-0000-0000-0000-000000000702", allocatedQty=3)
             ],
-            meta=Meta(correlationId="corr-pg-order2-allocate", idempotencyKey="idem-pg-order2-allocate"),
+            meta=_admin_meta("corr-pg-order2-allocate", "idem-pg-order2-allocate"),
         ),
     )
 
@@ -472,14 +481,14 @@ def test_order_cancel_releases_preorder_quota_on_postgres_path(
         order_id,
         RequestCancelOrderRequest(
             reason="customer_cancelled",
-            meta=Meta(correlationId="corr-pg-order2-request-cancel", idempotencyKey="idem-pg-order2-request-cancel"),
+            meta=_admin_meta("corr-pg-order2-request-cancel", "idem-pg-order2-request-cancel"),
         ),
     )
     order_service.cancel_order(
         order_id,
         CancelOrderRequest(
             reason="customer_cancelled",
-            meta=Meta(correlationId="corr-pg-order2-cancel", idempotencyKey="idem-pg-order2-cancel"),
+            meta=_admin_meta("corr-pg-order2-cancel", "idem-pg-order2-cancel"),
         ),
     )
 
@@ -586,7 +595,7 @@ def test_fulfillment_metadata_and_last_purchase_persist_on_postgres_path(
             customerId="00000000-0000-0000-0000-00000000c003",
             channel="web",
             lines=[CreateOrderLineRequest(productSkuId="00000000-0000-0000-0000-000000000503", orderedQty=6, unit="kg")],
-            meta=Meta(correlationId="corr-pg-full-create", idempotencyKey="idem-pg-full-create"),
+            meta=_admin_meta("corr-pg-full-create", "idem-pg-full-create"),
         )
     )
     order_id = created.data.orderId
@@ -594,7 +603,7 @@ def test_fulfillment_metadata_and_last_purchase_persist_on_postgres_path(
 
     order_service.confirm_order(
         order_id,
-        ConfirmOrderRequest(meta=Meta(correlationId="corr-pg-full-confirm", idempotencyKey="idem-pg-full-confirm")),
+        ConfirmOrderRequest(meta=_admin_meta("corr-pg-full-confirm", "idem-pg-full-confirm")),
     )
     order_service.allocate_order(
         order_id,
@@ -602,14 +611,14 @@ def test_fulfillment_metadata_and_last_purchase_persist_on_postgres_path(
             allocations=[
                 AllocateItem(orderLineId=order_line_id, lotId="00000000-0000-0000-0000-000000000703", allocatedQty=6)
             ],
-            meta=Meta(correlationId="corr-pg-full-allocate", idempotencyKey="idem-pg-full-allocate"),
+            meta=_admin_meta("corr-pg-full-allocate", "idem-pg-full-allocate"),
         ),
     )
     order_service.pack_order(
         order_id,
         PackOrderRequest(
             packedQtySummary=[PackQtyItem(orderLineId=order_line_id, packedQty=6)],
-            meta=Meta(correlationId="corr-pg-full-pack", idempotencyKey="idem-pg-full-pack"),
+            meta=_admin_meta("corr-pg-full-pack", "idem-pg-full-pack"),
         ),
     )
     order_service.ship_order(
@@ -618,7 +627,7 @@ def test_fulfillment_metadata_and_last_purchase_persist_on_postgres_path(
             carrier="gha",
             trackingRef="TRK-PG-1",
             shippedAt="2026-04-12T10:00:00Z",
-            meta=Meta(correlationId="corr-pg-full-ship", idempotencyKey="idem-pg-full-ship"),
+            meta=_admin_meta("corr-pg-full-ship", "idem-pg-full-ship"),
         ),
     )
     delivered = order_service.deliver_order(
@@ -627,7 +636,7 @@ def test_fulfillment_metadata_and_last_purchase_persist_on_postgres_path(
             deliveredQtySummary=[DeliveredQtyItem(orderLineId=order_line_id, deliveredQty=4)],
             deliveredAt="2026-04-12T11:00:00Z",
             proofRef="proof-pg-1",
-            meta=Meta(correlationId="corr-pg-full-deliver", idempotencyKey="idem-pg-full-deliver"),
+            meta=_admin_meta("corr-pg-full-deliver", "idem-pg-full-deliver"),
         ),
     )
 
@@ -759,7 +768,7 @@ def test_failed_delivery_persists_failed_status_without_customer_purchase_update
             customerId="00000000-0000-0000-0000-00000000c004",
             channel="web",
             lines=[CreateOrderLineRequest(productSkuId="00000000-0000-0000-0000-000000000504", orderedQty=6, unit="kg")],
-            meta=Meta(correlationId="corr-pg-fail-create", idempotencyKey="idem-pg-fail-create"),
+            meta=_admin_meta("corr-pg-fail-create", "idem-pg-fail-create"),
         )
     )
     order_id = created.data.orderId
@@ -767,7 +776,7 @@ def test_failed_delivery_persists_failed_status_without_customer_purchase_update
 
     order_service.confirm_order(
         order_id,
-        ConfirmOrderRequest(meta=Meta(correlationId="corr-pg-fail-confirm", idempotencyKey="idem-pg-fail-confirm")),
+        ConfirmOrderRequest(meta=_admin_meta("corr-pg-fail-confirm", "idem-pg-fail-confirm")),
     )
     order_service.allocate_order(
         order_id,
@@ -775,14 +784,14 @@ def test_failed_delivery_persists_failed_status_without_customer_purchase_update
             allocations=[
                 AllocateItem(orderLineId=order_line_id, lotId="00000000-0000-0000-0000-000000000704", allocatedQty=6)
             ],
-            meta=Meta(correlationId="corr-pg-fail-allocate", idempotencyKey="idem-pg-fail-allocate"),
+            meta=_admin_meta("corr-pg-fail-allocate", "idem-pg-fail-allocate"),
         ),
     )
     order_service.pack_order(
         order_id,
         PackOrderRequest(
             packedQtySummary=[PackQtyItem(orderLineId=order_line_id, packedQty=6)],
-            meta=Meta(correlationId="corr-pg-fail-pack", idempotencyKey="idem-pg-fail-pack"),
+            meta=_admin_meta("corr-pg-fail-pack", "idem-pg-fail-pack"),
         ),
     )
     order_service.ship_order(
@@ -791,7 +800,7 @@ def test_failed_delivery_persists_failed_status_without_customer_purchase_update
             carrier="gha",
             trackingRef="TRK-PG-FAIL-1",
             shippedAt="2026-04-12T10:00:00Z",
-            meta=Meta(correlationId="corr-pg-fail-ship", idempotencyKey="idem-pg-fail-ship"),
+            meta=_admin_meta("corr-pg-fail-ship", "idem-pg-fail-ship"),
         ),
     )
     failed = order_service.fail_delivery(
@@ -799,7 +808,7 @@ def test_failed_delivery_persists_failed_status_without_customer_purchase_update
         FailDeliveryRequest(
             failureReason="customer_unreachable",
             note="carrier could not complete handoff",
-            meta=Meta(correlationId="corr-pg-fail-deliver", idempotencyKey="idem-pg-fail-deliver"),
+            meta=_admin_meta("corr-pg-fail-deliver", "idem-pg-fail-deliver"),
         ),
     )
 

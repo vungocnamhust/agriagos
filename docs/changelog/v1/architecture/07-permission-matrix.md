@@ -325,6 +325,9 @@ Bắt buộc approval trong phase đầu:
 
 Phase 1 implementation note:
 - raw `/api/v1/orders*` reads and write commands now enforce the matrix directly in the service layer; Viewer remains denied on raw order access and agent lanes stay proposal-only
+- raw `/api/v1/lots/{lot_id}` reads plus `/evidence` and `/qc-reviews` readbacks now enforce operational-only access in the service layer; current readers are Founder / Super Admin, Admin, Ops, Farm Manager, và QC Reviewer
+- lot create commands (`POST /api/v1/lots`, `POST /api/v1/lots/processed`) now require Founder / Super Admin / Admin / Ops / Farm Manager; lot adjust/release/block/unblock uses the same write lane, while evidence add and QC review also admit `qc_reviewer`
+- packed-or-later order cancel vẫn còn một divergence implementation: service hiện chỉ gate theo role và chưa enforce `approvalRef`; theo dõi tại `DL-20260412-02` trong divergence ledger
 - route `ReleaseLot` hiện chỉ mang `approvalRef` như approval evidence cho case đặc biệt; identity của người approve vẫn thuộc audit/workflow ngoài request schema và chưa được enforce như field riêng ở public API
 - khi thiếu `approvalRef` cho lot release nhạy cảm, service hiện ghi audit decision `escalated` với `reason_code=approval_required` và metadata tối thiểu như `requiredApprovalRef`, `requiredApproverRoles`, `escalationOwner` trước khi trả `403`
 

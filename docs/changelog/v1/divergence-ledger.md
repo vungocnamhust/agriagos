@@ -24,6 +24,7 @@ Do not keep divergence tracking only in local TODOs, comments, prompts, or instr
 
 | ID | Concern | Code Surface | Doc Surface | Divergence | Why | Status | Exit Condition |
 |---|---|---|---|---|---|---|---|
+| DL-20260412-02 | permission/api | `agos_app/app/services/orders.py`, `agos_app/app/models/orders.py`, `agos_app/app/api/routes/orders.py` | `docs/changelog/v1/architecture/07-permission-matrix.md`, `docs/changelog/v1/openapi/agros-api-v1.0.yaml` | Packed-or-later order cancel is currently role-gated but does not yet enforce approval evidence such as `approvalRef`, even though the docs still classify that path as approval-required. | PR5 focused on shared order authz rollout without introducing a second approval/escalation flow inside order cancel. | open | Resolved when packed-or-later cancel either enforces an explicit approval/escalation contract or the docs/OpenAPI are revised to remove approval semantics from that path. |
 
 ## Resolved Entries
 

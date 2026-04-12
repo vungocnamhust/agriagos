@@ -13,9 +13,9 @@ UNSCOPED_EVENT_ROLES = frozenset({"founder", "super_admin"})
 SCOPED_EVENT_ROLES = frozenset({"admin", "accountant", "viewer"})
 
 
-def _effective_actor_role(context: dict[str, Any]) -> str | None:
+def _effective_actor_role(context: dict[str, Any], *, allow_delegated_agent: bool = True) -> str | None:
     actor_role = context.get("normalized_actor_role") or normalize_actor_role(context.get("actor_role"))
-    if actor_role != "agent":
+    if actor_role != "agent" or not allow_delegated_agent:
         return actor_role
 
     delegated_actor_role = normalize_actor_role(context.get("delegated_actor_role"))
@@ -53,6 +53,7 @@ def authorize_read_surface(
     allowed_roles: Iterable[str],
     reason_code: str,
     detail: str,
+    allow_delegated_agent: bool = True,
 ) -> dict[str, Any]:
     context = meta_context(meta)
     ensure_bypass_permitted(
@@ -62,7 +63,7 @@ def authorize_read_surface(
         context=context,
     )
 
-    effective_actor_role = _effective_actor_role(context)
+    effective_actor_role = _effective_actor_role(context, allow_delegated_agent=allow_delegated_agent)
     if effective_actor_role not in set(allowed_roles):
         _deny_read(
             action_name=action_name,

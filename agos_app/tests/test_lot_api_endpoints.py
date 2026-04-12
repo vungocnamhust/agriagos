@@ -9,6 +9,22 @@ from app.store import memory
 client = TestClient(app)
 
 
+def _auth_headers(role: str = "admin", actor_id: str | None = None) -> dict[str, str]:
+    resolved_actor_id = actor_id or f"{role}-actor"
+    return {
+        "X-Actor-Id": resolved_actor_id,
+        "X-Actor-Role": role,
+    }
+
+
+def _delegated_agent_headers(delegated_role: str, actor_id: str = "agent-actor") -> dict[str, str]:
+    return {
+        "X-Actor-Id": actor_id,
+        "X-Actor-Role": "agent",
+        "X-Delegated-Actor-Role": delegated_role,
+    }
+
+
 def test_lot_routes_create_detail_and_adjust() -> None:
     memory.save_crop_cycle(
         "cycle-api-1",
@@ -23,6 +39,7 @@ def test_lot_routes_create_detail_and_adjust() -> None:
 
     create_response = client.post(
         "/api/v1/lots",
+        headers=_auth_headers(),
         json={
             "productSkuId": "sku-1",
             "sourceType": "crop_cycle",
@@ -42,13 +59,14 @@ def test_lot_routes_create_detail_and_adjust() -> None:
     assert created["releasedQty"] == 0
     assert created["availableQty"] == 0
 
-    detail_response = client.get(f"/api/v1/lots/{created['lotId']}")
+    detail_response = client.get(f"/api/v1/lots/{created['lotId']}", headers=_auth_headers())
     assert detail_response.status_code == 200
     assert detail_response.json()["lotId"] == created["lotId"]
     assert detail_response.json()["sourceRefId"] == "cycle-api-1"
 
     adjust_response = client.post(
         f"/api/v1/lots/{created['lotId']}/adjust",
+        headers=_auth_headers(),
         json={
             "newActualQty": 30,
             "reason": "reweighed after intake",
@@ -63,6 +81,7 @@ def test_lot_routes_create_detail_and_adjust() -> None:
 def test_lot_create_route_rejects_invalid_quantity_and_missing_cycle() -> None:
     invalid_quantity_response = client.post(
         "/api/v1/lots",
+        headers=_auth_headers(),
         json={
             "productSkuId": "sku-1",
             "sourceType": "crop_cycle",
@@ -78,6 +97,7 @@ def test_lot_create_route_rejects_invalid_quantity_and_missing_cycle() -> None:
 
     missing_cycle_response = client.post(
         "/api/v1/lots",
+        headers=_auth_headers(),
         json={
             "productSkuId": "sku-1",
             "sourceType": "crop_cycle",
@@ -95,6 +115,7 @@ def test_lot_create_route_rejects_invalid_quantity_and_missing_cycle() -> None:
 def test_processed_lot_route_accepts_processing_batch_source() -> None:
     response = client.post(
         "/api/v1/lots/processed",
+        headers=_auth_headers(),
         json={
             "productSkuId": "sku-1",
             "processRefId": "batch-api-1",
@@ -106,6 +127,125 @@ def test_processed_lot_route_accepts_processing_batch_source() -> None:
 
     assert response.status_code == 201
     assert response.json()["data"]["sourceType"] == "processing_batch"
+
+
+def test_raw_lot_detail_route_denies_viewer() -> None:
+    memory.save_lot(
+        "lot-api-viewer-denied",
+        {
+            "lotId": "lot-api-viewer-denied",
+            "tenantId": "default",
+            "lotCode": "LOT-API-VIEWER-001",
+            "productSkuId": "sku-1",
+            "sourceType": "crop_cycle",
+            "sourceRefId": "cycle-viewer-denied",
+            "harvestOrProductionDate": "2026-04-11",
+            "actualQty": 10.0,
+            "availableQty": 0.0,
+            "reservedQty": 0.0,
+            "releasedQty": 0.0,
+            "status": "harvested",
+        },
+    )
+
+    response = client.get(
+        "/api/v1/lots/lot-api-viewer-denied",
+        headers=_auth_headers("viewer"),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["message"] == "Actor is not allowed to read raw lot details."
+
+
+def test_raw_lot_detail_route_denies_delegated_agent() -> None:
+    memory.save_lot(
+        "lot-api-agent-denied",
+        {
+            "lotId": "lot-api-agent-denied",
+            "tenantId": "default",
+            "lotCode": "LOT-API-AGENT-001",
+            "productSkuId": "sku-1",
+            "sourceType": "crop_cycle",
+            "sourceRefId": "cycle-agent-denied",
+            "harvestOrProductionDate": "2026-04-11",
+            "actualQty": 10.0,
+            "availableQty": 0.0,
+            "reservedQty": 0.0,
+            "releasedQty": 0.0,
+            "status": "harvested",
+        },
+    )
+
+    response = client.get(
+        "/api/v1/lots/lot-api-agent-denied",
+        headers=_delegated_agent_headers("ops"),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["message"] == "Actor is not allowed to read raw lot details."
+
+
+def test_qc_reviewer_can_read_evidence_and_qc_reviews() -> None:
+    memory.save_lot(
+        "lot-api-qc-read",
+        {
+            "lotId": "lot-api-qc-read",
+            "tenantId": "default",
+            "lotCode": "LOT-API-QC-001",
+            "productSkuId": "sku-1",
+            "sourceType": "crop_cycle",
+            "sourceRefId": "cycle-qc-read",
+            "harvestOrProductionDate": "2026-04-11",
+            "actualQty": 10.0,
+            "availableQty": 0.0,
+            "reservedQty": 0.0,
+            "releasedQty": 0.0,
+            "status": "qc_pending",
+        },
+    )
+    memory.save_lot_evidence(
+        "lot-api-qc-read",
+        [
+            {
+                "lotEvidenceId": "evidence-qc-read-1",
+                "lotId": "lot-api-qc-read",
+                "evidenceType": "photo",
+                "objectStorageKey": "evidence/qc-read-1.jpg",
+                "textValue": None,
+                "capturedAt": "2026-04-11T10:00:00Z",
+                "actorId": "qc-1",
+                "status": "active",
+            }
+        ],
+    )
+    memory.save_lot_qc_reviews(
+        "lot-api-qc-read",
+        [
+            {
+                "qcReviewId": "review-qc-read-1",
+                "lotId": "lot-api-qc-read",
+                "checklistVersion": "v1",
+                "result": "passed",
+                "reviewerId": "qc-1",
+                "reviewedAt": "2026-04-11T11:00:00Z",
+                "notes": None,
+            }
+        ],
+    )
+
+    evidence_response = client.get(
+        "/api/v1/lots/lot-api-qc-read/evidence",
+        headers=_auth_headers("qc_reviewer", actor_id="qc-1"),
+    )
+    reviews_response = client.get(
+        "/api/v1/lots/lot-api-qc-read/qc-reviews",
+        headers=_auth_headers("qc_reviewer", actor_id="qc-1"),
+    )
+
+    assert evidence_response.status_code == 200
+    assert evidence_response.json()["items"][0]["evidenceType"] == "photo"
+    assert reviews_response.status_code == 200
+    assert reviews_response.json()["items"][0]["result"] == "passed"
 
 
 def test_lot_release_block_and_unblock_workflow() -> None:
@@ -122,6 +262,7 @@ def test_lot_release_block_and_unblock_workflow() -> None:
 
     create_response = client.post(
         "/api/v1/lots",
+        headers=_auth_headers(),
         json={
             "productSkuId": "sku-1",
             "sourceType": "crop_cycle",
@@ -138,6 +279,7 @@ def test_lot_release_block_and_unblock_workflow() -> None:
 
     block_response = client.post(
         f"/api/v1/lots/{lot_id}/block",
+        headers=_auth_headers(),
         json={
             "reason": "awaiting evidence",
             "meta": {"correlationId": "corr-lot-api-unblock-block", "idempotencyKey": "idem-lot-api-unblock-block"},
@@ -149,6 +291,7 @@ def test_lot_release_block_and_unblock_workflow() -> None:
 
     unblock_response = client.post(
         f"/api/v1/lots/{lot_id}/unblock",
+        headers=_auth_headers(),
         json={
             "reason": "evidence uploaded",
             "meta": {"correlationId": "corr-lot-api-unblock", "idempotencyKey": "idem-lot-api-unblock"},
@@ -231,6 +374,7 @@ def test_sensitive_lot_release_requires_approval_ref() -> None:
 def test_harvested_lot_route_rejects_processing_batch_source() -> None:
     response = client.post(
         "/api/v1/lots",
+        headers=_auth_headers(),
         json={
             "productSkuId": "sku-1",
             "sourceType": "processing_batch",
@@ -266,6 +410,7 @@ def test_lot_release_route_rejects_blocked_transition() -> None:
 
     response = client.post(
         "/api/v1/lots/lot-api-blocked/release",
+        headers=_auth_headers(),
         json={
             "releasedQty": 5,
             "meta": {"correlationId": "corr-lot-api-blocked-release", "idempotencyKey": "idem-lot-api-blocked-release"},

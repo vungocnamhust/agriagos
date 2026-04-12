@@ -6,9 +6,11 @@ from typing import Any
 from fastapi import HTTPException
 
 from app.core import events
+from app.core.authz import ensure_bypass_permitted, normalize_actor_role
 from app.core.codegen import generate_lot_code
 from app.core.write_context import build_request_hash, meta_context
 from app.core.gateway import assert_lot_transition, check_idempotency, record_idempotency
+from app.models.common import Meta
 from app.models.enums import LotStatus
 from app.models.lots import (
     AddLotEvidenceRequest,
@@ -29,6 +31,7 @@ from app.models.lots import (
     UnblockLotRequest,
 )
 from app.services import audit as audit_service
+from app.services.read_authz import authorize_read_surface
 from app.store import farm as farm_store
 from app.store.lots import (
     append_lot_evidence,
@@ -47,6 +50,54 @@ VALID_QC_RESULTS = {"pending", "passed", "failed", "needs_more_evidence"}
 STANDARD_LOT_UNIT = "kg"
 SENSITIVE_RELEASE_ROLES = {"farm_manager", "ops", "ops_manager"}
 APPROVAL_BYPASS_ROLES = {"admin", "founder", "super_admin", "admin_van_hanh"}
+_LOT_READ_ROLES = frozenset({"founder", "super_admin", "admin", "ops", "farm_manager", "qc_reviewer"})
+_LOT_CREATE_ROLES = frozenset({"founder", "super_admin", "admin", "ops", "farm_manager"})
+_LOT_STATE_WRITE_ROLES = frozenset({"founder", "super_admin", "admin", "ops", "farm_manager"})
+_LOT_EVIDENCE_WRITE_ROLES = frozenset({"founder", "super_admin", "admin", "ops", "farm_manager", "qc_reviewer"})
+_LOT_QC_WRITE_ROLES = frozenset({"founder", "super_admin", "admin", "ops", "farm_manager", "qc_reviewer"})
+
+
+def _effective_lot_actor_role(context: dict[str, Any], *, allow_delegated_agent: bool = False) -> str | None:
+    actor_role = context.get("normalized_actor_role") or normalize_actor_role(context.get("actor_role"))
+    if actor_role != "agent" or not allow_delegated_agent:
+        return actor_role
+
+    delegated_actor_role = normalize_actor_role(context.get("delegated_actor_role"))
+    return delegated_actor_role or actor_role
+
+
+def _assert_lot_access(
+    *,
+    context: dict[str, Any],
+    action_name: str,
+    lot_id: str,
+    allowed_roles: frozenset[str],
+    reason_code: str,
+    detail: str,
+    before_snapshot: Any | None = None,
+    allow_delegated_agent: bool = False,
+) -> None:
+    ensure_bypass_permitted(
+        action_name=action_name,
+        target_type="Lot",
+        target_id=lot_id,
+        context=context,
+    )
+
+    actor_role = _effective_lot_actor_role(context, allow_delegated_agent=allow_delegated_agent)
+    if actor_role in allowed_roles:
+        return
+
+    _audit_lot(
+        action_name,
+        lot_id,
+        "denied",
+        context,
+        before_snapshot=before_snapshot,
+        reason_code=reason_code,
+        metadata={"message": detail, "effectiveActorRole": actor_role},
+    )
+    raise HTTPException(status_code=403, detail=detail)
 
 
 def _new_lot_code(product_sku_id: str) -> str:
@@ -348,6 +399,14 @@ def _get_lot_record_or_404(
 
 def create_harvested_lot(payload: CreateHarvestedLotRequest) -> LotResponse:
     context = meta_context(payload.meta)
+    _assert_lot_access(
+        context=context,
+        action_name="lot.create",
+        lot_id=f"pending:{payload.sourceType}:{payload.sourceRefId}",
+        allowed_roles=_LOT_CREATE_ROLES,
+        reason_code="forbidden_lot_write",
+        detail="Actor is not allowed to create harvested lots.",
+    )
     key = context["idempotency_key"]
     if cached := check_idempotency(key):
         return LotResponse(**cached)
@@ -400,6 +459,14 @@ def create_harvested_lot(payload: CreateHarvestedLotRequest) -> LotResponse:
 
 def create_processed_lot(payload: CreateProcessedLotRequest) -> LotResponse:
     context = meta_context(payload.meta)
+    _assert_lot_access(
+        context=context,
+        action_name="lot.processed_create",
+        lot_id=f"pending:processing_batch:{payload.processRefId}",
+        allowed_roles=_LOT_CREATE_ROLES,
+        reason_code="forbidden_lot_write",
+        detail="Actor is not allowed to create processed lots.",
+    )
     if cached := check_idempotency(context["idempotency_key"]):
         return LotResponse(**cached)
 
@@ -449,6 +516,15 @@ def adjust_lot_quantity(lot_id: str, payload: AdjustLotQuantityRequest) -> LotRe
     context = meta_context(payload.meta)
     record = _get_lot_record_or_404(lot_id, action_name="lot.adjust_quantity", context=context)
     before_snapshot = copy.deepcopy(record)
+    _assert_lot_access(
+        context=context,
+        action_name="lot.adjust_quantity",
+        lot_id=lot_id,
+        allowed_roles=_LOT_STATE_WRITE_ROLES,
+        reason_code="forbidden_lot_write",
+        detail="Actor is not allowed to adjust lot quantities.",
+        before_snapshot=before_snapshot,
+    )
 
     key = context["idempotency_key"]
     if cached := check_idempotency(key):
@@ -514,7 +590,17 @@ def adjust_lot_quantity(lot_id: str, payload: AdjustLotQuantityRequest) -> LotRe
     return result
 
 
-def get_lot(lot_id: str) -> LotDetail:
+def get_lot(lot_id: str, meta: Meta | None = None) -> LotDetail:
+    authorize_read_surface(
+        meta=meta,
+        action_name="lot.get",
+        target_type="Lot",
+        target_id=lot_id,
+        allowed_roles=_LOT_READ_ROLES,
+        reason_code="forbidden_lot_read",
+        detail="Actor is not allowed to read raw lot details.",
+        allow_delegated_agent=False,
+    )
     return _build_lot_detail(_get_lot_record_or_404(lot_id))
 
 
@@ -522,6 +608,15 @@ def release_lot(lot_id: str, payload: ReleaseLotRequest) -> LotResponse:
     context = meta_context(payload.meta)
     record = _get_lot_record_or_404(lot_id, action_name="lot.release", context=context)
     before_snapshot = copy.deepcopy(record)
+    _assert_lot_access(
+        context=context,
+        action_name="lot.release",
+        lot_id=lot_id,
+        allowed_roles=_LOT_STATE_WRITE_ROLES,
+        reason_code="forbidden_lot_write",
+        detail="Actor is not allowed to release lots.",
+        before_snapshot=before_snapshot,
+    )
 
     key = context["idempotency_key"]
     if cached := check_idempotency(key):
@@ -664,6 +759,15 @@ def block_lot(lot_id: str, payload: BlockLotRequest) -> LotResponse:
     context = meta_context(payload.meta)
     record = _get_lot_record_or_404(lot_id, action_name="lot.block", context=context)
     before_snapshot = copy.deepcopy(record)
+    _assert_lot_access(
+        context=context,
+        action_name="lot.block",
+        lot_id=lot_id,
+        allowed_roles=_LOT_STATE_WRITE_ROLES,
+        reason_code="forbidden_lot_write",
+        detail="Actor is not allowed to block lots.",
+        before_snapshot=before_snapshot,
+    )
 
     key = context["idempotency_key"]
     if cached := check_idempotency(key):
@@ -733,6 +837,15 @@ def unblock_lot(lot_id: str, payload: UnblockLotRequest) -> LotResponse:
     context = meta_context(payload.meta)
     record = _get_lot_record_or_404(lot_id, action_name="lot.unblock", context=context)
     before_snapshot = copy.deepcopy(record)
+    _assert_lot_access(
+        context=context,
+        action_name="lot.unblock",
+        lot_id=lot_id,
+        allowed_roles=_LOT_STATE_WRITE_ROLES,
+        reason_code="forbidden_lot_write",
+        detail="Actor is not allowed to unblock lots.",
+        before_snapshot=before_snapshot,
+    )
 
     key = context["idempotency_key"]
     if cached := check_idempotency(key):
@@ -803,6 +916,15 @@ def add_lot_evidence(lot_id: str, payload: AddLotEvidenceRequest) -> LotEvidence
     context = meta_context(payload.meta)
     lot = _get_lot_record_or_404(lot_id, action_name="lot.evidence_add", context=context)
     before_snapshot = copy.deepcopy(lot)
+    _assert_lot_access(
+        context=context,
+        action_name="lot.evidence_add",
+        lot_id=lot_id,
+        allowed_roles=_LOT_EVIDENCE_WRITE_ROLES,
+        reason_code="forbidden_lot_write",
+        detail="Actor is not allowed to add lot evidence.",
+        before_snapshot=before_snapshot,
+    )
 
     key = context["idempotency_key"]
     if cached := check_idempotency(key):
@@ -921,7 +1043,17 @@ def add_lot_evidence(lot_id: str, payload: AddLotEvidenceRequest) -> LotEvidence
     return result
 
 
-def get_lot_evidence(lot_id: str) -> LotEvidenceListResponse:
+def get_lot_evidence(lot_id: str, meta: Meta | None = None) -> LotEvidenceListResponse:
+    authorize_read_surface(
+        meta=meta,
+        action_name="lot.evidence.list",
+        target_type="Lot",
+        target_id=lot_id,
+        allowed_roles=_LOT_READ_ROLES,
+        reason_code="forbidden_lot_read",
+        detail="Actor is not allowed to read raw lot evidence.",
+        allow_delegated_agent=False,
+    )
     _get_lot_record_or_404(lot_id)
     if postgres_sync.is_enabled():
         evidence_items = list_lot_evidence(lot_id)
@@ -934,6 +1066,15 @@ def create_lot_qc_review(lot_id: str, payload: CreateQCReviewRequest) -> QCRevie
     context = meta_context(payload.meta)
     record = _get_lot_record_or_404(lot_id, action_name="lot.qc_review", context=context)
     before_snapshot = copy.deepcopy(record)
+    _assert_lot_access(
+        context=context,
+        action_name="lot.qc_review",
+        lot_id=lot_id,
+        allowed_roles=_LOT_QC_WRITE_ROLES,
+        reason_code="forbidden_qc_review_write",
+        detail="Actor is not allowed to create QC reviews.",
+        before_snapshot=before_snapshot,
+    )
 
     key = context["idempotency_key"]
     if cached := check_idempotency(key):
@@ -1045,7 +1186,17 @@ def create_lot_qc_review(lot_id: str, payload: CreateQCReviewRequest) -> QCRevie
     return result
 
 
-def get_lot_qc_reviews(lot_id: str) -> QCReviewListResponse:
+def get_lot_qc_reviews(lot_id: str, meta: Meta | None = None) -> QCReviewListResponse:
+    authorize_read_surface(
+        meta=meta,
+        action_name="lot.qc_review.list",
+        target_type="Lot",
+        target_id=lot_id,
+        allowed_roles=_LOT_READ_ROLES,
+        reason_code="forbidden_lot_read",
+        detail="Actor is not allowed to read raw QC reviews.",
+        allow_delegated_agent=False,
+    )
     _get_lot_record_or_404(lot_id)
     if postgres_sync.is_enabled():
         reviews = list_qc_reviews(lot_id)
