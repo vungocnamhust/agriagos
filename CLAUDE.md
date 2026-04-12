@@ -31,7 +31,7 @@ pytest tests/test_view_board_integration.py -m postgres_integration
 # Swagger UI at http://localhost:8000/docs
 ```
 
-Ruff is used for linting (`PYENV_VERSION=agos_3.10.14 ruff check agos_app/`). Runtime dependencies stay in `agos_app/requirements.txt`; pytest/TestClient dependencies now live in `agos_app/requirements-dev.txt`. Focused pytest coverage for deterministic-core write flows and `/views` read-model slices lives under `agos_app/tests/`, including PostgreSQL-backed integration coverage for `customer_360_view` and the `/views` board/store endpoint sweep in `tests/test_view_board_integration.py`. PostgreSQL migration scaffolding lives under `agos_app/alembic/`. The service layer now defaults to PostgreSQL when `POSTGRES_WRITE_PATH_ENABLED=true` and falls back to in-memory only for local simulation or tests.
+Ruff is used for linting (`PYENV_VERSION=agos_3.10.14 ruff check agos_app/`). Runtime dependencies stay in `agos_app/requirements.txt`; pytest/TestClient dependencies now live in `agos_app/requirements-dev.txt`. Focused pytest coverage for deterministic-core write flows and `/views` read-model slices lives under `agos_app/tests/`, including PostgreSQL-backed integration coverage for `customer_360_view` and the `/views` board/store endpoint sweep in `tests/test_view_board_integration.py`. PostgreSQL migration scaffolding lives under `agos_app/alembic/`. The service layer now defaults to PostgreSQL when `POSTGRES_WRITE_PATH_ENABLED=true` and falls back to in-memory only for local simulation or tests. Recent authz rollout coverage also includes focused route/service tests for customers, preorders, orders, lots, and raw read surfaces.
 
 ## Architecture
 
@@ -136,8 +136,16 @@ All endpoints are under `/api/v1/`. The route groups are:
 
 - **Correlation ID** — `CorrelationIdMiddleware` in `main.py` reads `X-Correlation-ID` from the request header (or generates a UUID) and writes it to `request.state.correlation_id`; echoed in every response header.
 - **Error envelope** — all non-2xx responses use `ErrorResponse { code, message, correlationId }`. Two exception handlers in `main.py` cover `StarletteHTTPException` and `RequestValidationError`. Semantic codes (`CUSTOMER_*`, `ORDER_*`, `LOT_*`, `PREORDER_*`, `FARM_*`, `INVALID_*`) in the HTTPException detail are promoted directly; others map via `_STATUS_CODE_MAP`.
+- **Actor context seam** — `app/api/routes/_meta.py` is the shared route adapter for protected surfaces. It can seed `Meta` from request state or headers such as `X-Actor-Id`, `X-Actor-Role`, `X-Bypass-Requested`, `X-External-Ref`, `X-Delegated-Actor-Id`, and `X-Delegated-Actor-Role`, and it merges missing fields into write payloads before service calls.
 - **Typed routes** — every route declares an explicit `response_model`. Do not add a route without one.
 - **Health** — `GET /health` returns `HealthResponse { status, service, version, checks }`. When `POSTGRES_WRITE_PATH_ENABLED=true`, `checks.db` reports a live `SELECT 1` result; otherwise `"disabled"`.
+
+## Authz Reality
+
+- **Phase 1 bypass stance** — the repo keeps the bypass mechanism in `Meta` and authz helpers, but no bypass lanes are enabled. Any bypass request must deny and audit instead of executing.
+- **Role vocabulary** — `qc_reviewer` is a top-level business role for the QC lane. Do not collapse it into `ops`, `farm_manager`, or delegated agent behavior.
+- **Shared read auth rollout** — protected read surfaces now flow through request-meta plus service-layer authz. This includes `/api/v1/events`, `/api/v1/views/*`, raw `/api/v1/farm/*`, `/api/v1/audit`, raw `/api/v1/customers*`, raw preorder reads, raw `/api/v1/orders*`, and raw `/api/v1/lots/{lot_id}` plus evidence/QC review readbacks.
+- **Write auth rollout** — preorder, order, lot/QC, and customer write paths now enforce role checks in the service layer before state transitions or event append. The remaining explicit divergence is the packed-or-later order cancel approval contract tracked in `docs/changelog/v1/divergence-ledger.md`.
 
 ## Design Documentation
 
@@ -172,7 +180,7 @@ All diagrams use `[Phase 1 ✅]` / `[Phase 2 🔜]` labels to distinguish implem
 | `05-state-machines-croptask-lot-order.md` | All 4 state machines; Phase 1 actual vs. Phase 2 planned split |
 | `06-command-policy-event-projection-flow.md` | Generic write path sequence |
 | `07-integration-flow-litefarm-erp-crm-core.md` | Integration target; DLQ/SyncBack marked Phase 2 |
-| `08-role-based-view-permission-diagram.md` | 7 roles, views, commands; Phase 1 `/views/*` endpoints table added |
+| `08-role-based-view-permission-diagram.md` | Role/view/command matrix, including Phase 1 `/views/*`, audit/event readbacks, and raw-surface protection notes |
 | `09-sequence-preorder-placed.md` | End-to-end preorder placed sequence |
 | `10-sequence-harvestedlot-to-lotreleased.md` | Lot harvest → release sequence |
 | `11-sequence-orderallocated-to-orderdelivered.md` | Order allocation → delivery sequence |
@@ -197,6 +205,7 @@ All diagrams use `[Phase 1 ✅]` / `[Phase 2 🔜]` labels to distinguish implem
 
 **Key Phase 1 audit facts**:
 - `app/services/audit.py` is the shared audit normalization layer: reason-code registries live there, sensitive snapshots are projected there, and services should go through `append_domain_audit_decision()` instead of appending raw audit entries directly
+- shared route/service authz denials now append audit decisions across protected raw read and write surfaces; prefer the shared request-meta seam plus service-owned deny/audit behavior over route-local branching
 - `lot.release` is the first owner-backed non-terminal audit lane: missing `approvalRef` on sensitive release writes `decision=escalated` with `reason_code=approval_required`; PostgreSQL persistence failure writes `decision=failed` with `reason_code=persistence_failed`
 
 When repo-root docs and `docs/changelog/v1/architecture/` overlap, treat the `docs/changelog/v1/architecture/` set as the working baseline for current deterministic-core decisions.

@@ -324,6 +324,8 @@ Bắt buộc approval trong phase đầu:
 | Preference confirm từ candidate có tác động workflow | Sales, CSKH, Admin | Không cần lớp approve riêng, nhưng bắt buộc audit log |
 
 Phase 1 implementation note:
+- raw `/api/v1/customers`, `/api/v1/customers/{customer_id}`, `/api/v1/customers/duplicate-candidates`, và `/api/v1/customers/{customer_id}/duplicate-candidates` hiện enforce Founder / Super Admin / Admin / Sales / CSKH ở service layer; Ops, Accountant, Viewer, và raw agent reads bị deny trên lane này
+- `Customer xem = limited/scoped` cho Ops, Accountant, Agent nên hiểu là qua customer-facing views hoặc tool/read surface riêng theo role, không phải raw customer routes trong Phase 1
 - raw `/api/v1/orders*` reads and write commands now enforce the matrix directly in the service layer; Viewer remains denied on raw order access and agent lanes stay proposal-only
 - raw `/api/v1/lots/{lot_id}` reads plus `/evidence` and `/qc-reviews` readbacks now enforce operational-only access in the service layer; current readers are Founder / Super Admin, Admin, Ops, Farm Manager, và QC Reviewer
 - lot create commands (`POST /api/v1/lots`, `POST /api/v1/lots/processed`) now require Founder / Super Admin / Admin / Ops / Farm Manager; lot adjust/release/block/unblock uses the same write lane, while evidence add and QC review also admit `qc_reviewer`

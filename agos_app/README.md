@@ -73,3 +73,5 @@ và các view đọc sớm.
 - Phase 1 hiện dùng direct PostgreSQL reads/writes trong service/store layer và vẫn append domain events vào `domain_events`.
 - Projection workers vẫn là hướng kiến trúc tài liệu hóa cho phase sau, chưa phải runtime mặc định.
 - `POSTGRES_WRITE_PATH_ENABLED=false` chỉ nên dùng cho mô phỏng local hoặc test thủ công.
+- Protected routes hiện dùng shared actor context từ request headers/body `meta`; runtime đã gate `/api/v1/events`, `/api/v1/views/*`, raw `/api/v1/farm/*`, `/api/v1/audit`, raw customer reads, preorder/order routes, và lot/QC surfaces ở service layer.
+- `qc_reviewer` là top-level role cho QC lane. Agent/automation bypass chỉ tồn tại như mechanism hook; Phase 1 chưa enable bất kỳ bypass lane nào.

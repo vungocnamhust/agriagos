@@ -10,6 +10,24 @@ from app.store import memory
 client = TestClient(app)
 
 
+def _auth_headers(
+    *,
+    actor_role: str,
+    actor_id: str = "actor-1",
+    delegated_actor_role: str | None = None,
+    bypass_requested: bool = False,
+) -> dict[str, str]:
+    headers = {
+        "X-Actor-Id": actor_id,
+        "X-Actor-Role": actor_role,
+    }
+    if delegated_actor_role is not None:
+        headers["X-Delegated-Actor-Role"] = delegated_actor_role
+    if bypass_requested:
+        headers["X-Bypass-Requested"] = "true"
+    return headers
+
+
 def test_customer_routes_support_search_patch_and_preference_detail() -> None:
     create_response = client.post(
         "/api/v1/customers",
@@ -25,7 +43,11 @@ def test_customer_routes_support_search_patch_and_preference_detail() -> None:
     assert create_response.status_code == 201
     customer = create_response.json()["data"]
 
-    search_response = client.get("/api/v1/customers", params={"q": customer["customerCode"]})
+    search_response = client.get(
+        "/api/v1/customers",
+        params={"q": customer["customerCode"]},
+        headers=_auth_headers(actor_role="sales", actor_id="sales-1"),
+    )
     assert search_response.status_code == 200
     assert [item["customerId"] for item in search_response.json()["items"]] == [customer["customerId"]]
 
@@ -53,7 +75,10 @@ def test_customer_routes_support_search_patch_and_preference_detail() -> None:
     )
     assert preference_response.status_code == 200
 
-    detail_response = client.get(f"/api/v1/customers/{customer['customerId']}")
+    detail_response = client.get(
+        f"/api/v1/customers/{customer['customerId']}",
+        headers=_auth_headers(actor_role="sales", actor_id="sales-1"),
+    )
     assert detail_response.status_code == 200
     assert detail_response.json()["preferences"][0]["preferenceType"] == "variety"
     assert memory.list_events()[-1]["eventName"] == "customer.preference_updated"
@@ -83,12 +108,18 @@ def test_duplicate_candidate_routes_list_and_review() -> None:
     assert second.status_code == 201
     first_customer_id = first.json()["data"]["customerId"]
 
-    all_candidates = client.get("/api/v1/customers/duplicate-candidates")
+    all_candidates = client.get(
+        "/api/v1/customers/duplicate-candidates",
+        headers=_auth_headers(actor_role="sales", actor_id="sales-1"),
+    )
     assert all_candidates.status_code == 200
     assert len(all_candidates.json()["items"]) == 1
     candidate_id = all_candidates.json()["items"][0]["candidateId"]
 
-    scoped_candidates = client.get(f"/api/v1/customers/{first_customer_id}/duplicate-candidates")
+    scoped_candidates = client.get(
+        f"/api/v1/customers/{first_customer_id}/duplicate-candidates",
+        headers=_auth_headers(actor_role="sales", actor_id="sales-1"),
+    )
     assert scoped_candidates.status_code == 200
     assert scoped_candidates.json()["items"][0]["status"] == "open"
 
@@ -146,7 +177,10 @@ def test_customer_policy_routes_reject_forbidden_actions() -> None:
     )
     assert second.status_code == 201
 
-    candidates = client.get(f"/api/v1/customers/{customer_id}/duplicate-candidates")
+    candidates = client.get(
+        f"/api/v1/customers/{customer_id}/duplicate-candidates",
+        headers=_auth_headers(actor_role="sales", actor_id="sales-1"),
+    )
     candidate_id = candidates.json()["items"][0]["candidateId"]
     forbidden_review = client.post(
         f"/api/v1/customers/duplicate-candidates/{candidate_id}/review",
@@ -191,6 +225,75 @@ def test_customer_write_routes_reject_unauthorized_roles() -> None:
     )
     assert forbidden_update.status_code == 403
     assert forbidden_update.json()["code"] == "FORBIDDEN"
+
+
+def test_customer_read_routes_reject_viewer_role() -> None:
+    created = client.post(
+        "/api/v1/customers",
+        json={
+            "fullName": "Protected User",
+            "phone": "0900000310",
+            "meta": {"correlationId": "corr-read-protected", "idempotencyKey": "idem-read-protected", "actorId": "sales-1", "actorRole": "sales"},
+        },
+    )
+    assert created.status_code == 201
+
+    response = client.get(
+        f"/api/v1/customers/{created.json()['data']['customerId']}",
+        headers=_auth_headers(actor_role="viewer", actor_id="viewer-1"),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "FORBIDDEN"
+    assert response.json()["message"] == "Actor is not allowed to read raw customer details."
+    assert memory.list_audit_logs()[-1]["actionName"] == "customer.get"
+    assert memory.list_audit_logs()[-1]["reasonCode"] == "forbidden_customer_read"
+
+
+def test_customer_read_routes_deny_bypass_requests() -> None:
+    created = client.post(
+        "/api/v1/customers",
+        json={
+            "fullName": "Bypass User",
+            "phone": "0900000311",
+            "meta": {"correlationId": "corr-read-bypass", "idempotencyKey": "idem-read-bypass", "actorId": "sales-1", "actorRole": "sales"},
+        },
+    )
+    assert created.status_code == 201
+
+    response = client.get(
+        f"/api/v1/customers/{created.json()['data']['customerId']}",
+        headers=_auth_headers(actor_role="sales", actor_id="sales-1", bypass_requested=True),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "FORBIDDEN"
+    assert response.json()["message"] == "Agent bypass lane is not enabled in Phase 1."
+    assert memory.list_audit_logs()[-1]["actionName"] == "customer.get"
+    assert memory.list_audit_logs()[-1]["reasonCode"] == "agent_execution_not_allowed"
+
+
+def test_customer_read_routes_reject_delegated_agent_access() -> None:
+    created = client.post(
+        "/api/v1/customers",
+        json={
+            "fullName": "Delegated Agent User",
+            "phone": "0900000312",
+            "meta": {"correlationId": "corr-read-agent", "idempotencyKey": "idem-read-agent", "actorId": "sales-1", "actorRole": "sales"},
+        },
+    )
+    assert created.status_code == 201
+
+    response = client.get(
+        f"/api/v1/customers/{created.json()['data']['customerId']}",
+        headers=_auth_headers(actor_role="agent", actor_id="agent-1", delegated_actor_role="sales"),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "FORBIDDEN"
+    assert response.json()["message"] == "Actor is not allowed to read raw customer details."
+    assert memory.list_audit_logs()[-1]["actionName"] == "customer.get"
+    assert memory.list_audit_logs()[-1]["reasonCode"] == "forbidden_customer_read"
 
 
 def test_customer_routes_return_conflict_and_validation_errors_for_core_rules() -> None:

@@ -168,7 +168,7 @@ Nó chỉ làm 3 việc:
 
 ### Deferred nhưng phải chừa đường
 - projection workers chuẩn
-- RBAC enforcement đầy đủ
+- tenant-scoped RBAC/ABAC hoàn chỉnh vượt ngoài rollout route/service hiện tại
 - integration adapters production-grade
 - advanced analytics và recommendation layer
 - agent bypass lanes hẹp, có explicit allow list + audit, chỉ sau khi guardrails đủ tốt
@@ -178,6 +178,8 @@ Nó chỉ làm 3 việc:
 - current shipped set gồm `customer_360_view`, `available_lots_board`, `pending_fulfillment_board`, và `farm_summary_board`
 - `customer_360_view` trên PostgreSQL path đã là nested detail projection; các board còn lại vẫn là operational list views
 - validation lane hiện có PostgreSQL integration coverage cho cả `customer_360_view` và sweep `/api/v1/views/*`, bao gồm store-level assertions lẫn HTTP endpoint checks để giữ migration + view contract không drift
+- shared actor-context/authz substrate cũng đã ship cho Phase 1 route/service rollout: `/api/v1/events`, `/api/v1/views/*`, raw `/api/v1/farm/*`, `/api/v1/audit`, raw `/api/v1/customers*`, preorder/order/lot surfaces đều đã có explicit role gates ở runtime hiện tại
+- bypass mechanism vẫn chỉ là hook kiến trúc; mọi bypass request trong Phase 1 hiện phải bị deny và audit, chưa có lane nào được enable
 
 ### Mặc định khi chưa có quyết định theo tenant
 - Core giữ `plot/crop summary` mức đủ dùng

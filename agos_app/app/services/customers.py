@@ -11,6 +11,7 @@ from app.core.authz import ensure_bypass_permitted, normalize_actor_role as _nor
 from app.core.codegen import generate_customer_code
 from app.core.write_context import append_audit_decision, build_request_hash, meta_context
 from app.core.gateway import check_idempotency, record_idempotency
+from app.models.common import Meta
 from app.models.customers import (
     CreateCustomerRequest,
     CustomerDuplicateCandidateSummary,
@@ -23,6 +24,7 @@ from app.models.customers import (
     UpdateCustomerRequest,
     UpsertPreferenceRequest,
 )
+from app.services.read_authz import authorize_read_surface
 from app.store import customers as customer_store
 from app.store import memory as memory_store
 from app.store._db import is_enabled as postgres_enabled, transaction as postgres_transaction
@@ -31,6 +33,7 @@ from app.store._db import is_enabled as postgres_enabled, transaction as postgre
 _ALLOWED_CANONICAL_PREFERENCE_SOURCES = {"human", "integration"}
 _CANONICAL_PREFERENCE_ROLES = {"founder", "super_admin", "admin", "sales", "cskh"}
 _DUPLICATE_REVIEW_ROLES = {"founder", "super_admin", "admin", "sales", "cskh"}
+_CUSTOMER_READ_ROLES = {"founder", "super_admin", "admin", "sales", "cskh"}
 _CUSTOMER_WRITE_ROLES = {"founder", "super_admin", "admin", "sales", "cskh"}
 
 
@@ -439,6 +442,26 @@ def list_customers(
     return items
 
 
+def list_customers_for_actor(
+    phone: str | None,
+    q: str | None,
+    tag: str | None,
+    *,
+    meta: Meta | None,
+) -> list[dict[str, Any]]:
+    authorize_read_surface(
+        meta=meta,
+        action_name="customer.list",
+        target_type="Customer",
+        target_id="query",
+        allowed_roles=_CUSTOMER_READ_ROLES,
+        reason_code="forbidden_customer_read",
+        detail="Actor is not allowed to list raw customers.",
+        allow_delegated_agent=False,
+    )
+    return list_customers(phone, q, tag)
+
+
 def get_customer(customer_id: str) -> CustomerDetail:
     record = customer_store.fetch_customer(customer_id) if postgres_enabled() else None
     if record is None:
@@ -448,6 +471,20 @@ def get_customer(customer_id: str) -> CustomerDetail:
     preferences = [CustomerPreferenceItem(**item) for item in _fetch_preferences(customer_id)]
     duplicate_candidates = [CustomerDuplicateCandidateSummary(**item) for item in _fetch_duplicate_candidates(customer_id)]
     return CustomerDetail(**record, preferences=preferences, duplicateCandidates=duplicate_candidates)
+
+
+def get_customer_for_actor(customer_id: str, *, meta: Meta | None) -> CustomerDetail:
+    authorize_read_surface(
+        meta=meta,
+        action_name="customer.get",
+        target_type="Customer",
+        target_id=customer_id,
+        allowed_roles=_CUSTOMER_READ_ROLES,
+        reason_code="forbidden_customer_read",
+        detail="Actor is not allowed to read raw customer details.",
+        allow_delegated_agent=False,
+    )
+    return get_customer(customer_id)
 
 
 def update_customer(customer_id: str, payload: UpdateCustomerRequest) -> CustomerDetail:
@@ -556,10 +593,42 @@ def list_customer_duplicate_candidates(customer_id: str) -> list[CustomerDuplica
     return [CustomerDuplicateCandidateSummary(**item) for item in _fetch_duplicate_candidates(customer_id)]
 
 
+def list_customer_duplicate_candidates_for_actor(
+    customer_id: str,
+    *,
+    meta: Meta | None,
+) -> list[CustomerDuplicateCandidateSummary]:
+    authorize_read_surface(
+        meta=meta,
+        action_name="customer.duplicate_candidate.list",
+        target_type="Customer",
+        target_id=customer_id,
+        allowed_roles=_CUSTOMER_READ_ROLES,
+        reason_code="forbidden_customer_read",
+        detail="Actor is not allowed to read raw customer duplicate candidates.",
+        allow_delegated_agent=False,
+    )
+    return list_customer_duplicate_candidates(customer_id)
+
+
 def list_duplicate_candidates() -> list[CustomerDuplicateCandidateSummary]:
     if postgres_enabled() and hasattr(customer_store, "list_duplicate_candidates"):
         return [CustomerDuplicateCandidateSummary(**item) for item in customer_store.list_duplicate_candidates()]
     return [CustomerDuplicateCandidateSummary(**item) for item in memory_store.list_duplicate_candidates()]
+
+
+def list_duplicate_candidates_for_actor(*, meta: Meta | None) -> list[CustomerDuplicateCandidateSummary]:
+    authorize_read_surface(
+        meta=meta,
+        action_name="customer.duplicate_candidate.list",
+        target_type="Customer",
+        target_id="all",
+        allowed_roles=_CUSTOMER_READ_ROLES,
+        reason_code="forbidden_customer_read",
+        detail="Actor is not allowed to read raw customer duplicate candidates.",
+        allow_delegated_agent=False,
+    )
+    return list_duplicate_candidates()
 
 
 def review_duplicate_candidate(candidate_id: str, payload: ReviewDuplicateCandidateRequest) -> CustomerDuplicateCandidateSummary:

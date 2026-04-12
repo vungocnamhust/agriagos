@@ -23,6 +23,13 @@ paths:
       - Customers
       summary: Create Customer
       operationId: create_customer_api_v1_customers_post
+      parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/ExternalRefHeader'
+      - $ref: '#/components/parameters/DelegatedActorIdHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       requestBody:
         required: true
         content:
@@ -60,6 +67,12 @@ paths:
       summary: List Customers
       operationId: list_customers_api_v1_customers_get
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/ExternalRefHeader'
+      - $ref: '#/components/parameters/DelegatedActorIdHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: phone
         in: query
         required: false
@@ -92,6 +105,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CustomerListResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Validation error
           content:
@@ -104,6 +123,13 @@ paths:
       - Customers
       summary: List Duplicate Candidates
       operationId: list_duplicate_candidates_api_v1_customers_duplicate_candidates_get
+      parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/ExternalRefHeader'
+      - $ref: '#/components/parameters/DelegatedActorIdHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       responses:
         '200':
           description: Successful Response
@@ -111,6 +137,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CustomerDuplicateCandidateListResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/customers/{customer_id}:
     get:
       tags:
@@ -118,6 +150,12 @@ paths:
       summary: Get Customer
       operationId: get_customer_api_v1_customers__customer_id__get
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/ExternalRefHeader'
+      - $ref: '#/components/parameters/DelegatedActorIdHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: customer_id
         in: path
         required: true
@@ -132,6 +170,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CustomerDetail'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Aggregate not found
           content:
@@ -150,6 +194,12 @@ paths:
       summary: Update Customer
       operationId: update_customer_api_v1_customers__customer_id__patch
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/ExternalRefHeader'
+      - $ref: '#/components/parameters/DelegatedActorIdHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: customer_id
         in: path
         required: true
@@ -195,6 +245,12 @@ paths:
       summary: Upsert Customer Preference
       operationId: upsert_customer_preference_api_v1_customers__customer_id__preferences_post
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/ExternalRefHeader'
+      - $ref: '#/components/parameters/DelegatedActorIdHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: customer_id
         in: path
         required: true
@@ -240,6 +296,12 @@ paths:
       summary: List Customer Duplicate Candidates
       operationId: list_customer_duplicate_candidates_api_v1_customers__customer_id__duplicate_candidates_get
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/ExternalRefHeader'
+      - $ref: '#/components/parameters/DelegatedActorIdHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: customer_id
         in: path
         required: true
@@ -254,6 +316,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CustomerDuplicateCandidateListResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Aggregate not found
           content:
@@ -273,6 +341,10 @@ paths:
       summary: Review Duplicate Candidate
       operationId: review_duplicate_candidate_api_v1_customers_duplicate_candidates__candidate_id__review_post
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: candidate_id
         in: path
         required: true
@@ -1981,28 +2053,42 @@ components:
       required: false
       schema:
         type: string
-      description: Optional caller identity used for read-surface audit trails.
+      description: Optional caller identity used for protected route audit trails.
     ActorRoleHeader:
       name: X-Actor-Role
       in: header
       required: false
       schema:
         type: string
-      description: Caller role used to authorize protected read surfaces in Phase 1.
+      description: Caller role used to authorize protected routes in Phase 1.
     BypassRequestedHeader:
       name: X-Bypass-Requested
       in: header
       required: false
       schema:
         type: boolean
-      description: Optional bypass mechanism flag. Phase 1 denies all read-surface bypass attempts.
+      description: Optional bypass mechanism flag. Phase 1 denies all bypass attempts.
+    ExternalRefHeader:
+      name: X-External-Ref
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Optional external system reference used by trusted integration customer writes.
+    DelegatedActorIdHeader:
+      name: X-Delegated-Actor-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Optional delegated human actor identity for advisory agent context.
     DelegatedActorRoleHeader:
       name: X-Delegated-Actor-Role
       in: header
       required: false
       schema:
         type: string
-      description: Delegated human role for advisory agent reads.
+      description: Delegated human role for advisory agent access on routes that explicitly permit it.
   schemas:
     ActivatePreorderRequest:
       properties:

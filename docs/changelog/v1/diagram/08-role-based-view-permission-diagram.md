@@ -21,6 +21,8 @@ Sơ đồ này thể hiện nguyên tắc **one truth, many views**: cùng một
 >
 > `GET /api/v1/audit` là read-only query surface cho operator/debug ở Phase 1; current enforced readers là Founder / Super Admin, Admin, và Accountant. Các role khác bị deny và ghi audit `audit.query`.
 >
+> Raw customer reads ở Phase 1 cũng đi lane hẹp: `GET /api/v1/customers`, `GET /api/v1/customers/{customer_id}`, `GET /api/v1/customers/duplicate-candidates`, và `GET /api/v1/customers/{customer_id}/duplicate-candidates` hiện chỉ cho Founder / Super Admin / Admin / Sales / CSKH. Ops, Accountant, Viewer, và raw agent reads phải dùng customer-facing view/tool surface khác hoặc bị deny trên raw lane.
+>
 > Raw lot reads ở Phase 1 không mở rộng như read models: `GET /api/v1/lots/{lot_id}`, `GET /api/v1/lots/{lot_id}/evidence`, và `GET /api/v1/lots/{lot_id}/qc-reviews` hiện chỉ cho Founder / Super Admin / Admin / Ops / Farm Manager / QC Reviewer. Lot create, adjust, release, block, unblock dùng service-layer write authz; evidence add và QC review giữ lane riêng cho QC.
 
 ## Mermaid
