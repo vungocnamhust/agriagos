@@ -38,6 +38,11 @@ Trong kiến trúc chung của mình:
 - AI không bypass policy
 - AI không tự mở rộng quyền
 
+Phase 1 clarification:
+- kiến trúc có thể chừa sẵn cơ chế biểu diễn bypass lane cho agent / automation
+- nhưng hiện tại không có bypass lane nào đang enable
+- mọi bypass request ở Phase 1 phải bị deny và audit thay vì được execute
+
 ---
 
 ## 4. Những việc AI nên làm ngay
@@ -161,6 +166,8 @@ AI có thể:
 - có quyền rộng hơn từng domain owner
 - viết thẳng truth vào core
 
+`qc_reviewer` là top-level business role riêng cho QC lane; agent phục vụ QC vẫn không được tự lấy vai trò này nếu không có delegated execution contract được implement riêng.
+
 ---
 
 ## 7. Pattern an toàn nên dùng
@@ -239,6 +246,12 @@ Ví dụ:
 - lot release
 - payment update
 - state change quan trọng
+
+### Chưa được ghi qua bypass lane ở Phase 1
+- canonical order / preorder / lot state changes
+- QC review final decision
+- audit / permission override
+- packed-or-later cancellation
 
 ---
 

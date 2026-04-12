@@ -11,6 +11,9 @@ class Meta(BaseModel):
     actorRole: str | None = None
     idempotencyKey: str | None = None
     externalRef: str | None = None  # for integration idempotency (08-integration-contracts.md)
+    bypassRequested: bool = False
+    delegatedActorId: str | None = None
+    delegatedActorRole: str | None = None
 
 
 class CommandMetaRequest(BaseModel):

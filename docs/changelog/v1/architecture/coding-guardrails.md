@@ -104,6 +104,12 @@ Không cần middleware inject tenant context.
 Chưa cần JWT. Nhưng `actor_id` và `actor_role` phải được ghi vào events
 (dùng placeholder `"system"` nếu chưa có auth).
 
+Canonical role vocabulary cho Phase 1 rollout phải coi `qc_reviewer` là top-level business role.
+Không được model nó như delegated capability của `ops` hay `farm_manager` trong doc, test, hoặc policy helper mới.
+
+Agent / automation bypass lane chỉ được tồn tại như policy/mechanism hook trong Phase 1.
+Không được enable lane bypass thực thi nào trước khi có authz + audit rollout tương ứng.
+
 ### B4. allocationPolicy parameter
 
 `AllocateOrderRequest.allocationPolicy` hiện chỉ accept `"manual"`.
@@ -160,7 +166,7 @@ Cần implement draft → confirmed → active flow hoặc xóa bớt states kh�
 |------|-------------------|-----------------------|---------------------------|-------|
 | `LotStatus` | draft, harvested, qc_pending, released, blocked, depleted, closed | harvested, qc_pending, released, blocked | draft, depleted, closed | Phase 1 có release/unblock lane tối thiểu; depleted/closed vẫn để Phase 2 |
 | `OrderStatus` | draft, confirmed, allocated, partially_allocated, packed, partially_packed, shipped, delivered, partially_delivered, cancel_requested, cancelled, failed | draft, confirmed, allocated, partially_allocated, packed, partially_packed, cancel_requested, shipped, delivered, partially_delivered, cancelled, failed | none | Partial packing, partial delivery, and post-shipment failed delivery are now active in the Phase 1 fulfillment flow |
-| `PreorderStatus` | draft, confirmed, active, completed, cancelled | active, completed, cancelled | draft, confirmed | Phase 1.5 (full preorder lifecycle chưa implement) |
+| `PreorderStatus` | draft, confirmed, active, completed, cancelled | draft, confirmed, active | completed, cancelled | `completed` và `cancelled` là terminal states; Phase 1 chưa có command riêng để đi tiếp từ hai state này |
 
 ---
 

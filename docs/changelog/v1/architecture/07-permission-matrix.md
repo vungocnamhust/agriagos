@@ -14,7 +14,7 @@ Nguyên tắc:
 - AI không được rộng quyền hơn role người mà nó phục vụ
 
 Role / permission diagram xem ở:
-- [Role-based View / Permission Diagram](../agri_diagrams/08-role-based-view-permission-diagram.md)
+- [Role-based View / Permission Diagram](../diagram/08-role-based-view-permission-diagram.md)
 
 ## 2. Các vai trò chính
 
@@ -24,6 +24,7 @@ Role / permission diagram xem ở:
 - CSKH
 - Ops / Kho / Đóng gói
 - Farm Manager
+- QC Reviewer
 - Accountant
 - Viewer / Analyst
 - Agent / Automation
@@ -206,19 +207,42 @@ Phase đầu cần hiểu rõ:
 
 ---
 
-## 4.8 Viewer / Analyst
+## 4.8 QC Reviewer
+### Được xem
+- lot evidence
+- QC review history
+- các read surface liên quan QC đã được cấp quyền
+
+### Được sửa
+- tạo QC review
+- cập nhật QC note / approval evidence theo policy
+
+### Không được
+- thao tác order, preorder, customer như role vận hành chung
+- release lot
+- sửa payment final
+
+---
+
+## 4.9 Viewer / Analyst
 ### Được xem
 - dashboard
 - report
 - read models được cấp quyền
+- short-term ưu tiên qua `/api/v1/views/*` và scoped `/api/v1/events`
+
+Ghi chú:
+- không phải mọi read model đều mở cho viewer / analyst theo mặc định
+- `customer_360` vẫn chỉ mở cho các role trực tiếp phục vụ customer workflow nếu permission matrix không nói khác
 
 ### Không được
 - chạm vào write model
 - chạy action nghiệp vụ
+- mặc định không đọc raw operational routes nếu đã có read model phù hợp
 
 ---
 
-## 4.9 Agent / Automation
+## 4.10 Agent / Automation
 ### Được làm
 - đọc dữ liệu trong scope cần thiết
 - tạo suggestion
@@ -238,6 +262,11 @@ Phase đầu cần hiểu rõ:
 - review duplicate candidate canonical
 - tự approve reconcile giữa Core và ERP
 
+### Bypass mechanism
+- kiến trúc phải chừa sẵn cơ chế biểu diễn bypass lane để sau này mở các lane hẹp có audit
+- Phase 1 hiện chưa enable bất kỳ bypass lane nào cho agent / automation
+- mọi bypass request ở phase hiện tại phải bị deny và audit rõ ràng
+
 ### Guard cho trusted integration trên customer preference
 - integration chỉ được xác nhận trực tiếp preference canonical khi request mang `actorRole=integration`, có `actorId`, và có `externalRef`
 - nếu thiếu một trong ba guard trên, integration payload chỉ được coi là candidate/input chứ không được canonicalize trực tiếp
@@ -247,27 +276,29 @@ Phase đầu cần hiểu rõ:
 
 ## 5. Ma trận tóm tắt theo domain
 
-| Domain | Founder | Admin | Sales | CSKH | Ops | Farm Manager | Accountant | Viewer | Agent |
-|---|---|---|---|---|---|---|---|---|---|
-| Customer xem | full | full | yes | yes | limited | no | limited | yes | scoped |
-| Customer sửa | full | full | partial | partial | no | no | no | no | no direct |
-| Preorder xem | full | full | yes | yes | limited | no | limited | yes | scoped |
-| Preorder tạo/sửa | full | full | yes | limited | no | no | no | no | propose only |
-| Order xem | full | full | yes | yes | yes | limited | yes | yes | scoped |
-| Order tạo/sửa | full | full | yes | limited | limited | no | no | no | propose only |
-| Lot xem | full | full | limited | limited | yes | yes | limited | yes | scoped |
-| Lot tạo | full | full | no | no | yes | yes | no | no | no direct |
-| Lot release/block/unblock | full | full | no | no | limited | limited/yes theo policy | no | no | no direct |
-| Allocation | full | full | no | no | yes | no | no | no | suggest only |
-| Plot/Crop xem | full | full | limited | no | yes | yes | no | yes | scoped |
-| Plot/Crop sửa | full | full | no | no | limited | yes | no | no | no direct |
-| Payment status xem | full | full | limited | limited | limited | no | yes | yes | scoped |
-| Payment chỉnh | full | limited | no | no | no | no | yes | no | no direct |
-| Audit/Event log query | full | yes | no | no | no | no | limited | no | no direct |
-| Preference confirm | full | yes | yes | yes theo policy | no | no | no | no | no direct |
-| Duplicate candidate review | full | yes | yes | yes theo policy | no | no | no | no | no direct |
-| ERP reconcile approve | full | limited | no | no | no | no | yes | no | no direct |
-| Config / Permission | full | limited | no | no | no | no | no | no | no |
+| Domain | Founder | Admin | Sales | CSKH | Ops | Farm Manager | QC Reviewer | Accountant | Viewer | Agent |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Customer xem | full | full | yes | yes | limited | no | no | limited | no | scoped |
+| Customer sửa | full | full | partial | partial | no | no | no | no | no | no direct |
+| Preorder xem | full | full | yes | yes | limited | no | no | limited | no raw, use views only | scoped |
+| Preorder tạo/sửa | full | full | yes | limited | no | no | no | no | no | propose only |
+| Order xem | full | full | yes | yes | yes | limited | no | yes | no raw, use views only | scoped |
+| Order tạo/sửa | full | full | yes | limited | limited | no | no | no | no | propose only |
+| Lot xem | full | full | limited | limited | yes | yes | yes scoped | limited | read model only | scoped |
+| Lot tạo | full | full | no | no | yes | yes | no | no | no | no direct |
+| Lot release/block/unblock | full | full | no | no | limited | limited/yes theo policy | no | no | no | no direct |
+| Lot evidence / QC review | full | full | no | no | limited | limited | yes | no | no | no direct |
+| Allocation | full | full | no | no | yes | no | no | no | no | suggest only |
+| Plot/Crop xem | full | full | limited | no | yes | yes | limited | no | `/views/farm*` only | scoped |
+| Plot/Crop sửa | full | full | no | no | limited | yes | no | no | no | no direct |
+| Payment status xem | full | full | limited | limited | limited | no | no | yes | no | scoped |
+| Payment chỉnh | full | limited | no | no | no | no | no | yes | no | no direct |
+| Event log query | full | yes scoped | no | no | no | no | no | limited scoped | scoped only | no direct |
+| Audit log query | full | yes | no | no | no | no | no | limited | no | no direct |
+| Preference confirm | full | yes | yes | yes theo policy | no | no | no | no | no | no direct |
+| Duplicate candidate review | full | yes | yes | yes theo policy | no | no | no | no | no | no direct |
+| ERP reconcile approve | full | limited | no | no | no | no | no | yes | no | no direct |
+| Config / Permission | full | limited | no | no | no | no | no | no | no | no |
 
 ---
 

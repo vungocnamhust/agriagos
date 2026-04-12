@@ -3,97 +3,130 @@
 ## Mục đích
 Sơ đồ này thể hiện nguyên tắc **one truth, many views**: cùng một dữ liệu gốc, mỗi role nhìn khác nhau và được thực hiện command khác nhau.
 
-> **Phase 1 API endpoints** (thực tế trong `agos_app/app/api/routes/views.py`):
+> **Phase 1 API endpoints** (role-facing read surfaces + debug readback):
 >
 > | Endpoint | Conceptual View |
 > |---|---|
-> | `GET /views/customer-360/{id}` | Customer 360 Lite View (V4) |
-> | `GET /views/available-lots` | Available Lot Board — released lots chưa được allocate hết |
-> | `GET /views/pending-fulfillment` | Order Board View (V3) — confirmed/allocated/packed orders |
-> | `GET /views/farm` | Farm View — plots + active crop cycles |
-> | `GET /audit` | Audit Query Surface — operator/debug readback, không phải role-facing business view |
+> | `GET /api/v1/views/customer-360/{customer_id}` | Customer 360 Lite View |
+> | `GET /api/v1/views/available-lots` | Available Lot Board — released lots chưa được allocate hết |
+> | `GET /api/v1/views/pending-fulfillment` | Pending Fulfillment Board |
+> | `GET /api/v1/views/farm` | Farm View — plots + active crop cycles |
+> | `GET /api/v1/views/farm-summary-board` | Farm Summary Board |
+> | `GET /api/v1/events` | Scoped Event Stream — short-term read lane cho operator / analyst use cases |
+> | `GET /api/v1/audit` | Audit Query Surface — operator/debug readback, không phải role-facing business view |
 >
 > Các view còn lại (Farmer Task View, QC Board, Traceability, Management Metrics) là Phase 2.
 >
-> `GET /audit` hiện là read-only query surface cho operator/debug ở Phase 1; intended readers là Founder / Admin / Accountant. Permission enforcement đầy đủ cho endpoint này vẫn đi sau auth/gateway hardening.
+> `GET /api/v1/events` là short-term scoped read lane; role enforcement chi tiết vẫn là phần rollout PR sau.
+>
+> `GET /api/v1/audit` hiện là read-only query surface cho operator/debug ở Phase 1; intended readers là Founder / Admin / Accountant. Permission enforcement đầy đủ cho endpoint này vẫn đi sau auth/gateway hardening và đang được giữ trong divergence ledger.
 
 ## Mermaid
 ```mermaid
 flowchart LR
     subgraph Roles["Roles"]
+        Founder["Founder / Super Admin"]
         Admin["Admin"]
-        OpsLead["Ops Lead"]
+        Ops["Ops / Kho / Dong goi"]
         FarmMgr["Farm Manager"]
         QC["QC Reviewer"]
-        Sales["Sales / CSKH"]
-        Farmer["Farmer User"]
-        Customer["Customer"]
+        Sales["Sales"]
+        CSKH["CSKH"]
+        Accountant["Accountant"]
+        Viewer["Viewer / Analyst"]
+        Agent["Agent / Automation"]
     end
 
     subgraph Canonical["Canonical Core"]
-        C1["Identity + Customer + Farmer"]
-        C2["Crop Cycle + Crop Task"]
+        C1["Identity + Customer"]
+        C2["Plot + Crop Cycle Summary"]
         C3["Lot + Evidence + QC Review"]
-        C4["Order + Allocation + Inventory View"]
+        C4["Order + Allocation + Inventory"]
         C5["Event Log + Audit"]
     end
 
     subgraph Views["Read Models / Views"]
-        V1["Farmer Task View"]
-        V2["QC Board View"]
-        V3["Order Board View"]
-        V4["Customer 360 Lite View"]
-        V5["Traceability Public View"]
-        V6["Management Metrics View"]
+        V1["Customer 360 Lite View"]
+        V2["Available Lots Board"]
+        V3["Pending Fulfillment Board"]
+        V4["Farm View / Farm Summary Board"]
+        V5["Scoped Event Stream"]
+        V6["Audit Query Surface"]
     end
 
     subgraph Commands["Allowed Commands"]
-        CMD1["CropTask Commands"]
+        CMD1["Farm Summary / Harvest Commands"]
         CMD2["Lot Evidence / QC Commands"]
         CMD3["Order Commands"]
-        CMD4["Customer / Tag / Follow-up Commands"]
+        CMD4["Customer / Preference / Follow-up Commands"]
         CMD5["Admin / Override Commands"]
     end
 
-    C1 --> V4
-    C2 --> V1
+    C1 --> V1
     C3 --> V2
     C4 --> V3
-    C3 --> V5
-    C1 --> V6
-    C2 --> V6
-    C3 --> V6
-    C4 --> V6
+    C2 --> V4
+    C5 --> V5
     C5 --> V6
 
-    Farmer --> V1
-    Farmer --> CMD1
+    Founder --> V1
+    Founder --> V2
+    Founder --> V3
+    Founder --> V4
+    Founder --> V5
+    Founder --> V6
+    Founder --> CMD5
 
     QC --> V2
     QC --> CMD2
 
+    Sales --> V1
     Sales --> V3
-    Sales --> V4
-    Sales --> CMD3
     Sales --> CMD4
 
-    FarmMgr --> V1
+    CSKH --> V1
+    CSKH --> V3
+    CSKH --> CMD4
+
     FarmMgr --> V2
+    FarmMgr --> V4
     FarmMgr --> CMD1
     FarmMgr --> CMD2
 
-    OpsLead --> V2
-    OpsLead --> V3
-    OpsLead --> V6
-    OpsLead --> CMD3
-    OpsLead --> CMD5
+    Ops --> V2
+    Ops --> V3
+    Ops --> V4
+    Ops --> CMD2
+    Ops --> CMD3
 
-    Admin --> V1
     Admin --> V2
     Admin --> V3
+    Admin --> V1
     Admin --> V4
+    Admin --> V5
     Admin --> V6
     Admin --> CMD5
 
-    Customer --> V5
+    Accountant --> V3
+    Accountant --> V5
+    Accountant --> V6
+
+    Viewer --> V2
+    Viewer --> V3
+    Viewer --> V4
+    Viewer --> V5
+
+    Agent -.-> V1
+    Agent -.-> V2
+    Agent -.-> V3
+    Agent -.-> V4
+    Agent -.-> V5
+    Agent -.-> CMD3
+    Agent -.-> CMD4
 ```
+
+## Phase 1 notes
+
+- `qc_reviewer` là top-level business role riêng cho QC lane, không phải delegated capability của `ops` hay `farm_manager`.
+- `viewer / analyst` short-term đi qua `/api/v1/views/*` và scoped `/api/v1/events`; không dùng raw operational reads theo mặc định.
+- `agent / automation` vẫn advisory-first. Sơ đồ cho thấy nó có thể đọc hoặc tạo draft trong scope được cấp, nhưng không có bypass lane nào đang enable ở Phase 1.

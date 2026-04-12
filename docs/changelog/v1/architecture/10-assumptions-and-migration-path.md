@@ -131,6 +131,7 @@ Nó chỉ làm 3 việc:
 ## 3.7 AI chỉ ở mức suggest / draft trước
 ### Giả định
 - phase đầu agent không được auto-execute action nhạy cảm
+- phase đầu chừa sẵn mechanism cho bypass lane nhưng chưa enable lane nào
 
 ### Vì sao
 - cần học từ dữ liệu thật
@@ -170,6 +171,7 @@ Nó chỉ làm 3 việc:
 - RBAC enforcement đầy đủ
 - integration adapters production-grade
 - advanced analytics và recommendation layer
+- agent bypass lanes hẹp, có explicit allow list + audit, chỉ sau khi guardrails đủ tốt
 
 ### Runtime reality đã được kéo lên sớm trong late Phase 1
 - selected role-based read models đã được ship sớm bằng SQL views thay vì đợi projection workers
