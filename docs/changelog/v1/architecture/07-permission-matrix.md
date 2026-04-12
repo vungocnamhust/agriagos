@@ -364,7 +364,7 @@ Mọi action nhạy cảm phải log:
 Phase 1 readback note:
 - `GET /api/v1/audit` là operator/debug surface để query audit decisions
 - intended roles hiện tại: Founder / Super Admin, Admin vận hành, và Accountant khi cần lần lại operational payment / reconcile trail
-- gateway/auth enforcement cho quyền đọc endpoint này chưa được implement đầy đủ trong phase hiện tại; xem divergence ledger nếu code surface đang đi trước permission enforcement
+- quyền đọc endpoint này đã đi qua shared read authz ở Phase 1; các role khác bị deny và ghi audit `audit.query`
 
 ---
 

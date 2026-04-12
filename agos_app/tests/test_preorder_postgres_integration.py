@@ -172,7 +172,10 @@ def test_preorder_core_persists_adjustment_history_and_remaining_qty(
         ),
         {"preorder_id": created.data.preorderId},
     )
-    intermediate = preorder_service.get_preorder(created.data.preorderId)
+    intermediate = preorder_service.get_preorder(
+        created.data.preorderId,
+        meta=Meta(actorId="sales-1", actorRole="sales"),
+    )
 
     assert intermediate.allocatedQty == 4
     assert intermediate.deliveredQty == 3
@@ -191,7 +194,10 @@ def test_preorder_core_persists_adjustment_history_and_remaining_qty(
             ),
         ),
     )
-    detail = preorder_service.get_preorder(created.data.preorderId)
+    detail = preorder_service.get_preorder(
+        created.data.preorderId,
+        meta=Meta(actorId="sales-2", actorRole="sales"),
+    )
 
     assert adjusted.data.status == "active"
     assert adjusted.data.remainingQty == 18

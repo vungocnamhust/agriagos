@@ -19,7 +19,7 @@ Sơ đồ này thể hiện nguyên tắc **one truth, many views**: cùng một
 >
 > `GET /api/v1/events` là short-term scoped read lane; role enforcement chi tiết vẫn là phần rollout PR sau.
 >
-> `GET /api/v1/audit` hiện là read-only query surface cho operator/debug ở Phase 1; intended readers là Founder / Admin / Accountant. Permission enforcement đầy đủ cho endpoint này vẫn đi sau auth/gateway hardening và đang được giữ trong divergence ledger.
+> `GET /api/v1/audit` là read-only query surface cho operator/debug ở Phase 1; current enforced readers là Founder / Super Admin, Admin, và Accountant. Các role khác bị deny và ghi audit `audit.query`.
 
 ## Mermaid
 ```mermaid

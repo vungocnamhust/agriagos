@@ -1,7 +1,8 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 
+from app.api.routes._meta import request_meta
 from app.models.audit import AuditLogEntry, AuditLogListResponse
 from app.models.common import ErrorResponse
 from app.services import audit as svc
@@ -10,12 +11,14 @@ router = APIRouter()
 
 
 AUDIT_ERROR_RESPONSES = {
+    403: {"model": ErrorResponse, "description": "Forbidden"},
     422: {"model": ErrorResponse, "description": "Validation error"},
 }
 
 
 @router.get("", response_model=AuditLogListResponse, responses=AUDIT_ERROR_RESPONSES)
 def list_audit_logs(
+    request: Request,
     targetType: str | None = None,
     targetId: str | None = None,
     actionName: str | None = None,
@@ -38,5 +41,6 @@ def list_audit_logs(
         actor_role=actorRole,
         created_from=from_,
         created_to=to,
+        meta=request_meta(request),
     )
     return AuditLogListResponse(items=[AuditLogEntry(**item) for item in items], total=len(items))

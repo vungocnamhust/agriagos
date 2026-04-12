@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from app.models.common import Meta
+from app.services.read_authz import authorize_read_surface
 from app.core.write_context import append_audit_decision
 from app.store import audit as audit_store
 
@@ -45,6 +47,8 @@ PREORDER_AUDIT_REASON_CODES = COMMON_AUDIT_REASON_CODES | frozenset(
         "invalid_committed_qty",
         "committed_qty_below_reserved_and_delivered",
         "preorder_has_allocations",
+        "forbidden_preorder_read",
+        "forbidden_preorder_write",
     }
 )
 
@@ -323,7 +327,17 @@ def query_audit_logs(
     actor_role: str | None = None,
     created_from: datetime | None = None,
     created_to: datetime | None = None,
+    meta: Meta | None = None,
 ) -> list[dict[str, object]]:
+    authorize_read_surface(
+        meta=meta,
+        action_name="audit.query",
+        target_type="AuditLog",
+        target_id="query",
+        allowed_roles={"founder", "super_admin", "admin", "accountant"},
+        reason_code="forbidden_audit_query",
+        detail="Actor is not allowed to query the audit log.",
+    )
     return audit_store.query_audit_logs(
         target_type=target_type,
         target_id=target_id,

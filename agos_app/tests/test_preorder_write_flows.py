@@ -25,7 +25,7 @@ def test_create_preorder_records_event_audit_and_idempotency(monkeypatch: pytest
             customerId="customer-1",
             productSkuId="sku-1",
             committedQty=12,
-            meta=Meta(correlationId="corr-preorder", idempotencyKey="idem-preorder"),
+            meta=Meta(correlationId="corr-preorder", idempotencyKey="idem-preorder", actorId="sales-1", actorRole="sales"),
         )
     )
 
@@ -65,17 +65,17 @@ def test_confirm_and_activate_preorder_emit_events(monkeypatch: pytest.MonkeyPat
             customerId="customer-1",
             productSkuId="sku-1",
             committedQty=12,
-            meta=Meta(correlationId="corr-preorder"),
+            meta=Meta(correlationId="corr-preorder", actorId="sales-1", actorRole="sales"),
         )
     )
 
     confirmed = preorders.confirm_preorder(
         created.data.preorderId,
-        ConfirmPreorderRequest(meta=Meta(correlationId="corr-preorder-confirm")),
+        ConfirmPreorderRequest(meta=Meta(correlationId="corr-preorder-confirm", actorId="sales-1", actorRole="sales")),
     )
     activated = preorders.activate_preorder(
         created.data.preorderId,
-        ActivatePreorderRequest(meta=Meta(correlationId="corr-preorder-activate")),
+        ActivatePreorderRequest(meta=Meta(correlationId="corr-preorder-activate", actorId="sales-1", actorRole="sales")),
     )
 
     assert confirmed.data.status == PreorderStatus.confirmed
@@ -118,12 +118,12 @@ def test_adjust_preorder_recomputes_remaining_qty_using_allocated_and_delivered(
         AdjustPreorderRequest(
             newCommittedQty=12.0,
             reason="increase quota",
-            meta=Meta(correlationId="corr-adjust"),
+            meta=Meta(correlationId="corr-adjust", actorId="sales-1", actorRole="sales"),
         ),
     )
 
     assert response.data.remainingQty == 7.0
-    detail = preorders.get_preorder(preorder_id)
+    detail = preorders.get_preorder(preorder_id, meta=Meta(actorId="sales-1", actorRole="sales"))
     assert detail.adjustmentHistory[0].oldCommittedQty == 10.0
     assert detail.adjustmentHistory[0].newCommittedQty == 12.0
 
@@ -161,7 +161,7 @@ def test_adjust_preorder_rejects_new_committed_qty_below_allocated_and_delivered
             AdjustPreorderRequest(
                 newCommittedQty=4.0,
                 reason="invalid shrink",
-                meta=Meta(correlationId="corr-adjust-reject"),
+                meta=Meta(correlationId="corr-adjust-reject", actorId="sales-1", actorRole="sales"),
             ),
         )
 
@@ -202,7 +202,7 @@ def test_adjust_preorder_rejects_new_committed_qty_below_cancelled_allocated_and
             AdjustPreorderRequest(
                 newCommittedQty=5.0,
                 reason="invalid shrink",
-                meta=Meta(correlationId="corr-adjust-reject-cancelled"),
+                meta=Meta(correlationId="corr-adjust-reject-cancelled", actorId="sales-1", actorRole="sales"),
             ),
         )
 
@@ -240,7 +240,7 @@ def test_cancel_preorder_blocks_when_allocated_qty_exists(monkeypatch: pytest.Mo
             preorder_id,
             CancelPreorderRequest(
                 reason="customer changed mind",
-                meta=Meta(correlationId="corr-cancel"),
+                meta=Meta(correlationId="corr-cancel", actorId="sales-1", actorRole="sales"),
             ),
         )
 
@@ -277,7 +277,7 @@ def test_cancel_preorder_consumes_outstanding_quota_and_emits_event(monkeypatch:
         preorder_id,
         CancelPreorderRequest(
             reason="customer changed mind",
-            meta=Meta(correlationId="corr-cancel-ok"),
+            meta=Meta(correlationId="corr-cancel-ok", actorId="sales-1", actorRole="sales"),
         ),
     )
 
@@ -285,6 +285,131 @@ def test_cancel_preorder_consumes_outstanding_quota_and_emits_event(monkeypatch:
     assert response.data.cancelledQty == 8.0
     assert response.data.remainingQty == 0.0
     assert memory.list_events()[-1]["eventName"] == "preorder.cancelled"
+
+
+def test_create_preorder_denies_missing_actor_role_and_audits(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(preorders.postgres_sync, "is_enabled", lambda: False)
+    memory.save_customer("customer-2", {"customerId": "customer-2", "fullName": "Bob"})
+
+    with pytest.raises(HTTPException) as exc_info:
+        preorders.create_preorder(
+            CreatePreorderRequest(
+                customerId="customer-2",
+                productSkuId="sku-1",
+                committedQty=6,
+                meta=Meta(correlationId="corr-preorder-no-role", actorId="actor-1"),
+            )
+        )
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "Actor is not allowed to create preorders."
+    assert memory.list_audit_logs()[-1]["actionName"] == "preorder.create"
+    assert memory.list_audit_logs()[-1]["reasonCode"] == "forbidden_preorder_write"
+
+
+def test_get_preorder_denies_viewer_role(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(preorders.postgres_sync, "is_enabled", lambda: False)
+    preorder_id = "preorder-viewer-denied"
+    memory.save_preorder(
+        preorder_id,
+        {
+            "preorderId": preorder_id,
+            "tenantId": "default",
+            "preorderCode": "DT-006",
+            "customerId": "customer-1",
+            "productSkuId": "sku-1",
+            "committedQty": 5.0,
+            "allocatedQty": 0.0,
+            "deliveredQty": 0.0,
+            "cancelledQty": 0.0,
+            "remainingQty": 5.0,
+            "deliveryCadence": None,
+            "depositAmount": None,
+            "notes": None,
+            "status": PreorderStatus.draft.value,
+            "startDate": None,
+            "adjustmentHistory": [],
+        },
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        preorders.get_preorder(preorder_id, meta=Meta(actorId="viewer-1", actorRole="viewer"))
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "Actor is not allowed to read preorder details."
+    assert memory.list_audit_logs()[-1]["actionName"] == "preorder.get"
+    assert memory.list_audit_logs()[-1]["reasonCode"] == "forbidden_preorder_read"
+
+
+def test_get_preorder_allows_accountant_role(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(preorders.postgres_sync, "is_enabled", lambda: False)
+    preorder_id = "preorder-accountant-read"
+    memory.save_preorder(
+        preorder_id,
+        {
+            "preorderId": preorder_id,
+            "tenantId": "default",
+            "preorderCode": "DT-006A",
+            "customerId": "customer-1",
+            "productSkuId": "sku-1",
+            "committedQty": 7.0,
+            "allocatedQty": 1.0,
+            "deliveredQty": 0.0,
+            "cancelledQty": 0.0,
+            "remainingQty": 6.0,
+            "deliveryCadence": None,
+            "depositAmount": None,
+            "notes": None,
+            "status": PreorderStatus.active.value,
+            "startDate": None,
+            "adjustmentHistory": [],
+        },
+    )
+
+    detail = preorders.get_preorder(preorder_id, meta=Meta(actorId="acct-1", actorRole="accountant"))
+
+    assert detail.preorderId == preorder_id
+    assert detail.remainingQty == 6.0
+
+
+def test_cancel_preorder_denies_accountant_role(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(preorders.postgres_sync, "is_enabled", lambda: False)
+    preorder_id = "preorder-accountant-denied"
+    memory.save_preorder(
+        preorder_id,
+        {
+            "preorderId": preorder_id,
+            "tenantId": "default",
+            "preorderCode": "DT-007",
+            "customerId": "customer-1",
+            "productSkuId": "sku-1",
+            "committedQty": 10.0,
+            "allocatedQty": 0.0,
+            "deliveredQty": 0.0,
+            "cancelledQty": 0.0,
+            "remainingQty": 10.0,
+            "deliveryCadence": None,
+            "depositAmount": None,
+            "notes": None,
+            "status": PreorderStatus.active.value,
+            "startDate": None,
+            "adjustmentHistory": [],
+        },
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        preorders.cancel_preorder(
+            preorder_id,
+            CancelPreorderRequest(
+                reason="no authority",
+                meta=Meta(correlationId="corr-preorder-accountant-cancel", actorId="acct-1", actorRole="accountant"),
+            ),
+        )
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "Actor is not allowed to cancel preorders."
+    assert memory.list_audit_logs()[-1]["actionName"] == "preorder.cancel"
+    assert memory.list_audit_logs()[-1]["reasonCode"] == "forbidden_preorder_write"
 
 
 def test_completed_preorder_rejects_activate_and_writes_transition_audit(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -315,7 +440,9 @@ def test_completed_preorder_rejects_activate_and_writes_transition_audit(monkeyp
     with pytest.raises(HTTPException) as exc_info:
         preorders.activate_preorder(
             preorder_id,
-            ActivatePreorderRequest(meta=Meta(correlationId="corr-preorder-completed-activate")),
+            ActivatePreorderRequest(
+                meta=Meta(correlationId="corr-preorder-completed-activate", actorId="sales-1", actorRole="sales")
+            ),
         )
 
     assert exc_info.value.status_code == 422

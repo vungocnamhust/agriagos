@@ -8,9 +8,11 @@ from typing import Any
 from fastapi import HTTPException
 
 from app.core import events
+from app.core.authz import ensure_bypass_permitted, normalize_actor_role
 from app.core.codegen import generate_preorder_code
 from app.core.write_context import build_request_hash, meta_context
 from app.core.gateway import assert_preorder_transition, check_idempotency, record_idempotency
+from app.models.common import Meta
 from app.models.enums import PreorderStatus
 from app.models.preorders import (
     ActivatePreorderRequest,
@@ -26,6 +28,10 @@ from app.services import audit as audit_service
 from app.store import postgres_sync
 from app.store import memory as store
 from app.store._db import transaction as postgres_transaction
+
+
+_PREORDER_READ_ROLES = frozenset({"founder", "super_admin", "admin", "sales", "cskh", "ops", "accountant"})
+_PREORDER_WRITE_ROLES = frozenset({"founder", "super_admin", "admin", "sales", "cskh"})
 
 
 def _new_preorder_code() -> str:
@@ -120,6 +126,49 @@ def _audit_preorder(
     )
 
 
+def _effective_preorder_actor_role(context: dict[str, Any], *, allow_delegated_agent: bool = False) -> str | None:
+    actor_role = context.get("normalized_actor_role") or normalize_actor_role(context.get("actor_role"))
+    if actor_role != "agent" or not allow_delegated_agent:
+        return actor_role
+
+    delegated_actor_role = normalize_actor_role(context.get("delegated_actor_role"))
+    return delegated_actor_role or actor_role
+
+
+def _assert_preorder_access(
+    *,
+    context: dict[str, Any],
+    action_name: str,
+    preorder_id: str,
+    allowed_roles: frozenset[str],
+    reason_code: str,
+    detail: str,
+    before_snapshot: Any | None = None,
+    allow_delegated_agent: bool = False,
+) -> None:
+    ensure_bypass_permitted(
+        action_name=action_name,
+        target_type="Preorder",
+        target_id=preorder_id,
+        context=context,
+    )
+
+    actor_role = _effective_preorder_actor_role(context, allow_delegated_agent=allow_delegated_agent)
+    if actor_role in allowed_roles:
+        return
+
+    _audit_preorder(
+        action_name,
+        preorder_id,
+        "denied",
+        context,
+        before_snapshot=before_snapshot,
+        reason_code=reason_code,
+        metadata={"message": detail, "effectiveActorRole": actor_role},
+    )
+    raise HTTPException(status_code=403, detail=detail)
+
+
 def _raise_preorder_denied(
     *,
     action_name: str,
@@ -172,6 +221,14 @@ def _get_preorder_record_or_404(
 
 def create_preorder(payload: CreatePreorderRequest) -> PreorderResponse:
     context = meta_context(payload.meta)
+    _assert_preorder_access(
+        context=context,
+        action_name="preorder.create",
+        preorder_id=f"pending:{payload.customerId}",
+        allowed_roles=_PREORDER_WRITE_ROLES,
+        reason_code="forbidden_preorder_write",
+        detail="Actor is not allowed to create preorders.",
+    )
     key = context["idempotency_key"]
     if cached := check_idempotency(key):
         return PreorderResponse(**cached)
@@ -235,7 +292,17 @@ def create_preorder(payload: CreatePreorderRequest) -> PreorderResponse:
     return result
 
 
-def get_preorder(preorder_id: str) -> PreorderDetail:
+def get_preorder(preorder_id: str, meta: Meta | None = None) -> PreorderDetail:
+    context = meta_context(meta)
+    _assert_preorder_access(
+        context=context,
+        action_name="preorder.get",
+        preorder_id=preorder_id,
+        allowed_roles=_PREORDER_READ_ROLES,
+        reason_code="forbidden_preorder_read",
+        detail="Actor is not allowed to read preorder details.",
+        allow_delegated_agent=True,
+    )
     record = _get_preorder_record_or_404(preorder_id)
     return _build_preorder_detail(record)
 
@@ -244,6 +311,15 @@ def confirm_preorder(preorder_id: str, payload: ConfirmPreorderRequest) -> Preor
     context = meta_context(payload.meta)
     record = _get_preorder_record_or_404(preorder_id, action_name="preorder.confirm", context=context)
     before_snapshot = copy.deepcopy(record)
+    _assert_preorder_access(
+        context=context,
+        action_name="preorder.confirm",
+        preorder_id=preorder_id,
+        allowed_roles=_PREORDER_WRITE_ROLES,
+        reason_code="forbidden_preorder_write",
+        detail="Actor is not allowed to confirm preorders.",
+        before_snapshot=before_snapshot,
+    )
     key = context["idempotency_key"]
     if cached := check_idempotency(key):
         return PreorderResponse(**cached)
@@ -296,6 +372,15 @@ def activate_preorder(preorder_id: str, payload: ActivatePreorderRequest) -> Pre
     context = meta_context(payload.meta)
     record = _get_preorder_record_or_404(preorder_id, action_name="preorder.activate", context=context)
     before_snapshot = copy.deepcopy(record)
+    _assert_preorder_access(
+        context=context,
+        action_name="preorder.activate",
+        preorder_id=preorder_id,
+        allowed_roles=_PREORDER_WRITE_ROLES,
+        reason_code="forbidden_preorder_write",
+        detail="Actor is not allowed to activate preorders.",
+        before_snapshot=before_snapshot,
+    )
     key = context["idempotency_key"]
     if cached := check_idempotency(key):
         return PreorderResponse(**cached)
@@ -348,6 +433,15 @@ def adjust_preorder(preorder_id: str, payload: AdjustPreorderRequest) -> Preorde
     context = meta_context(payload.meta)
     record = _get_preorder_record_or_404(preorder_id, action_name="preorder.adjust", context=context)
     before_snapshot = copy.deepcopy(record)
+    _assert_preorder_access(
+        context=context,
+        action_name="preorder.adjust",
+        preorder_id=preorder_id,
+        allowed_roles=_PREORDER_WRITE_ROLES,
+        reason_code="forbidden_preorder_write",
+        detail="Actor is not allowed to adjust preorders.",
+        before_snapshot=before_snapshot,
+    )
 
     key = context["idempotency_key"]
     if cached := check_idempotency(key):
@@ -449,6 +543,15 @@ def cancel_preorder(preorder_id: str, payload: CancelPreorderRequest) -> Preorde
     context = meta_context(payload.meta)
     record = _get_preorder_record_or_404(preorder_id, action_name="preorder.cancel", context=context)
     before_snapshot = copy.deepcopy(record)
+    _assert_preorder_access(
+        context=context,
+        action_name="preorder.cancel",
+        preorder_id=preorder_id,
+        allowed_roles=_PREORDER_WRITE_ROLES,
+        reason_code="forbidden_preorder_write",
+        detail="Actor is not allowed to cancel preorders.",
+        before_snapshot=before_snapshot,
+    )
     key = context["idempotency_key"]
     if cached := check_idempotency(key):
         return PreorderResponse(**cached)

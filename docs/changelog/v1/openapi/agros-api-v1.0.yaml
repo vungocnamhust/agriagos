@@ -317,6 +317,11 @@ paths:
       - Preorders
       summary: Create Preorder
       operationId: create_preorder_api_v1_preorders_post
+      parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       requestBody:
         content:
           application/json:
@@ -330,6 +335,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PreorderResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Validation Error
           content:
@@ -343,6 +354,10 @@ paths:
       summary: Get Preorder
       operationId: get_preorder_api_v1_preorders__preorder_id__get
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: preorder_id
         in: path
         required: true
@@ -356,6 +371,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PreorderDetail'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Validation Error
           content:
@@ -369,6 +390,10 @@ paths:
       summary: Adjust Preorder
       operationId: adjust_preorder_api_v1_preorders__preorder_id__adjust_post
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: preorder_id
         in: path
         required: true
@@ -388,6 +413,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PreorderResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Validation Error
           content:
@@ -401,6 +432,10 @@ paths:
       summary: Confirm Preorder
       operationId: confirm_preorder_api_v1_preorders__preorder_id__confirm_post
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: preorder_id
         in: path
         required: true
@@ -420,6 +455,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PreorderResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Validation Error
           content:
@@ -433,6 +474,10 @@ paths:
       summary: Activate Preorder
       operationId: activate_preorder_api_v1_preorders__preorder_id__activate_post
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: preorder_id
         in: path
         required: true
@@ -452,6 +497,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PreorderResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Validation Error
           content:
@@ -465,6 +516,10 @@ paths:
       summary: Cancel Preorder
       operationId: cancel_preorder_api_v1_preorders__preorder_id__cancel_post
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: preorder_id
         in: path
         required: true
@@ -484,6 +539,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PreorderResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Validation Error
           content:
@@ -1579,6 +1640,10 @@ paths:
       summary: List Audit Logs
       operationId: list_audit_logs_api_v1_audit_get
       parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: targetType
         in: query
         required: false
@@ -1669,6 +1734,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuditLogListResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Validation error
           content:
