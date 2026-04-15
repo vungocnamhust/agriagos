@@ -234,6 +234,7 @@ def test_farm_view_returns_legacy_plot_and_cycle_lists() -> None:
     memory.save_plot("plot-1", {
         "plotId": "plot-1",
         "plotCode": "PLOT-001",
+        "organizationId": "org-1",
         "name": "Garden A",
         "locationText": "Da Lat",
         "areaValue": 2.5,
@@ -243,6 +244,7 @@ def test_farm_view_returns_legacy_plot_and_cycle_lists() -> None:
     memory.save_crop_cycle("cycle-1", {
         "cropCycleId": "cycle-1",
         "plotId": "plot-1",
+        "organizationId": "org-1",
         "cropName": "Strawberry",
         "growthStage": "maturing",
         "status": "active",
@@ -257,12 +259,15 @@ def test_farm_view_returns_legacy_plot_and_cycle_lists() -> None:
     assert len(payload["plots"]) == 1
     assert len(payload["cropCycles"]) == 1
     assert payload["plots"][0]["plotCode"] == "PLOT-001"
+    assert payload["plots"][0]["organizationId"] == "org-1"
+    assert payload["cropCycles"][0]["organizationId"] == "org-1"
 
 
 def test_farm_summary_board_flattens_plot_and_active_cycle_rows() -> None:
     memory.save_plot("plot-1", {
         "plotId": "plot-1",
         "plotCode": "PLOT-001",
+        "organizationId": "org-1",
         "name": "Garden A",
         "locationText": "Da Lat",
         "areaValue": 2.5,
@@ -272,6 +277,7 @@ def test_farm_summary_board_flattens_plot_and_active_cycle_rows() -> None:
     memory.save_plot("plot-2", {
         "plotId": "plot-2",
         "plotCode": "PLOT-002",
+        "organizationId": None,
         "name": "Garden B",
         "locationText": "Bao Loc",
         "areaValue": 1.0,
@@ -281,6 +287,7 @@ def test_farm_summary_board_flattens_plot_and_active_cycle_rows() -> None:
     memory.save_crop_cycle("cycle-1", {
         "cropCycleId": "cycle-1",
         "plotId": "plot-1",
+        "organizationId": "org-1",
         "cropName": "Strawberry",
         "growthStage": "flowering_or_maturing",
         "status": "active",
@@ -305,7 +312,11 @@ def test_farm_summary_board_flattens_plot_and_active_cycle_rows() -> None:
     payload = response.json()["items"]
     assert [item["plotCode"] for item in payload] == ["PLOT-001", "PLOT-002"]
     assert payload[0]["growthStage"] == "maturing"
+    assert payload[0]["plotOrganizationId"] == "org-1"
+    assert payload[0]["cropCycleOrganizationId"] == "org-1"
     assert payload[1]["cropCycleId"] is None
+    assert payload[1]["plotOrganizationId"] is None
+    assert payload[1]["cropCycleOrganizationId"] is None
 
 
 def test_customer_360_rejects_viewer_and_records_denied_audit() -> None:

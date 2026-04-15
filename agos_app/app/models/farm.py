@@ -4,6 +4,7 @@ from app.models.enums import CropCycleStatus, GrowthStage
 class PlotSummary(BaseModel):
     plotId: str
     plotCode: str
+    organizationId: str | None = None
     name: str
     locationText: str | None = None
     areaValue: float
@@ -13,6 +14,7 @@ class PlotSummary(BaseModel):
 class CropCycleSummary(BaseModel):
     cropCycleId: str
     plotId: str
+    organizationId: str | None = None
     cropName: str
     growthStage: GrowthStage  # (06-state-transitions.md)
     status: CropCycleStatus  # (06-state-transitions.md)

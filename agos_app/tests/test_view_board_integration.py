@@ -102,6 +102,33 @@ def _insert_customer(session: Session, customer_id: str, customer_code: str, ful
     )
 
 
+def _insert_organization(session: Session, organization_id: str, organization_code: str, name: str) -> None:
+    session.execute(
+        text(
+            """
+            INSERT INTO organizations (
+                organization_id,
+                organization_code,
+                name,
+                organization_type,
+                status
+            ) VALUES (
+                CAST(:organization_id AS uuid),
+                :organization_code,
+                :name,
+                'family_business',
+                'active'
+            )
+            """
+        ),
+        {
+            "organization_id": organization_id,
+            "organization_code": organization_code,
+            "name": name,
+        },
+    )
+
+
 @pytest.mark.postgres_integration
 def test_fetch_available_lots_board_filters_to_released_positive_qty_and_honors_sku_filter(
     postgres_db_session: Session,
@@ -313,10 +340,13 @@ def test_fetch_farm_store_and_summary_board_return_expected_postgres_rows(
     _enable_farm_store(monkeypatch, postgres_db_session)
 
     code_suffix = uuid.uuid4().hex[:8]
+    organization_id = str(uuid.uuid4())
     plot_1 = str(uuid.uuid4())
     plot_2 = str(uuid.uuid4())
     cycle_active = str(uuid.uuid4())
     cycle_closed = str(uuid.uuid4())
+
+    _insert_organization(postgres_db_session, organization_id, f"ORG-FARM-{code_suffix}", "Farm Org")
 
     postgres_db_session.execute(
         text(
@@ -324,6 +354,7 @@ def test_fetch_farm_store_and_summary_board_return_expected_postgres_rows(
             INSERT INTO plots (
                 plot_id,
                 plot_code,
+                organization_id,
                 name,
                 location_text,
                 area_value,
@@ -333,6 +364,7 @@ def test_fetch_farm_store_and_summary_board_return_expected_postgres_rows(
             (
                 CAST(:plot_1 AS uuid),
                 :plot_code_1,
+                CAST(:organization_id AS uuid),
                 'Garden A',
                 'Da Lat',
                 2.5,
@@ -342,6 +374,7 @@ def test_fetch_farm_store_and_summary_board_return_expected_postgres_rows(
             (
                 CAST(:plot_2 AS uuid),
                 :plot_code_2,
+                NULL,
                 'Garden B',
                 'Bao Loc',
                 1.0,
@@ -351,6 +384,7 @@ def test_fetch_farm_store_and_summary_board_return_expected_postgres_rows(
             """
         ),
         {
+            "organization_id": organization_id,
             "plot_1": plot_1,
             "plot_code_1": f"PLOT-IT-{code_suffix}-1",
             "plot_2": plot_2,
@@ -363,6 +397,7 @@ def test_fetch_farm_store_and_summary_board_return_expected_postgres_rows(
             INSERT INTO crop_cycles (
                 crop_cycle_id,
                 plot_id,
+                organization_id,
                 crop_name,
                 start_date,
                 growth_stage,
@@ -374,6 +409,7 @@ def test_fetch_farm_store_and_summary_board_return_expected_postgres_rows(
             (
                 CAST(:cycle_active AS uuid),
                 CAST(:plot_1 AS uuid),
+                CAST(:organization_id AS uuid),
                 'Strawberry',
                 CAST('2026-03-01' AS date),
                 'flowering_or_maturing',
@@ -385,6 +421,7 @@ def test_fetch_farm_store_and_summary_board_return_expected_postgres_rows(
             (
                 CAST(:cycle_closed AS uuid),
                 CAST(:plot_1 AS uuid),
+                NULL,
                 'Spinach',
                 CAST('2026-02-01' AS date),
                 'growing',
@@ -398,6 +435,7 @@ def test_fetch_farm_store_and_summary_board_return_expected_postgres_rows(
         {
             "cycle_active": cycle_active,
             "cycle_closed": cycle_closed,
+            "organization_id": organization_id,
             "plot_1": plot_1,
         },
     )
@@ -409,10 +447,13 @@ def test_fetch_farm_store_and_summary_board_return_expected_postgres_rows(
     scoped_summary_rows = [row for row in summary_rows if row["plotCode"].startswith(f"PLOT-IT-{code_suffix}-")]
 
     assert [plot["plotCode"] for plot in scoped_plots] == [f"PLOT-IT-{code_suffix}-1", f"PLOT-IT-{code_suffix}-2"]
+    assert scoped_plots[0]["organizationId"] == organization_id
+    assert scoped_plots[1]["organizationId"] is None
     assert active_cycles == [
         {
             "cropCycleId": cycle_active,
             "plotId": plot_1,
+            "organizationId": organization_id,
             "cropName": "Strawberry",
             "growthStage": "maturing",
             "status": "active",
@@ -735,8 +776,11 @@ def test_farm_summary_board_endpoint_reads_real_postgres_projection(
     monkeypatch.setattr(views_service.postgres_sync, "is_enabled", lambda: True)
 
     code_suffix = uuid.uuid4().hex[:8]
+    organization_id = str(uuid.uuid4())
     plot_id = str(uuid.uuid4())
     crop_cycle_id = str(uuid.uuid4())
+
+    _insert_organization(postgres_db_session, organization_id, f"ORG-EP-{code_suffix}", "Endpoint Org")
 
     postgres_db_session.execute(
         text(
@@ -744,6 +788,7 @@ def test_farm_summary_board_endpoint_reads_real_postgres_projection(
             INSERT INTO plots (
                 plot_id,
                 plot_code,
+                organization_id,
                 name,
                 location_text,
                 area_value,
@@ -752,6 +797,7 @@ def test_farm_summary_board_endpoint_reads_real_postgres_projection(
             ) VALUES (
                 CAST(:plot_id AS uuid),
                 :plot_code,
+                CAST(:organization_id AS uuid),
                 'Endpoint Plot',
                 'Da Lat',
                 3.0,
@@ -761,6 +807,7 @@ def test_farm_summary_board_endpoint_reads_real_postgres_projection(
             """
         ),
         {
+            "organization_id": organization_id,
             "plot_id": plot_id,
             "plot_code": f"PLOT-EP-{code_suffix}",
         },
@@ -771,6 +818,7 @@ def test_farm_summary_board_endpoint_reads_real_postgres_projection(
             INSERT INTO crop_cycles (
                 crop_cycle_id,
                 plot_id,
+                organization_id,
                 crop_name,
                 start_date,
                 growth_stage,
@@ -781,6 +829,7 @@ def test_farm_summary_board_endpoint_reads_real_postgres_projection(
             ) VALUES (
                 CAST(:crop_cycle_id AS uuid),
                 CAST(:plot_id AS uuid),
+                CAST(:organization_id AS uuid),
                 'Coffee',
                 CAST('2026-03-15' AS date),
                 'flowering_or_maturing',
@@ -793,6 +842,7 @@ def test_farm_summary_board_endpoint_reads_real_postgres_projection(
         ),
         {
             "crop_cycle_id": crop_cycle_id,
+            "organization_id": organization_id,
             "plot_id": plot_id,
         },
     )
@@ -804,6 +854,8 @@ def test_farm_summary_board_endpoint_reads_real_postgres_projection(
     assert response.status_code == 200
     assert len(scoped_rows) == 1
     assert scoped_rows[0]["cropCycleId"] == crop_cycle_id
+    assert scoped_rows[0]["plotOrganizationId"] == organization_id
+    assert scoped_rows[0]["cropCycleOrganizationId"] == organization_id
     assert scoped_rows[0]["growthStage"] == "maturing"
     assert scoped_rows[0]["cropCycleStatus"] == "near_harvest"
     assert scoped_rows[0]["estimatedYieldQty"] == 88.0

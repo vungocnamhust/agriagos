@@ -134,12 +134,36 @@ def test_raw_farm_plots_deny_viewer_and_audit() -> None:
     assert memory.list_audit_logs()[-1]["reasonCode"] == "forbidden_farm_plot_read"
 
 
+def test_raw_farm_plots_allow_ops_and_return_organization_id() -> None:
+    memory.save_plot(
+        "plot-1",
+        {
+            "plotId": "plot-1",
+            "plotCode": "PLOT-001",
+            "organizationId": "org-1",
+            "name": "Garden A",
+            "locationText": "Da Lat",
+            "areaValue": 2.0,
+            "areaUnit": "ha",
+            "status": "active",
+        },
+    )
+
+    response = client.get("/api/v1/farm/plots", headers=_auth_headers(actor_role="ops", actor_id="ops-1"))
+
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+    assert response.json()[0]["plotId"] == "plot-1"
+    assert response.json()[0]["organizationId"] == "org-1"
+
+
 def test_raw_farm_crop_cycles_allow_ops() -> None:
     memory.save_plot(
         "plot-1",
         {
             "plotId": "plot-1",
             "plotCode": "PLOT-001",
+            "organizationId": "org-1",
             "name": "Garden A",
             "locationText": "Da Lat",
             "areaValue": 2.0,
@@ -152,6 +176,7 @@ def test_raw_farm_crop_cycles_allow_ops() -> None:
         {
             "cropCycleId": "cycle-1",
             "plotId": "plot-1",
+            "organizationId": "org-1",
             "cropName": "Strawberry",
             "growthStage": "maturing",
             "status": "active",
@@ -165,3 +190,4 @@ def test_raw_farm_crop_cycles_allow_ops() -> None:
     assert response.status_code == 200
     assert len(response.json()) == 1
     assert response.json()[0]["cropCycleId"] == "cycle-1"
+    assert response.json()[0]["organizationId"] == "org-1"

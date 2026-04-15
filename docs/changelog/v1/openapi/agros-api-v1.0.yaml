@@ -3131,6 +3131,11 @@ components:
         plotId:
           type: string
           title: Plotid
+        organizationId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Organizationid
         cropName:
           type: string
           title: Cropname
@@ -3779,6 +3784,11 @@ components:
         plotCode:
           type: string
           title: Plotcode
+        plotOrganizationId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Plotorganizationid
         plotName:
           type: string
           title: Plotname
@@ -3801,6 +3811,11 @@ components:
           - type: string
           - type: 'null'
           title: Cropcycleid
+        cropCycleOrganizationId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cropcycleorganizationid
         cropName:
           anyOf:
           - type: string
@@ -4342,6 +4357,11 @@ components:
         plotCode:
           type: string
           title: Plotcode
+        organizationId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Organizationid
         name:
           type: string
           title: Name

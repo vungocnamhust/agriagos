@@ -31,6 +31,7 @@ def fetch_plots() -> list[dict[str, Any]]:
                 SELECT
                     plot_id,
                     plot_code,
+                    organization_id,
                     name,
                     location_text,
                     area_value,
@@ -46,6 +47,7 @@ def fetch_plots() -> list[dict[str, Any]]:
         {
             "plotId": str(row["plot_id"]),
             "plotCode": row["plot_code"],
+            "organizationId": str(row["organization_id"]) if row["organization_id"] is not None else None,
             "name": row["name"],
             "locationText": row["location_text"],
             "areaValue": _db.to_float(row["area_value"]),
@@ -80,6 +82,7 @@ def fetch_crop_cycles(plot_id: str | None, status: str | None) -> list[dict[str,
                 SELECT
                     crop_cycle_id,
                     plot_id,
+                    organization_id,
                     crop_name,
                     growth_stage,
                     status,
@@ -97,6 +100,7 @@ def fetch_crop_cycles(plot_id: str | None, status: str | None) -> list[dict[str,
         {
             "cropCycleId": str(row["crop_cycle_id"]),
             "plotId": str(row["plot_id"]),
+            "organizationId": str(row["organization_id"]) if row["organization_id"] is not None else None,
             "cropName": row["crop_name"],
             "growthStage": _normalize_growth_stage(row["growth_stage"]),
             "status": row["status"],
@@ -124,6 +128,7 @@ def fetch_crop_cycle(crop_cycle_id: str) -> dict[str, Any] | None:
                 SELECT
                     crop_cycle_id,
                     plot_id,
+                    organization_id,
                     crop_name,
                     growth_stage,
                     status,
@@ -142,6 +147,7 @@ def fetch_crop_cycle(crop_cycle_id: str) -> dict[str, Any] | None:
     return {
         "cropCycleId": str(row["crop_cycle_id"]),
         "plotId": str(row["plot_id"]),
+        "organizationId": str(row["organization_id"]) if row["organization_id"] is not None else None,
         "cropName": row["crop_name"],
         "growthStage": _normalize_growth_stage(row["growth_stage"]),
         "status": row["status"],

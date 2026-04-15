@@ -122,12 +122,14 @@ def fetch_farm_summary_board() -> list[dict[str, Any]]:
                 SELECT
                     plot_id,
                     plot_code,
+                    plot_organization_id,
                     plot_name,
                     location_text,
                     area_value,
                     area_unit,
                     plot_status,
                     crop_cycle_id,
+                    crop_cycle_organization_id,
                     crop_name,
                     growth_stage,
                     crop_cycle_status,
@@ -144,12 +146,17 @@ def fetch_farm_summary_board() -> list[dict[str, Any]]:
         {
             "plotId": str(row["plot_id"]),
             "plotCode": row["plot_code"],
+            "plotOrganizationId": str(row["plot_organization_id"]) if row["plot_organization_id"] is not None else None,
             "plotName": row["plot_name"],
             "locationText": row["location_text"],
             "areaValue": _db.to_float(row["area_value"]),
             "areaUnit": row["area_unit"],
             "plotStatus": row["plot_status"],
             "cropCycleId": str(row["crop_cycle_id"]) if row["crop_cycle_id"] is not None else None,
+            "cropCycleOrganizationId": (
+                str(row["crop_cycle_organization_id"])
+                if row["crop_cycle_organization_id"] is not None else None
+            ),
             "cropName": row["crop_name"],
             "growthStage": _normalize_growth_stage(row["growth_stage"]),
             "cropCycleStatus": row["crop_cycle_status"],

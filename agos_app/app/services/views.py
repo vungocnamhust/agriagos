@@ -212,6 +212,7 @@ def get_farm_summary_board() -> FarmSummaryBoardResponse:
                 FarmSummaryBoardItem(
                     plotId=plot["plotId"],
                     plotCode=plot["plotCode"],
+                    plotOrganizationId=_string_value(plot.get("organizationId")),
                     plotName=plot["name"],
                     locationText=_string_value(plot.get("locationText")),
                     areaValue=plot["areaValue"],
@@ -226,12 +227,14 @@ def get_farm_summary_board() -> FarmSummaryBoardResponse:
                 FarmSummaryBoardItem(
                     plotId=plot["plotId"],
                     plotCode=plot["plotCode"],
+                    plotOrganizationId=_string_value(plot.get("organizationId")),
                     plotName=plot["name"],
                     locationText=_string_value(plot.get("locationText")),
                     areaValue=plot["areaValue"],
                     areaUnit=plot["areaUnit"],
                     plotStatus=_string_value(plot.get("status")) or "active",
                     cropCycleId=_string_value(cycle.get("cropCycleId")),
+                    cropCycleOrganizationId=_string_value(cycle.get("organizationId")),
                     cropName=_string_value(cycle.get("cropName")),
                     growthStage=_normalize_growth_stage(cycle.get("growthStage")),
                     cropCycleStatus=_crop_cycle_status(cycle.get("status")),

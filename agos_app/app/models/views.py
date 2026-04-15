@@ -32,12 +32,14 @@ class AvailableLotListResponse(BaseModel):
 class FarmSummaryBoardItem(BaseModel):
     plotId: str
     plotCode: str
+    plotOrganizationId: str | None = None
     plotName: str
     locationText: str | None = None
     areaValue: float
     areaUnit: str
     plotStatus: str
     cropCycleId: str | None = None
+    cropCycleOrganizationId: str | None = None
     cropName: str | None = None
     growthStage: GrowthStage | None = None
     cropCycleStatus: CropCycleStatus | None = None
