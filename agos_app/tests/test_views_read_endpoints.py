@@ -49,6 +49,7 @@ def test_customer_360_returns_customer_preorders_orders_and_preferences() -> Non
         {
             "preorderId": "preorder-1",
             "preorderCode": "DT-002",
+            "organizationId": "org-001",
             "customerId": "customer-1",
             "productSkuId": "sku-1",
             "committedQty": 20.0,
@@ -64,6 +65,7 @@ def test_customer_360_returns_customer_preorders_orders_and_preferences() -> Non
         {
             "preorderId": "preorder-2",
             "preorderCode": "DT-001",
+            "organizationId": "org-001",
             "customerId": "customer-1",
             "productSkuId": "sku-2",
             "committedQty": 10.0,
@@ -79,6 +81,7 @@ def test_customer_360_returns_customer_preorders_orders_and_preferences() -> Non
         {
             "orderId": "order-1",
             "orderCode": "ORD-202604-0002",
+            "organizationId": "org-001",
             "customerId": "customer-1",
             "channel": "direct",
             "status": "confirmed",
@@ -103,6 +106,7 @@ def test_customer_360_returns_customer_preorders_orders_and_preferences() -> Non
         {
             "orderId": "order-2",
             "orderCode": "ORD-202604-0001",
+            "organizationId": "org-001",
             "customerId": "customer-1",
             "channel": "crm",
             "status": "delivered",
@@ -133,8 +137,10 @@ def test_customer_360_returns_customer_preorders_orders_and_preferences() -> Non
     payload = response.json()
     assert payload["customer"]["fullName"] == "Alice Nguyen"
     assert [item["preorderCode"] for item in payload["activePreorders"]] == ["DT-002", "DT-001"]
+    assert [item["organizationId"] for item in payload["activePreorders"]] == ["org-001", "org-001"]
     assert payload["activePreorders"][0]["remainingQty"] == 13.0
     assert [item["orderCode"] for item in payload["recentOrders"]] == ["ORD-202604-0002", "ORD-202604-0001"]
+    assert [item["organizationId"] for item in payload["recentOrders"]] == ["org-001", "org-001"]
     assert [item["preferenceType"] for item in payload["preferences"]] == ["pack_size", "variety"]
 
 

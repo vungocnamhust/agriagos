@@ -13,12 +13,40 @@ def test_customer_360_view_returns_nested_projection_from_real_postgres(
     postgres_db_session: Session,
 ) -> None:
     code_suffix = uuid.uuid4().hex[:8]
+    organization_id = str(uuid.uuid4())
     customer_id = str(uuid.uuid4())
     preorder_active_id = str(uuid.uuid4())
     preorder_cancelled_id = str(uuid.uuid4())
     order_id = str(uuid.uuid4())
     order_line_id = str(uuid.uuid4())
     sku_id = str(uuid.uuid4())
+
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO organizations (
+                organization_id,
+                organization_code,
+                name,
+                organization_type,
+                status
+            ) VALUES (
+                CAST(:organization_id AS uuid),
+                :organization_code,
+                :name,
+                :organization_type,
+                :status
+            )
+            """
+        ),
+        {
+            "organization_id": organization_id,
+            "organization_code": f"ORG-IT-{code_suffix}",
+            "name": "Integration Org",
+            "organization_type": "family_business",
+            "status": "active",
+        },
+    )
 
     postgres_db_session.execute(
         text(
@@ -129,6 +157,7 @@ def test_customer_360_view_returns_nested_projection_from_real_postgres(
             INSERT INTO preorders (
                 preorder_id,
                 preorder_code,
+                organization_id,
                 customer_id,
                 product_sku_id,
                 committed_qty,
@@ -141,6 +170,7 @@ def test_customer_360_view_returns_nested_projection_from_real_postgres(
             (
                 CAST(:preorder_active_id AS uuid),
                 'DT-IT-002',
+                CAST(:organization_id AS uuid),
                 CAST(:customer_id AS uuid),
                 CAST(:product_sku_id AS uuid),
                 20,
@@ -153,6 +183,7 @@ def test_customer_360_view_returns_nested_projection_from_real_postgres(
             (
                 CAST(:preorder_cancelled_id AS uuid),
                 'DT-IT-001',
+                CAST(:organization_id AS uuid),
                 CAST(:customer_id AS uuid),
                 CAST(:product_sku_id AS uuid),
                 10,
@@ -165,6 +196,7 @@ def test_customer_360_view_returns_nested_projection_from_real_postgres(
             """
         ),
         {
+            "organization_id": organization_id,
             "preorder_active_id": preorder_active_id,
             "preorder_cancelled_id": preorder_cancelled_id,
             "customer_id": customer_id,
@@ -177,6 +209,7 @@ def test_customer_360_view_returns_nested_projection_from_real_postgres(
             INSERT INTO sales_orders (
                 order_id,
                 order_code,
+                organization_id,
                 customer_id,
                 channel,
                 delivery_date_expected,
@@ -189,6 +222,7 @@ def test_customer_360_view_returns_nested_projection_from_real_postgres(
             ) VALUES (
                 CAST(:order_id AS uuid),
                 :order_code,
+                CAST(:organization_id AS uuid),
                 CAST(:customer_id AS uuid),
                 :channel,
                 now() + interval '2 day',
@@ -204,6 +238,7 @@ def test_customer_360_view_returns_nested_projection_from_real_postgres(
         {
             "order_id": order_id,
             "order_code": f"ORD-IT-{code_suffix}",
+            "organization_id": organization_id,
             "customer_id": customer_id,
             "channel": "zalo",
             "shipping_address": "Da Lat",
@@ -269,6 +304,7 @@ def test_customer_360_view_returns_nested_projection_from_real_postgres(
 
     assert [item["preorderCode"] for item in row["active_preorders"]] == ["DT-IT-002"]
     preorder = row["active_preorders"][0]
+    assert preorder["organizationId"] == organization_id
     assert preorder["status"] == "active"
     assert preorder["committedQty"] == 20
     assert preorder["allocatedQty"] == 5
@@ -276,6 +312,7 @@ def test_customer_360_view_returns_nested_projection_from_real_postgres(
     assert preorder["remainingQty"] == 13
 
     assert [item["orderCode"] for item in row["recent_orders"]] == [f"ORD-IT-{code_suffix}"]
+    assert row["recent_orders"][0]["organizationId"] == organization_id
     assert row["recent_orders"][0]["lines"][0]["orderLineId"] == order_line_id
     assert row["recent_orders"][0]["lines"][0]["status"] == "allocated"
 
