@@ -24,6 +24,8 @@ Sơ đồ này thể hiện nguyên tắc **one truth, many views**: cùng một
 > Raw customer reads ở Phase 1 cũng đi lane hẹp: `GET /api/v1/customers`, `GET /api/v1/customers/{customer_id}`, `GET /api/v1/customers/duplicate-candidates`, và `GET /api/v1/customers/{customer_id}/duplicate-candidates` hiện chỉ cho Founder / Super Admin / Admin / Sales / CSKH. Ops, Accountant, Viewer, và raw agent reads phải dùng customer-facing view/tool surface khác hoặc bị deny trên raw lane.
 >
 > Raw lot reads ở Phase 1 không mở rộng như read models: `GET /api/v1/lots/{lot_id}`, `GET /api/v1/lots/{lot_id}/evidence`, và `GET /api/v1/lots/{lot_id}/qc-reviews` hiện chỉ cho Founder / Super Admin / Admin / Ops / Farm Manager / QC Reviewer. Lot create, adjust, release, block, unblock dùng service-layer write authz; evidence add và QC review giữ lane riêng cho QC.
+>
+> `Organization` hiện mới được khóa ở architecture baseline, chưa có Phase 1 API/runtime. Khi slice Organization CRUD được mở, Founder / Super Admin và Admin sẽ là nhóm mutate chính; customer vẫn là shared ecosystem identity chứ không thành owned view của từng organization.
 
 ## Mermaid
 ```mermaid
@@ -50,6 +52,7 @@ flowchart LR
     end
 
     subgraph Views["Read Models / Views"]
+        V0["Organization Profile View [Planned]"]
         V1["Customer 360 Lite View"]
         V2["Available Lots Board"]
         V3["Pending Fulfillment Board"]
@@ -59,6 +62,7 @@ flowchart LR
     end
 
     subgraph Commands["Allowed Commands"]
+        CMD0["Organization Management Commands [Planned]"]
         CMD1["Farm Summary / Harvest Commands"]
         CMD2["Lot Evidence / QC Commands"]
         CMD3["Order Commands"]
@@ -74,11 +78,13 @@ flowchart LR
     C5 --> V6
 
     Founder --> V1
+    Founder --> V0
     Founder --> V2
     Founder --> V3
     Founder --> V4
     Founder --> V5
     Founder --> V6
+    Founder --> CMD0
     Founder --> CMD5
 
     QC --> V2
@@ -105,10 +111,12 @@ flowchart LR
 
     Admin --> V2
     Admin --> V3
+    Admin --> V0
     Admin --> V1
     Admin --> V4
     Admin --> V5
     Admin --> V6
+    Admin --> CMD0
     Admin --> CMD5
 
     Accountant --> V3
@@ -134,3 +142,4 @@ flowchart LR
 - `qc_reviewer` là top-level business role riêng cho QC lane, không phải delegated capability của `ops` hay `farm_manager`.
 - `viewer / analyst` short-term đi qua `/api/v1/views/*` và scoped `/api/v1/events`; không dùng raw operational reads theo mặc định.
 - `agent / automation` vẫn advisory-first. Sơ đồ cho thấy nó có thể đọc hoặc tạo draft trong scope được cấp, nhưng không có bypass lane nào đang enable ở Phase 1.
+- `Organization Profile View [Planned]` và `Organization Management Commands [Planned]` là docs-first baseline cho slice Organization; chúng không ngầm khẳng định runtime đã ship endpoint tương ứng.

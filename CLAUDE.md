@@ -107,6 +107,8 @@ agos_app/
 
 Phase 1 runtime stores the implemented core entities in PostgreSQL tables and store records such as `customers`, `preorders`, `sales_orders`, `sales_order_lines`, `product_skus`, `lots`, `plots`, and `crop_cycles`.
 
+Architecture baseline now also locks `Organization` as a future canonical business aggregate for the legal-operating owner via ADR-012, but it is not yet implemented in runtime schema, routes, or services. Track the intentional docs-first gap in `docs/changelog/v1/divergence-ledger.md` entry `DL-20260415-01`.
+
 Architecture docs use canonical aliases such as `CustomerProfile`, `Preorder`, `SalesOrder`, `SalesOrderLine`, `ProductSKU`, `LotBatch`, `Plot`, and `CropCycle` for cross-reference with business terms. They may also discuss future or broader entities such as `Farmer` and `CropTask`, but those are not yet implemented in the current Phase 1 runtime.
 
 Vietnamese architecture docs sometimes use shorter business names such as `Customer`, `Order`, and `Lot`. For the mapping between business labels and implementation names, see `docs/changelog/v1/architecture/04-canonical-data-model.md`.

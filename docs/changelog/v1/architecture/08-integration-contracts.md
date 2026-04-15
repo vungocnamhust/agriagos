@@ -69,6 +69,14 @@ Ví dụ:
 - tenant chưa dùng LiteFarm: Core giữ trực tiếp `plot/crop summary`
 - tenant đã dùng LiteFarm: Core giữ `snapshot đủ dùng`, LiteFarm giữ dữ liệu sâu
 
+### `Organization` không thay `Tenant` trong integration baseline
+`Organization` là business owner aggregate của domain, còn `Tenant` vẫn là boundary triển khai hoặc lựa chọn integration.
+
+Điều này có nghĩa là:
+- không dùng `tenant_id` để thay cho organization trong canonical model
+- một integration contract có thể vẫn được chọn theo tenant, trong khi record vận hành về sau cần biết đang thuộc organization nào
+- propagation của `organization_id` vào integration-facing records là rollout phase sau, không phải bằng chứng rằng tenant và organization là một
+
 ### Snapshot contract tối thiểu khi LiteFarm là nguồn sâu
 Core tối thiểu phải nhận được:
 - `plot_id` hoặc external mapping để map plot
@@ -96,6 +104,12 @@ Nói dễ hiểu:
 - khách là ai trong chuỗi giao dịch → Core
 - khách đã nói chuyện gì, trên kênh nào → CRM
 - khách lên hóa đơn thế nào → ERP
+- đơn hàng hoặc preorder của organization nào → Core commercial records khi rollout organization đã tới phase tương ứng
+
+### Rule baseline về customer và organization
+- customer identity là shared identity của hệ sinh thái, không bị partition ownership theo organization trong baseline hiện tại
+- khi organization rollout sang commercial side, hệ cần diễn đạt được giao dịch của organization X thuộc shared customer Y
+- nếu về sau cần đo loyalty của customer với từng organization, nên làm qua association/read model phù hợp thay vì đổi canonical ownership của customer
 
 ---
 
@@ -214,6 +228,10 @@ Nói dễ hiểu:
 - CRM không được âm thầm tạo “customer truth” riêng lệch khỏi core
 - candidate preference từ CRM hoặc AI không tự thành preference confirmed
 - core chỉ nhận `conversation summary` hoặc `workflow summary` cần cho vận hành, không nhận ownership của conversation thread
+
+### Rule baseline cho phase integration sau này
+- khi integration rollout đủ chín, các sync jobs, external mappings, và integration-facing records cần propagate `organization_id` nhất quán để phân biệt external interactions của từng organization
+- requirement này không làm đổi nghĩa của `tenant`; nó chỉ thêm business-owner traceability vào integration boundary
 
 ---
 

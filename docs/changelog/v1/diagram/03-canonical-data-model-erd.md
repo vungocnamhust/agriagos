@@ -13,6 +13,7 @@ ERD này mô tả các thực thể canonical mà Agri OS Core cần giữ để
 
 | Entity | Phase | Ghi chú |
 |---|---|---|
+| ORGANIZATION | Phase 2 🔜 | Architecture baseline locked in PR-1; runtime rollout starts after standalone schema/API slice |
 | CUSTOMER_PROFILE | Phase 1 ✅ | |
 | PREORDER | Phase 1 ✅ | Bị thiếu trong ERD cũ — đã thêm |
 | PRODUCT_SKU | Phase 1 ✅ | Bị thiếu trong ERD cũ — đã thêm |
@@ -38,8 +39,30 @@ ERD này mô tả các thực thể canonical mà Agri OS Core cần giữ để
 erDiagram
     %% ── Phase 1 entities ────────────────────────────────────────────────────
 
+    %% Organization là docs-first baseline ở PR-1.
+    %% Runtime chưa implement trong Phase 1 code hiện tại, nhưng rollout order đã được khóa:
+    %% Organization -> Plot/CropCycle/Lot -> Preorder/SalesOrder.
+    %% Customer-organization affinity, nếu cần, là read-model lane được duyệt riêng và
+    %% không xuất hiện như canonical ownership edge trong ERD baseline này.
+
+    ORGANIZATION ||--o{ PLOT : operates
+    ORGANIZATION ||--o{ CROP_CYCLE : scopes
+    ORGANIZATION ||--o{ LOT_BATCH : owns_flow
+    ORGANIZATION ||--o{ PREORDER : sells_under
+    ORGANIZATION ||--o{ SALES_ORDER : sells_under
+
     CUSTOMER_PROFILE ||--o{ SALES_ORDER : places
     CUSTOMER_PROFILE ||--o{ PREORDER : commits
+
+    ORGANIZATION {
+        string organization_id PK
+        string organization_code
+        string name
+        string organization_type
+        string status
+        string region
+        string locality_summary
+    }
 
     PREORDER {
         string preorder_id PK

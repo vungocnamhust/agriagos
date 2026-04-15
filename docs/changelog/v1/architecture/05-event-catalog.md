@@ -49,6 +49,54 @@ Mỗi event tối thiểu nên có:
 
 ## 3. Nhóm event theo aggregate
 
+## 3.0 Organization events
+
+> Docs baseline này đi trước runtime implementation. Event names dưới đây là contract mục tiêu cho slice Organization, chưa phải cam kết rằng runtime Phase 1 hiện đã emit các event này.
+
+### `OrganizationCreated`
+Khi một legal-operating owner record được tạo lần đầu.
+
+Payload tối thiểu:
+- organization_id
+- organization_code
+- name
+- organization_type
+- status
+
+### `OrganizationUpdated`
+Khi profile của organization thay đổi.
+
+Payload tối thiểu:
+- organization_id
+- changed_fields
+- after_summary
+
+### `OrganizationActivated`
+Khi organization chuyển từ `draft` hoặc `paused` sang `active`.
+
+Payload tối thiểu:
+- organization_id
+- old_status
+- new_status
+
+### `OrganizationPaused`
+Khi organization bị tạm dừng.
+
+Payload tối thiểu:
+- organization_id
+- old_status
+- new_status
+- reason
+
+### `OrganizationClosed`
+Khi organization bị đóng và không còn tiếp tục lifecycle hiện tại.
+
+Payload tối thiểu:
+- organization_id
+- old_status
+- new_status
+- reason
+
 ## 3.1 Customer events
 
 ### `CustomerCreated`

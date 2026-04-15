@@ -51,6 +51,36 @@ Rule này áp dụng cho các aggregate đang được harden trong Phase 1 như
 
 ---
 
+## 2A. Organization state baseline
+
+> Đây là docs-first state vocabulary cho aggregate `Organization`. Runtime hiện tại chưa implement aggregate này; state machine được chốt trước để tránh semantic drift ở các slice schema/API sau.
+
+### State
+- `draft`
+- `active`
+- `paused`
+- `closed`
+
+### Ý nghĩa
+- `draft`: organization record mới tạo, chưa đủ thông tin hoặc chưa được bật vận hành
+- `active`: organization đang là legal-operating owner hợp lệ trong hệ
+- `paused`: organization tạm dừng hoạt động nhưng chưa đóng lifecycle
+- `closed`: organization đã kết thúc lifecycle hiện tại
+
+### Transition hợp lệ
+- draft → active
+- draft → closed
+- active → paused
+- paused → active
+- paused → closed
+
+### Guard baseline
+- không đi từ `closed` về `active`
+- không nên cho phép cascade cross-domain tự động chỉ vì organization đổi state trong slice đầu
+- việc chặn farm-side hoặc commercial-side actions theo organization state là rollout phase sau, không phải docs này ngầm khẳng định runtime đã enforce
+
+---
+
 ## 3. Customer state
 
 ### State gợi ý

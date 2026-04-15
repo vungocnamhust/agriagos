@@ -40,6 +40,54 @@ Nó giữ:
 
 ---
 
+## 3.1 Organization
+
+**Định nghĩa:** chủ thể vận hành hoặc pháp lý mà Agri OS cần mô hình hóa như một legal-operating owner.
+
+Ví dụ có thể là:
+- một hộ sản xuất
+- một gia đình có thương hiệu riêng
+- một người khởi nghiệp
+- một HTX hoặc chủ thể sở hữu tương đương
+
+Organization dùng để trả lời các câu hỏi như:
+- lô hàng hoặc vụ mùa này đang thuộc vận hành của ai
+- đơn hàng này là giao dịch của tổ chức nào
+- về sau integration nào đang tương tác cho tổ chức nào
+
+**Không nên nhầm với:**
+- `Tenant`: boundary triển khai hoặc tích hợp
+- Customer: identity người mua dùng chung toàn hệ sinh thái
+- Brand: business-facing identity; phase này chưa tách thành aggregate riêng
+
+## 3.2 Tenant
+
+**Định nghĩa:** một đơn vị triển khai hoặc môi trường vận hành có lựa chọn integration riêng.
+
+Tenant giúp mô tả các quyết định như:
+- tenant nào dùng LiteFarm
+- tenant nào giữ plot/crop summary trực tiếp trong Core
+- tenant nào cần contract integration riêng
+
+**Không nên nhầm với:**
+- Organization: business owner aggregate của domain
+- Customer segment
+- Brand identity
+
+## 3.3 Brand Identity
+
+**Định nghĩa:** lớp business-facing identity mà thị trường hoặc khách hàng nhìn thấy của một organization.
+
+Ví dụ:
+- tên thương mại
+- mô tả giới thiệu ngắn
+- profile nhận diện mà customer nhớ tới
+
+Phase hiện tại **không** tách brand thành aggregate riêng.
+Nếu một organization chỉ có một business-facing identity đơn giản, giữ nó trong profile của `Organization` là đủ.
+
+---
+
 ## 4. Customer
 
 **Định nghĩa:** người mua hoặc tổ chức mua hàng.
@@ -50,6 +98,12 @@ Customer là thực thể gốc để gắn:
 - lịch sử mua
 - preference
 - segment
+
+Trong baseline hiện tại, customer identity là **shared ecosystem identity**.
+Điều cần trả lời về sau không phải là “customer có thuộc về organization nào không”, mà là:
+- customer có giao dịch với organization nào
+- customer có mức độ trung thành hay affinity với organization nào
+- customer có mức độ trung thành với toàn hệ sinh thái ra sao
 
 **Không nên nhầm với:**
 - Lead: mới quan tâm nhưng chưa trở thành khách chính thức

@@ -172,6 +172,7 @@ Nó chỉ làm 3 việc:
 - integration adapters production-grade
 - advanced analytics và recommendation layer
 - agent bypass lanes hẹp, có explicit allow list + audit, chỉ sau khi guardrails đủ tốt
+- organization-aware scoping rollout theo từng domain slice; không one-shot rewrite toàn hệ
 
 ### Runtime reality đã được kéo lên sớm trong late Phase 1
 - selected role-based read models đã được ship sớm bằng SQL views thay vì đợi projection workers
@@ -208,6 +209,7 @@ Thành công khi:
 
 ### Phase 2 - Stable Modules + Integrations
 Mục tiêu:
+- Organization aggregate baseline đã được đưa vào schema/runtime và bắt đầu rollout association theo domain
 - ERP sync
 - CRM sync
 - LiteFarm sync summary
@@ -219,6 +221,20 @@ Thành công khi:
 - sync không còn lỗi mù
 - read model bắt đầu phục vụ team tốt
 - boundary theo tenant không còn phải giải thích lại mỗi lần build integration
+
+### Organization rollout path
+Baseline cho aggregate `Organization` đi theo thứ tự sau:
+1. chốt authority docs + ADR
+2. thêm standalone `Organization` schema và CRUD
+3. rollout `organization_id` sang farm-side records: `plot`, `crop_cycle`, `lot`
+4. rollout `organization_id` sang commercial-side records: `preorder`, `sales_order`
+5. nếu cần, thêm customer-organization affinity/read model mà không đổi canonical ownership của `CustomerProfile`; lane này nằm ngoài canonical ownership graph hiện tại và không tự tạo FK ownership mới trên `CustomerProfile`
+6. ở phase integration sau, propagate `organization_id` sang integration-facing records và flows
+
+Rule baseline:
+- không dùng `tenant_id = "default"` để suy ra organization truth
+- không ép mọi bảng phải có `organization_id` trong một migration duy nhất
+- backward compatibility của existing APIs phải được giữ cho đến khi slice rollout tương ứng được ship
 
 ### Phase 3 - Read Models + Agent Support
 Mục tiêu:

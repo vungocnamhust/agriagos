@@ -80,6 +80,7 @@ Một domain có thể xuất hiện ở nhiều hệ và nhiều dashboard, nh�
 
 | Domain | Canonical owner | Core phải giữ gì | Hệ ngoài chỉ giữ gì |
 |---|---|---|---|
+| Organization identity | Agri OS Core | legal-operating owner identity, organization code, organization profile tối thiểu, rollout policy cho association | integration systems chỉ giữ external mapping hoặc contract riêng theo nhu cầu của từng org |
 | Customer identity | Agri OS Core | customer profile, customer code, external mappings | CRM/ERP chỉ giữ mapped record theo nhu cầu riêng |
 | Customer preference confirmed | Agri OS Core | confirmed preference và operational segment dùng cho workflow | CRM và AI chỉ cung cấp candidate/input |
 | Preorder | Agri OS Core | commitment, quota balance, trạng thái preorder | ERP/CRM chỉ nhận summary nếu cần |
@@ -91,9 +92,11 @@ Một domain có thể xuất hiện ở nhiều hệ và nhiều dashboard, nh�
 | Conversations / campaign activity | CRM | Core chỉ giữ summary cần cho workflow và mapping về customer canonical | CRM giữ threads, activities, campaigns |
 
 ### Rule baseline
+- Core giữ `Organization` như business owner aggregate mới, nhưng không được dùng nó để cướp ownership của `CustomerProfile`, `Preorder`, `SalesOrder`, `LotBatch`, `Plot`, hay `CropCycle`.
 - Core không được tạo source of truth thứ hai cho `accounting final` hoặc `conversations`.
 - ERP, LiteFarm, CRM không được tạo source of truth thứ hai cho `preorder`, `order vận hành`, `lot`, `allocation`.
 - Nếu `plot/crop` do LiteFarm giữ sâu, tenant đó vẫn phải chốt rõ snapshot tối thiểu nào đi vào Core.
+- customer identity vẫn là shared ecosystem identity; organization rollout về sau chỉ được gắn transaction, farm-side records, hoặc loyalty/affinity views mà không biến customer thành dữ liệu sở hữu riêng của từng organization.
 
 ### `Tenant` trong tài liệu này nghĩa là gì
 `Tenant` ở đây là một môi trường vận hành hoặc một đơn vị triển khai có quyết định tích hợp riêng với hệ ngoài.
@@ -106,9 +109,52 @@ Phase đầu nên coi mặc định là:
 - **Core giữ plot/crop summary đủ dùng**
 - LiteFarm chỉ trở thành nguồn sâu khi team đã chốt snapshot contract cho tenant đó
 
+### `Organization` trong tài liệu này nghĩa là gì
+`Organization` là chủ thể vận hành hoặc pháp lý mà Core cần mô hình hóa như business owner aggregate.
+
+Trong baseline hiện tại:
+- `Organization` **không** đồng nghĩa với `Tenant`
+- `Organization` là legal-operating owner của farm-side hoặc commercial-side records khi rollout đã đến slice tương ứng
+- customer vẫn là shared identity của toàn hệ sinh thái, không trở thành owned aggregate của từng organization
+- brand/business-facing identity được giữ trong profile của `Organization`; chưa tách thành aggregate riêng
+
+### Rollout order cho `organization_id`
+Thứ tự rollout chi tiết xem ở `10-assumptions-and-migration-path.md`.
+
+1. standalone Organization aggregate
+2. farm-side records: `Plot`, `CropCycle`, `LotBatch`
+3. commercial-side records: `Preorder`, `SalesOrder`
+4. nếu cần, customer-organization affinity chỉ đi qua read model hoặc relationship view được duyệt riêng; không thêm canonical ownership edge trong baseline này
+
 ---
 
 ## 4. Danh sách entity lõi
+
+## 4.0 Organization
+**Mục đích:** giữ identity của legal-operating owner trong hệ sinh thái Agri OS.
+
+**Source of truth:** Agri OS Core
+
+### Field tối thiểu
+- `organization_id`
+- `organization_code`
+- `name`
+- `organization_type`
+- `status`
+- `region`
+- `locality_summary`
+- `representative_name`
+- `contact_phone`
+- `contact_email`
+- `short_description`
+- `created_at`
+- `updated_at`
+
+### Rule baseline
+- aggregate này mô hình hóa chủ thể vận hành/pháp lý như hộ sản xuất, gia đình có thương hiệu riêng, solo founder, HTX, hoặc chủ thể tương đương
+- aggregate này không thay `tenant_id`
+- phase rollout đầu chỉ cần aggregate standalone; association sang farm-side và commercial-side là slice tiếp theo
+- brand/business-facing identity ở trong profile của `Organization`, không phải aggregate riêng trong baseline hiện tại
 
 ## 4.1 Customer
 **Mục đích:** giữ canonical customer identity.
@@ -139,6 +185,7 @@ CRM có thể giữ conversation, nhưng customer identity canonical vẫn phả
 - `phone_normalized` là internal canonical key dùng cho rule chống trùng cơ bản; `phone` gốc vẫn giữ cho hiển thị
 - merge customer cần event và audit log riêng
 - phase hiện tại đã có `customer_duplicate_candidates` để review nghi ngờ trùng; queue này không được auto-merge record canonical
+- customer không trở thành dữ liệu sở hữu riêng của một `Organization`; nếu về sau cần trả lời loyalty hoặc affinity theo tổ chức, nên dùng association/read model tương ứng thay vì đổi ownership của `CustomerProfile`
 
 ---
 

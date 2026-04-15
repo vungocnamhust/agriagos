@@ -58,6 +58,15 @@ Phase đầu cần hiểu rõ:
 - nhưng implementation mới không được đi ngược baseline này
 - nếu current code chưa enforce đủ, phần thiếu phải được coi là debt có chủ đích chứ không phải permission ngầm
 
+### 3.6 Organization baseline policy
+`Organization` là business owner aggregate mới trong baseline kiến trúc, nhưng chưa có runtime auth surface ở Phase 1 hiện tại.
+
+Policy baseline cho các slice sắp tới:
+- Founder / Super Admin và Admin vận hành là nhóm chính được tạo, sửa, kích hoạt, tạm dừng, hoặc đóng organization
+- Sales, CSKH, Ops, Farm Manager, Accountant, Viewer không mặc định có quyền mutate organization aggregate
+- việc một role nào đó được thao tác records thuộc một organization không tự động đồng nghĩa role đó được sửa organization aggregate
+- org-scoped RBAC/ABAC và membership theo organization là phase sau, không được ngầm giả định đã tồn tại
+
 ---
 
 ## 4. Phạm vi quyền theo domain
@@ -69,6 +78,7 @@ Phase đầu cần hiểu rõ:
 - chỉnh permission
 - approve action nhạy cảm
 - override trong trường hợp đặc biệt
+- tạo / sửa / activate / pause / close organization khi policy cho phép
 
 ### Điều kiện
 - mọi override phải có audit log
@@ -84,6 +94,7 @@ Phase đầu cần hiểu rõ:
 - theo dõi lot, allocation, packing, delivery
 - điều phối liên phòng ban
 - xem lỗi sync / retry / queue
+- tạo / sửa / activate / pause organization theo policy baseline
 
 ### Không nên làm trực tiếp
 - chốt accounting final

@@ -38,6 +38,7 @@ Nó chỉ làm 4 việc:
 - workflow nào được coi là bắt buộc, workflow nào defer
 
 ### 3.2 Domain boundary
+- `organization` là legal-operating owner aggregate của Core, không đồng nhất với `tenant`
 - `customer` canonical identity thuộc Core
 - `preorder`, `order`, `lot`, `allocation`, `inventory movement` thuộc Core
 - `plot/crop summary` thuộc Core snapshot hay LiteFarm snapshot theo tenant nào
@@ -59,6 +60,7 @@ Nó chỉ làm 4 việc:
 - trigger để bước từ `Core Monolith` sang `Stable Modules + Integrations`
 - trigger để bước sang `Read Models + Agent Support`
 - điều kiện nào mới cho phép automation nhiều hơn nhưng vẫn không tạo shadow truth
+- rollout order của `Organization`: standalone aggregate trước, farm-side trước, commercial-side sau, customer affinity/read-model cuối
 
 ---
 
@@ -85,6 +87,7 @@ Ghi chú: team nhỏ có thể để một người kiêm nhiều vai trò owner
 4. `10-assumptions-and-migration-path.md` phải có included scope, excluded scope, phase gates.
 5. `05-event-catalog.md` và `07-permission-matrix.md` phải khớp với source-of-truth policy đã chốt.
 6. Nếu có quyết định kiến trúc mới vượt ngoài ADR hiện có, phải thêm ADR thay vì sửa prose âm thầm.
+7. Nếu `Organization` được đưa vào baseline nhưng runtime chưa có, phải có divergence note rõ ràng thay vì để docs nói như đã ship.
 
 ---
 
@@ -99,6 +102,7 @@ Baseline chỉ được coi là hoàn thành khi:
 5. Migration path có phase gate cụ thể thay vì chỉ có định hướng chung.
 6. Narrative docs, ADRs, event/state docs và diagrams không mâu thuẫn nhau.
 7. Một kỹ sư mới đọc bộ docs này có thể biết ngay thứ gì đang được build, thứ gì chưa build, và dữ liệu nào thuộc hệ nào.
+8. Một kỹ sư mới phải phân biệt rõ `Organization` với `Tenant`, và hiểu customer vẫn là shared ecosystem identity.
 
 ---
 
@@ -106,6 +110,7 @@ Baseline chỉ được coi là hoàn thành khi:
 
 - [ ] Founder/Product chốt bài toán hệ thống và P0 workflow
 - [ ] Architect chốt boundary theo domain
+- [ ] Architect + Founder/Product chốt boundary của `Organization` và xác nhận không đồng nhất với `Tenant`
 - [ ] Integration lead chốt boundary với ERP/LiteFarm/CRM
 - [ ] Core backend lead xác nhận scope phase đầu khớp với code reality
 - [ ] Finance/Ops/CRM stakeholders chốt accounting và conversations ownership
