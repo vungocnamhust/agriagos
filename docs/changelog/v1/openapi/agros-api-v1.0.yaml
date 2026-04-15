@@ -383,6 +383,335 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/organizations:
+    post:
+      tags:
+      - Organizations
+      summary: Create Organization
+      operationId: create_organization_api_v1_organizations_post
+      parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/ExternalRefHeader'
+      - $ref: '#/components/parameters/DelegatedActorIdHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrganizationRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags:
+      - Organizations
+      summary: List Organizations
+      operationId: list_organizations_api_v1_organizations_get
+      parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/ExternalRefHeader'
+      - $ref: '#/components/parameters/DelegatedActorIdHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationListResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/organizations/{organization_id}:
+    get:
+      tags:
+      - Organizations
+      summary: Get Organization
+      operationId: get_organization_api_v1_organizations__organization_id__get
+      parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/ExternalRefHeader'
+      - $ref: '#/components/parameters/DelegatedActorIdHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
+      - name: organization_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Organization Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationDetail'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      tags:
+      - Organizations
+      summary: Update Organization
+      operationId: update_organization_api_v1_organizations__organization_id__patch
+      parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/ExternalRefHeader'
+      - $ref: '#/components/parameters/DelegatedActorIdHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
+      - name: organization_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Organization Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrganizationRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/organizations/{organization_id}/activate:
+    post:
+      tags:
+      - Organizations
+      summary: Activate Organization
+      operationId: activate_organization_api_v1_organizations__organization_id__activate_post
+      parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/ExternalRefHeader'
+      - $ref: '#/components/parameters/DelegatedActorIdHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
+      - name: organization_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Organization Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivateOrganizationRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/organizations/{organization_id}/pause:
+    post:
+      tags:
+      - Organizations
+      summary: Pause Organization
+      operationId: pause_organization_api_v1_organizations__organization_id__pause_post
+      parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/ExternalRefHeader'
+      - $ref: '#/components/parameters/DelegatedActorIdHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
+      - name: organization_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Organization Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PauseOrganizationRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/organizations/{organization_id}/close:
+    post:
+      tags:
+      - Organizations
+      summary: Close Organization
+      operationId: close_organization_api_v1_organizations__organization_id__close_post
+      parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/ExternalRefHeader'
+      - $ref: '#/components/parameters/DelegatedActorIdHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
+      - name: organization_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Organization Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CloseOrganizationRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/preorders:
     post:
       tags:
@@ -2466,6 +2795,52 @@ components:
           - type: 'null'
       type: object
       title: ConfirmPreorderRequest
+    CreateOrganizationRequest:
+      properties:
+        contactEmail:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Contactemail
+        contactPhone:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Contactphone
+        localitySummary:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Localitysummary
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+        name:
+          type: string
+          title: Name
+        organizationType:
+          $ref: '#/components/schemas/OrganizationType'
+        region:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Region
+        representativeName:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Representativename
+        shortDescription:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Shortdescription
+      type: object
+      required:
+      - name
+      - organizationType
+      title: CreateOrganizationRequest
     CreateCustomerRequest:
       properties:
         fullName:
@@ -3006,6 +3381,216 @@ components:
       - phone
       - status
       title: CustomerSummary
+    OrganizationDetail:
+      properties:
+        contactEmail:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Contactemail
+        contactPhone:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Contactphone
+        createdAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdat
+        localitySummary:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Localitysummary
+        name:
+          type: string
+          title: Name
+        organizationCode:
+          type: string
+          title: Organizationcode
+        organizationId:
+          type: string
+          title: Organizationid
+        organizationType:
+          $ref: '#/components/schemas/OrganizationType'
+        region:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Region
+        representativeName:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Representativename
+        shortDescription:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Shortdescription
+        status:
+          $ref: '#/components/schemas/OrganizationStatus'
+        updatedAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Updatedat
+      type: object
+      required:
+      - organizationId
+      - organizationCode
+      - name
+      - organizationType
+      - status
+      title: OrganizationDetail
+    OrganizationListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/OrganizationSummary'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: OrganizationListResponse
+    OrganizationResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/OrganizationDetail'
+      type: object
+      required:
+      - data
+      title: OrganizationResponse
+    OrganizationStatus:
+      type: string
+      enum:
+      - draft
+      - active
+      - paused
+      - closed
+      title: OrganizationStatus
+    OrganizationSummary:
+      properties:
+        createdAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdat
+        name:
+          type: string
+          title: Name
+        organizationCode:
+          type: string
+          title: Organizationcode
+        organizationId:
+          type: string
+          title: Organizationid
+        organizationType:
+          $ref: '#/components/schemas/OrganizationType'
+        region:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Region
+        status:
+          $ref: '#/components/schemas/OrganizationStatus'
+      type: object
+      required:
+      - organizationId
+      - organizationCode
+      - name
+      - organizationType
+      - status
+      title: OrganizationSummary
+    OrganizationType:
+      type: string
+      enum:
+      - household_producer
+      - family_business
+      - solo_founder
+      - cooperative
+      - startup_operator
+      - other
+      title: OrganizationType
+    PauseOrganizationRequest:
+      properties:
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+        reason:
+          type: string
+          title: Reason
+      type: object
+      required:
+      - reason
+      title: PauseOrganizationRequest
+    CloseOrganizationRequest:
+      properties:
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+        reason:
+          type: string
+          title: Reason
+      type: object
+      required:
+      - reason
+      title: CloseOrganizationRequest
+    ActivateOrganizationRequest:
+      properties:
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      title: ActivateOrganizationRequest
+    UpdateOrganizationRequest:
+      properties:
+        contactEmail:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Contactemail
+        contactPhone:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Contactphone
+        localitySummary:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Localitysummary
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        region:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Region
+        representativeName:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Representativename
+        shortDescription:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Shortdescription
+      type: object
+      title: UpdateOrganizationRequest
     DeliverOrderRequest:
       properties:
         deliveredQtySummary:

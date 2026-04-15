@@ -5,10 +5,11 @@ from fastapi import HTTPException
 
 from app.core.gateway import (
     assert_lot_transition,
+    assert_organization_transition,
     assert_order_transition_outcome,
     assert_preorder_transition,
 )
-from app.models.enums import LotStatus, OrderStatus, PreorderStatus
+from app.models.enums import LotStatus, OrderStatus, OrganizationStatus, PreorderStatus
 
 
 def test_order_transition_outcome_allows_partial_allocate_from_confirmed() -> None:
@@ -63,3 +64,56 @@ def test_lot_blocked_cannot_move_directly_to_released() -> None:
 
     assert exc_info.value.status_code == 422
     assert exc_info.value.detail == "Lot transition 'release' not allowed from state 'blocked'."
+
+
+def test_organization_draft_can_activate() -> None:
+    next_status = assert_organization_transition(
+        {"status": OrganizationStatus.draft.value},
+        "activate",
+    )
+
+    assert next_status == OrganizationStatus.active.value
+
+
+def test_organization_draft_can_close() -> None:
+    next_status = assert_organization_transition(
+        {"status": OrganizationStatus.draft.value},
+        "close",
+    )
+
+    assert next_status == OrganizationStatus.closed.value
+
+
+def test_organization_active_can_pause() -> None:
+    next_status = assert_organization_transition(
+        {"status": OrganizationStatus.active.value},
+        "pause",
+    )
+
+    assert next_status == OrganizationStatus.paused.value
+
+
+def test_organization_paused_can_close() -> None:
+    next_status = assert_organization_transition(
+        {"status": OrganizationStatus.paused.value},
+        "close",
+    )
+
+    assert next_status == OrganizationStatus.closed.value
+
+
+def test_organization_paused_can_reactivate() -> None:
+    next_status = assert_organization_transition(
+        {"status": OrganizationStatus.paused.value},
+        "activate",
+    )
+
+    assert next_status == OrganizationStatus.active.value
+
+
+def test_organization_closed_is_terminal() -> None:
+    with pytest.raises(HTTPException) as exc_info:
+        assert_organization_transition({"status": OrganizationStatus.closed.value}, "activate")
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail == "Organization transition 'activate' not allowed from state 'closed'."

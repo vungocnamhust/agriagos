@@ -18,6 +18,7 @@ _inventory_movements: list[dict[str, Any]] = []
 _customers: dict[str, dict[str, Any]] = {}
 _preferences: dict[str, list[dict[str, Any]]] = defaultdict(list)  # customer_id → [pref]
 _customer_duplicate_candidates: dict[str, dict[str, Any]] = {}
+_organizations: dict[str, dict[str, Any]] = {}
 
 _preorders: dict[str, dict[str, Any]] = {}
 _orders: dict[str, dict[str, Any]] = {}
@@ -50,6 +51,10 @@ def list_events() -> list[dict[str, Any]]:
 
 def list_customers() -> list[dict[str, Any]]:
     return list(_customers.values())
+
+
+def list_organizations() -> list[dict[str, Any]]:
+    return list(_organizations.values())
 
 
 def list_customer_preferences(customer_id: str) -> list[dict[str, Any]]:
@@ -92,8 +97,16 @@ def get_customer(customer_id: str) -> dict[str, Any] | None:
     return _customers.get(customer_id)
 
 
+def get_organization(organization_id: str) -> dict[str, Any] | None:
+    return _organizations.get(organization_id)
+
+
 def save_customer(customer_id: str, record: dict[str, Any]) -> None:
     _customers[customer_id] = record
+
+
+def save_organization(organization_id: str, record: dict[str, Any]) -> None:
+    _organizations[organization_id] = record
 
 
 def customer_phone_exists(phone: str) -> bool:
@@ -331,6 +344,7 @@ def reset_state() -> None:
     _customers.clear()
     _preferences.clear()
     _customer_duplicate_candidates.clear()
+    _organizations.clear()
     _preorders.clear()
     _orders.clear()
     _allocations.clear()

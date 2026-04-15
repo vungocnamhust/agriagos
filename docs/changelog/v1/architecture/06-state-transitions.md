@@ -53,7 +53,7 @@ Rule này áp dụng cho các aggregate đang được harden trong Phase 1 như
 
 ## 2A. Organization state baseline
 
-> Đây là docs-first state vocabulary cho aggregate `Organization`. Runtime hiện tại chưa implement aggregate này; state machine được chốt trước để tránh semantic drift ở các slice schema/API sau.
+> Runtime Phase 1 hiện đã implement standalone `Organization` aggregate với state machine dưới đây. Việc dùng state này để cascade cross-domain enforcement vẫn là slice rollout sau.
 
 ### State
 - `draft`

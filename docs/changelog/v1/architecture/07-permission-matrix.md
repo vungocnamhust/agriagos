@@ -59,11 +59,12 @@ Phase đầu cần hiểu rõ:
 - nếu current code chưa enforce đủ, phần thiếu phải được coi là debt có chủ đích chứ không phải permission ngầm
 
 ### 3.6 Organization baseline policy
-`Organization` là business owner aggregate mới trong baseline kiến trúc, nhưng chưa có runtime auth surface ở Phase 1 hiện tại.
+`Organization` là business owner aggregate mới trong baseline kiến trúc. Phase 1 hiện đã có standalone runtime auth surface cho Organization CRUD + activate/pause/close.
 
-Policy baseline cho các slice sắp tới:
+Policy baseline cho runtime hiện tại và các slice tiếp theo:
 - Founder / Super Admin và Admin vận hành là nhóm chính được tạo, sửa, kích hoạt, tạm dừng, hoặc đóng organization
 - Sales, CSKH, Ops, Farm Manager, Accountant, Viewer không mặc định có quyền mutate organization aggregate
+- raw read lane cho organization aggregate hiện cũng chỉ mở cho Founder / Super Admin / Admin
 - việc một role nào đó được thao tác records thuộc một organization không tự động đồng nghĩa role đó được sửa organization aggregate
 - org-scoped RBAC/ABAC và membership theo organization là phase sau, không được ngầm giả định đã tồn tại
 

@@ -9,7 +9,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from app.models.enums import LotStatus, OrderStatus, PreorderStatus
+from app.models.enums import LotStatus, OrderStatus, OrganizationStatus, PreorderStatus
 from app.store import idempotency as idempotency_store
 from app.store import memory as store
 from app.store._db import is_enabled as postgres_enabled
@@ -85,6 +85,21 @@ PREORDER_TRANSITIONS: dict[str, dict[str, str]] = {
     },
     PreorderStatus.completed.value: {},
     PreorderStatus.cancelled.value: {},
+}
+
+ORGANIZATION_TRANSITIONS: dict[str, dict[str, str]] = {
+    OrganizationStatus.draft.value: {
+        "activate": OrganizationStatus.active.value,
+        "close": OrganizationStatus.closed.value,
+    },
+    OrganizationStatus.active.value: {
+        "pause": OrganizationStatus.paused.value,
+    },
+    OrganizationStatus.paused.value: {
+        "activate": OrganizationStatus.active.value,
+        "close": OrganizationStatus.closed.value,
+    },
+    OrganizationStatus.closed.value: {},
 }
 
 LEGACY_ORDER_STATES: dict[str, str] = {
@@ -183,5 +198,16 @@ def assert_preorder_transition(preorder: dict[str, Any], action: str) -> str:
         raise HTTPException(
             status_code=422,
             detail=f"Preorder transition '{action}' not allowed from state '{original}'.",
+        )
+    return allowed[action]
+
+
+def assert_organization_transition(organization: dict[str, Any], action: str) -> str:
+    current = organization.get("status", "")
+    allowed = ORGANIZATION_TRANSITIONS.get(current, {})
+    if action not in allowed:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Organization transition '{action}' not allowed from state '{current}'.",
         )
     return allowed[action]

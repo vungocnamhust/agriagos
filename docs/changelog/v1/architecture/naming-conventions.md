@@ -27,6 +27,7 @@ PascalCase singular. Đây là canonical label dùng trong event `aggregateType`
 
 | Class | aggregateType trong event |
 |-------|--------------------------|
+| `Organization` | `"Organization"` |
 | `CustomerProfile` | `"Customer"` |
 | `SalesOrder` | `"Order"` |
 | `LotBatch` | `"Lot"` |
@@ -180,6 +181,7 @@ Xem [ADR-010](../adrs/ADR-010-id-strategy.md) và `core/codegen.py`.
 
 | Entity | Format | Ví dụ |
 |--------|--------|-------|
+| Organization | `ORG-YYYYMM-NNNN` | `ORG-202604-0001` |
 | Customer | `KH-YYYYMM-NNNN` | `KH-202604-0001` |
 | Preorder | `DT-YYYYMM-NNNN` | `DT-202604-0001` |
 | Order | `ORD-YYYYMM-NNNN` | `ORD-202604-0001` |

@@ -51,7 +51,7 @@ Mỗi event tối thiểu nên có:
 
 ## 3.0 Organization events
 
-> Docs baseline này đi trước runtime implementation. Event names dưới đây là contract mục tiêu cho slice Organization, chưa phải cam kết rằng runtime Phase 1 hiện đã emit các event này.
+> Standalone Organization runtime hiện đã emit các event dưới đây cho schema/API slice đầu tiên. Cross-domain propagation sang farm-side, commercial-side, và integration-facing flows vẫn là phase rollout sau.
 
 ### `OrganizationCreated`
 Khi một legal-operating owner record được tạo lần đầu.

@@ -11,6 +11,22 @@ class CustomerStatus(str, Enum):
     blocked = "blocked"
 
 
+class OrganizationStatus(str, Enum):
+    draft = "draft"
+    active = "active"
+    paused = "paused"
+    closed = "closed"
+
+
+class OrganizationType(str, Enum):
+    household_producer = "household_producer"
+    family_business = "family_business"
+    solo_founder = "solo_founder"
+    cooperative = "cooperative"
+    startup_operator = "startup_operator"
+    other = "other"
+
+
 class PreorderStatus(str, Enum):
     draft = "draft"
     confirmed = "confirmed"

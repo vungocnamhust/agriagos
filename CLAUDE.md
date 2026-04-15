@@ -76,8 +76,8 @@ agos_app/
 ├── app/
 │   ├── main.py           # FastAPI entrypoint: CorrelationIdMiddleware, ErrorResponse handlers, router mount
 │   ├── api/
-│   │   ├── router.py     # Aggregates 8 route groups under /api/v1/
-│   │   └── routes/       # One file per domain (customers, orders, lots, farm, preorders, views, events, health)
+│   │   ├── router.py     # Aggregates 9 route groups under /api/v1/
+│   │   └── routes/       # One file per domain (customers, organizations, orders, lots, farm, preorders, views, events, health)
 │   ├── models/           # Pydantic v2 schemas (DTOs, not ORM models)
 │   │   ├── common.py     # Shared: Meta, ErrorResponse, DomainEvent, HealthResponse, DomainEventListResponse
 │   │   └── *.py          # Per-domain schemas
@@ -94,6 +94,7 @@ agos_app/
 │   │   ├── farm.py       # Farm summary reads against PostgreSQL
 │   │   ├── idempotency.py # Durable idempotency_records access
 │   │   ├── lots.py       # Lot store operations
+│   │   ├── organizations.py # Organization store operations
 │   │   ├── orders.py     # Order store operations (atomic allocate/adjust/release/cancel)
 │   │   ├── preorders.py  # Preorder store + quantity/history helpers for delivered/allocated/cancelled state
 │   │   ├── postgres_sync.py  # Backward-compat re-export shim (do not add logic here)
@@ -105,9 +106,9 @@ agos_app/
 
 ### Domain Entities
 
-Phase 1 runtime stores the implemented core entities in PostgreSQL tables and store records such as `customers`, `preorders`, `sales_orders`, `sales_order_lines`, `product_skus`, `lots`, `plots`, and `crop_cycles`.
+Phase 1 runtime stores the implemented core entities in PostgreSQL tables and store records such as `organizations`, `customers`, `preorders`, `sales_orders`, `sales_order_lines`, `product_skus`, `lots`, `plots`, and `crop_cycles`.
 
-Architecture baseline now also locks `Organization` as a future canonical business aggregate for the legal-operating owner via ADR-012, but it is not yet implemented in runtime schema, routes, or services. Track the intentional docs-first gap in `docs/changelog/v1/divergence-ledger.md` entry `DL-20260415-01`.
+`Organization` is now implemented as a standalone canonical business aggregate for the legal-operating owner via ADR-012, with schema, CRUD/state routes, and event emission in place. The remaining intentional gap tracked in `docs/changelog/v1/divergence-ledger.md` entry `DL-20260415-01` is staged `organization_id` propagation into farm-side, commercial-side, and integration-facing flows.
 
 Architecture docs use canonical aliases such as `CustomerProfile`, `Preorder`, `SalesOrder`, `SalesOrderLine`, `ProductSKU`, `LotBatch`, `Plot`, and `CropCycle` for cross-reference with business terms. They may also discuss future or broader entities such as `Farmer` and `CropTask`, but those are not yet implemented in the current Phase 1 runtime.
 
@@ -119,6 +120,7 @@ All endpoints are under `/api/v1/`. The route groups are:
 
 - `/health` — liveness check
 - `/customers` — customer CRUD and preferences
+- `/organizations` — standalone organization CRUD and state transitions
 - `/preorders` — pre-order management
 - `/orders` — full order lifecycle (create → confirm → allocate → adjust/release allocation → pack → ship → deliver / fail-delivery / cancel)
 - `/lots` — lot/batch management, evidence, and QC reviews
@@ -190,10 +192,12 @@ All diagrams use `[Phase 1 ✅]` / `[Phase 2 🔜]` labels to distinguish implem
 **Key Phase 1 state machine facts** (source: `core/gateway.py`):
 - Order: `draft → confirmed → allocated|partially_allocated → packed|partially_packed → shipped → delivered|partially_delivered|failed`; repeated `allocate` can move `confirmed -> partially_allocated` or `partially_allocated -> allocated`; repeated `pack` can move `allocated -> partially_packed|packed`, `partially_allocated -> partially_packed`, and `partially_packed -> packed`; `deliver` is explicit and is allowed only from `shipped` and `partially_delivered`; `fail_delivery` is allowed from `shipped` and `partially_delivered`; `cancel_requested` is allowed from `partially_allocated`, `allocated`, and `packed`, while direct cancel remains available from `draft` and `confirmed`
 - Lot: create path can initialize `harvested` or `qc_pending`; gateway currently supports `harvested/qc_pending → released`, `harvested/qc_pending/released → blocked`, and `blocked → qc_pending` via unblock without reopening inventory
+- Organization: created in `draft`; `activate` allows `draft|paused -> active`; `pause` allows `active -> paused`; `close` allows `draft|paused -> closed`; `closed` is terminal in the standalone aggregate slice
 - Preorder: created in `draft`; `confirm → confirmed`; `activate → active`; `adjust` stays in current `confirmed` or `active` state; `cancel → cancelled`; `completed` remains a terminal system-derived state produced by delivery/quota consumption rather than a dedicated gateway action; `remainingQty` is allocatable balance `committedQty - allocatedQty - deliveredQty - cancelledQty`
 
 **Key Phase 1 event names** (source: `core/events.py` + `services/`):
 - Use dotted lowercase at runtime: `order.created`, `order.confirmed`, `order.allocated`, `order.partially_allocated`, `allocation.adjusted`, `allocation.released`, `lot.harvest.created`, `lot.processed.created`, `lot.adjusted`, `preorder.placed`
+- Standalone Organization runtime events now include `organization.created`, `organization.updated`, `organization.activated`, `organization.paused`, and `organization.closed`
 - Fulfillment runtime events now also include `order.packed`, `order.partially_packed`, `order.shipped`, `order.delivered`, `order.partially_delivered`, and `order.delivery_failed`
 - Preorder runtime events now include `preorder.confirmed`, `preorder.activated`, `preorder.adjusted`, `preorder.cancelled`, `preorder.quota_consumed`, and `preorder.completed`
 - `eventType` is auto-derived PascalCase: `OrderCreated`, `OrderConfirmed`, `OrderAllocated`, `OrderPartiallyAllocated`, `AllocationAdjusted`, `AllocationReleased`, `LotHarvestCreated`, `LotProcessedCreated`, `LotAdjusted`, `PreorderPlaced`

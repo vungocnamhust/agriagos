@@ -4,6 +4,7 @@ Phase 1: in-memory sequence counter per (entity_prefix, YYYYMM).
 Phase 2: replace _next_seq() with a DB sequence SELECT nextval() per (entity, month).
 
 Format reference (ADR-010):
+    Organization: ORG-YYYYMM-0001
   Customer:  KH-YYYYMM-0001
   Preorder:  DT-YYYYMM-0001
   Order:     ORD-YYYYMM-0001
@@ -32,6 +33,11 @@ def _next_seq(prefix: str, now: datetime) -> int:
 def generate_customer_code(now: datetime | None = None) -> str:
     t = now or _now()
     return f"KH-{t:%Y%m}-{_next_seq('KH', t):04d}"
+
+
+def generate_organization_code(now: datetime | None = None) -> str:
+    t = now or _now()
+    return f"ORG-{t:%Y%m}-{_next_seq('ORG', t):04d}"
 
 
 def generate_preorder_code(now: datetime | None = None) -> str:
