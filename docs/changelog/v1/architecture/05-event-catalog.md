@@ -51,7 +51,7 @@ Mỗi event tối thiểu nên có:
 
 ## 3.0 Organization events
 
-> Standalone Organization runtime hiện đã emit các event dưới đây cho schema/API slice đầu tiên. Additive `organization_id` propagation đã bắt đầu trên farm-side và canonical commercial records; integration-facing flows và deferred relationship/read-model slices vẫn là phase rollout sau.
+> Standalone Organization runtime hiện đã emit các event dưới đây cho schema/API slice đầu tiên. Additive `organization_id` propagation đã bắt đầu trên farm-side, canonical commercial records, current read-model surfaces, và `external_mappings`; integration sync jobs và adapter-facing flows vẫn là phase rollout sau.
 
 ### `OrganizationCreated`
 Khi một legal-operating owner record được tạo lần đầu.

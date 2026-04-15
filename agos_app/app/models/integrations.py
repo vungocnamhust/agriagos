@@ -13,6 +13,7 @@ class ExternalMappingRecord(BaseModel):
     Maps any Agri OS Core object to its counterpart in an external system.
     Required to avoid hardcoded mapping across the codebase (08-integration-contracts.md §13).
     """
+    organizationId: str | None = None
     externalSystem: str         # erp | litefarm | crm | logistics | payment
     externalObjectType: str     # e.g. "sales_order", "farm_plot", "contact"
     externalObjectId: str
@@ -23,6 +24,7 @@ class ExternalMappingRecord(BaseModel):
 
 
 class RegisterExternalMappingRequest(BaseModel):
+    organizationId: str | None = None
     externalSystem: str
     externalObjectType: str
     externalObjectId: str

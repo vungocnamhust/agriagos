@@ -108,7 +108,7 @@ agos_app/
 
 Phase 1 runtime stores the implemented core entities in PostgreSQL tables and store records such as `organizations`, `customers`, `preorders`, `sales_orders`, `sales_order_lines`, `product_skus`, `lots`, `plots`, and `crop_cycles`.
 
-`Organization` is now implemented as a standalone canonical business aggregate for the legal-operating owner via ADR-012, with schema, CRUD/state routes, event emission, and additive `organization_id` propagation on farm-side canonical records plus the first commercial-side canonical records and current Phase 1 read-model surfaces in place. The remaining intentional gap tracked in `docs/changelog/v1/divergence-ledger.md` entry `DL-20260415-01` is staged `organization_id` propagation into integration-facing flows.
+`Organization` is now implemented as a standalone canonical business aggregate for the legal-operating owner via ADR-012, with schema, CRUD/state routes, event emission, and additive `organization_id` propagation on farm-side canonical records plus the first commercial-side canonical records, current Phase 1 read-model surfaces, and the `external_mappings` baseline in place. The remaining intentional gap tracked in `docs/changelog/v1/divergence-ledger.md` entry `DL-20260415-01` is staged `organization_id` propagation into integration sync/adapters.
 
 Architecture docs now also include `ProjectScope` via ADR-013 as the additive soft value-stream scope under `Organization`. The runtime now includes the standalone `ProjectScope` schema/API slice plus the first assignment lane for `plot`, `crop_cycle`, `lot`, `preorder`, and `order`, while contribution, economics, reporting, and backfill lanes remain deferred and tracked in `docs/changelog/v1/divergence-ledger.md` entry `DL-20260416-01`.
 
