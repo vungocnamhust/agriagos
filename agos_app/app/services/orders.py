@@ -41,6 +41,7 @@ from app.models.orders import (
 from app.services import audit as audit_service
 from app.store import postgres_sync
 from app.store import memory as store
+from app.store import organizations as organization_store
 from app.store._db import transaction as postgres_transaction
 
 
@@ -122,6 +123,7 @@ def _build_order_detail(record: dict[str, Any]) -> OrderDetail:
     return OrderDetail(
         orderId=record["orderId"],
         orderCode=record["orderCode"],
+        organizationId=record.get("organizationId"),
         customerId=record["customerId"],
         orderDate=record.get("orderDate"),
         channel=record["channel"],
@@ -160,6 +162,79 @@ def _get_preorder_record(preorder_id: str) -> dict[str, Any] | None:
     if postgres_sync.is_enabled():
         return postgres_sync.fetch_preorder(preorder_id)
     return store.get_preorder(preorder_id)
+
+
+def _organization_exists(organization_id: str) -> bool:
+    if postgres_sync.is_enabled():
+        return organization_store.organization_exists(organization_id)
+    return store.get_organization(organization_id) is not None
+
+
+def _validate_organization_id(organization_id: str | None) -> str | None:
+    if organization_id is None:
+        return None
+    normalized = organization_id.strip()
+    if not normalized:
+        raise HTTPException(status_code=422, detail="organizationId cannot be blank.")
+    if not _organization_exists(normalized):
+        raise HTTPException(status_code=422, detail="Referenced organization was not found.")
+    return normalized
+
+
+def _resolve_order_organization_id(
+    requested_organization_id: str | None,
+    linked_preorder_ids: list[str],
+    context: dict[str, Any],
+    pending_order_id: str,
+) -> str | None:
+    validated_requested_id = _validate_organization_id(requested_organization_id)
+    if not linked_preorder_ids:
+        return validated_requested_id
+
+    linked_org_ids: set[str] = set()
+    for preorder_id in linked_preorder_ids:
+        preorder_record = _get_preorder_record(preorder_id)
+        if preorder_record is None:
+            _raise_order_denied(
+                action_name="order.create",
+                order_id=pending_order_id,
+                context=context,
+                detail=f"Preorder {preorder_id} not found.",
+                reason_code="source_preorder_not_found",
+                status_code=404,
+                metadata={"sourcePreorderId": preorder_id},
+            )
+        preorder_org_id = preorder_record.get("organizationId")
+        if preorder_org_id is not None:
+            linked_org_ids.add(str(preorder_org_id))
+
+    if len(linked_org_ids) > 1:
+        _raise_order_denied(
+            action_name="order.create",
+            order_id=pending_order_id,
+            context=context,
+            detail="Linked preorders must belong to the same organization.",
+            reason_code="source_preorder_organization_conflict",
+            status_code=422,
+            metadata={"linkedPreorderIds": linked_preorder_ids},
+        )
+
+    if not linked_org_ids:
+        return validated_requested_id
+
+    linked_org_id = next(iter(linked_org_ids))
+    if validated_requested_id is not None and validated_requested_id != linked_org_id:
+        _raise_order_denied(
+            action_name="order.create",
+            order_id=pending_order_id,
+            context=context,
+            detail="Requested organizationId does not match linked preorder organization.",
+            reason_code="organization_mismatch",
+            status_code=422,
+            metadata={"requestedOrganizationId": validated_requested_id, "linkedOrganizationId": linked_org_id},
+        )
+
+    return linked_org_id
 
 
 def _validate_source_preorder_ids(lines: list[dict[str, Any]], context: dict[str, Any], order_id: str) -> None:
@@ -770,11 +845,18 @@ def create_order(payload: CreateOrderRequest) -> OrderResponse:
 
     _validate_source_preorder_ids(lines, context, f"pending:{payload.customerId}")
     linked_preorder_ids = _linked_preorder_ids(lines)
+    organization_id = _resolve_order_organization_id(
+        payload.organizationId,
+        linked_preorder_ids,
+        context,
+        f"pending:{payload.customerId}",
+    )
 
     record: dict[str, Any] = {
         "orderId": order_id,
         "tenantId": "default",
         "orderCode": order_code,
+        "organizationId": organization_id,
         "customerId": payload.customerId,
         "channel": payload.channel,
         "status": OrderStatus.draft.value,

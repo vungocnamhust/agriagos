@@ -14,6 +14,7 @@
 | [ADR-010](ADR-010-id-strategy.md) | ID Strategy — UUID cho machine ID, sequential code cho human-readable | Accepted |
 | [ADR-011](ADR-011-api-contract-committed-spec.md) | OpenAPI spec phải là committed artifact trong git | Accepted |
 | ADR-012 | Organization là legal-operating owner aggregate; tenant giữ nghĩa deployment boundary | Proposed |
+| ADR-013 | ProjectScope là lớp soft scope cho value stream dưới Organization | Proposed |
 
 Tài liệu này là chỉ mục nhanh cho các quyết định kiến trúc đã được khóa trong baseline hiện tại.
 

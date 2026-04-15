@@ -37,6 +37,27 @@ def test_create_preorder_records_event_audit_and_idempotency(monkeypatch: pytest
     assert response.data.remainingQty == 12
 
 
+def test_create_preorder_persists_organization_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(preorders.postgres_sync, "is_enabled", lambda: False)
+    memory.save_customer("customer-1", {"customerId": "customer-1", "fullName": "Alice"})
+    memory.save_organization("org-1", {"organizationId": "org-1", "name": "Farm Org"})
+
+    response = preorders.create_preorder(
+        CreatePreorderRequest(
+            customerId="customer-1",
+            productSkuId="sku-1",
+            committedQty=12,
+            organizationId="org-1",
+            meta=Meta(correlationId="corr-preorder-org", actorId="sales-1", actorRole="sales"),
+        )
+    )
+
+    stored = memory.get_preorder(response.data.preorderId)
+    assert stored is not None
+    assert stored["organizationId"] == "org-1"
+    assert response.data.organizationId == "org-1"
+
+
 def test_adjust_preorder_missing_aggregate_writes_denied_audit(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(preorders.postgres_sync, "is_enabled", lambda: False)
 

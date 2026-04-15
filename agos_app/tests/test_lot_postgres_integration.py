@@ -72,11 +72,20 @@ def test_harvested_lot_persists_unit_on_postgres_path(
     postgres_db_session.execute(
         text(
             """
-            INSERT INTO plots (plot_id, tenant_id, plot_code, name, area_value, area_unit, status)
-            VALUES (:plot_id, 'default', 'PLOT-1', 'Plot 1', 10, 'ha', 'active')
+            INSERT INTO organizations (organization_id, tenant_id, organization_code, name, organization_type, status)
+            VALUES (:organization_id, 'default', 'ORG-LOT-PG-1', 'Lot PG Org', 'family_business', 'active')
             """
         ),
-        {"plot_id": "00000000-0000-0000-0000-000000000211"},
+        {"organization_id": "00000000-0000-0000-0000-000000000911"},
+    )
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO plots (plot_id, tenant_id, plot_code, organization_id, name, area_value, area_unit, status)
+            VALUES (:plot_id, 'default', 'PLOT-1', :organization_id, 'Plot 1', 10, 'ha', 'active')
+            """
+        ),
+        {"plot_id": "00000000-0000-0000-0000-000000000211", "organization_id": "00000000-0000-0000-0000-000000000911"},
     )
     postgres_db_session.execute(
         text(
@@ -85,6 +94,7 @@ def test_harvested_lot_persists_unit_on_postgres_path(
                 crop_cycle_id,
                 tenant_id,
                 plot_id,
+                organization_id,
                 crop_name,
                 start_date,
                 growth_stage,
@@ -93,6 +103,7 @@ def test_harvested_lot_persists_unit_on_postgres_path(
                 :crop_cycle_id,
                 'default',
                 :plot_id,
+                :organization_id,
                 'rice',
                 DATE '2026-03-01',
                 'harvested',
@@ -103,6 +114,7 @@ def test_harvested_lot_persists_unit_on_postgres_path(
         {
             "crop_cycle_id": "00000000-0000-0000-0000-000000000311",
             "plot_id": "00000000-0000-0000-0000-000000000211",
+            "organization_id": "00000000-0000-0000-0000-000000000911",
         },
     )
 
@@ -124,6 +136,7 @@ def test_harvested_lot_persists_unit_on_postgres_path(
     assert stored["unit"] == "kg"
     assert stored["status"] == "harvested"
     assert stored["sourceRefId"] == "00000000-0000-0000-0000-000000000311"
+    assert stored["organizationId"] == "00000000-0000-0000-0000-000000000911"
 
 
 @pytest.mark.postgres_integration
@@ -141,6 +154,15 @@ def test_processed_lot_persists_processing_batch_source_on_postgres_path(
     postgres_db_session.execute(
         text(
             """
+            INSERT INTO organizations (organization_id, tenant_id, organization_code, name, organization_type, status)
+            VALUES (:organization_id, 'default', 'ORG-LOT-PG-2', 'Processed Lot PG Org', 'family_business', 'active')
+            """
+        ),
+        {"organization_id": "00000000-0000-0000-0000-000000000912"},
+    )
+    postgres_db_session.execute(
+        text(
+            """
             INSERT INTO product_skus (product_sku_id, tenant_id, sku_code, sku_name, unit, status)
             VALUES (:product_sku_id, 'default', 'SKU-LOT-2', 'Processed Lot SKU', 'kg', 'active')
             """
@@ -151,6 +173,7 @@ def test_processed_lot_persists_processing_batch_source_on_postgres_path(
     created = lot_service.create_processed_lot(
         CreateProcessedLotRequest(
             productSkuId="00000000-0000-0000-0000-000000000112",
+            organizationId="00000000-0000-0000-0000-000000000912",
             processRefId="PROC-2026-0001",
             actualQty=12,
             unit="KG",
@@ -166,6 +189,7 @@ def test_processed_lot_persists_processing_batch_source_on_postgres_path(
     assert stored["status"] == "harvested"
     assert stored["sourceType"] == "processing_batch"
     assert stored["sourceRefId"] == "PROC-2026-0001"
+    assert stored["organizationId"] == "00000000-0000-0000-0000-000000000912"
 
 
 @pytest.mark.postgres_integration

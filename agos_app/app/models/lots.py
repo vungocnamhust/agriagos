@@ -13,6 +13,7 @@ LotUnit = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"(?i)
 class LotDetail(BaseModel):
     lotId: str
     lotCode: str
+    organizationId: str | None = None
     productSkuId: str
     sourceType: LotSourceType
     sourceRefId: str
@@ -49,6 +50,7 @@ class CreateHarvestedLotRequest(BaseModel):
 
 class CreateProcessedLotRequest(BaseModel):
     productSkuId: str
+    organizationId: str | None = None
     processRefId: str
     actualQty: float
     unit: LotUnit | None = None

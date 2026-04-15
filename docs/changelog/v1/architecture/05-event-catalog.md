@@ -51,7 +51,7 @@ Mỗi event tối thiểu nên có:
 
 ## 3.0 Organization events
 
-> Standalone Organization runtime hiện đã emit các event dưới đây cho schema/API slice đầu tiên. Cross-domain propagation sang farm-side, commercial-side, và integration-facing flows vẫn là phase rollout sau.
+> Standalone Organization runtime hiện đã emit các event dưới đây cho schema/API slice đầu tiên. Additive `organization_id` propagation đã bắt đầu trên farm-side và canonical commercial records; integration-facing flows và deferred relationship/read-model slices vẫn là phase rollout sau.
 
 ### `OrganizationCreated`
 Khi một legal-operating owner record được tạo lần đầu.
@@ -96,6 +96,203 @@ Payload tối thiểu:
 - old_status
 - new_status
 - reason
+
+## 3.0A ProjectScope events
+
+> `ProjectScope` là docs-first baseline trong PR này. Runtime event emission sẽ đến theo rollout sau, nên nhóm event này đang là canonical contract trước implementation.
+
+### `ProjectScopeCreated`
+Khi một project/value stream scope được tạo dưới một `Organization`.
+
+Payload tối thiểu:
+- project_scope_id
+- organization_id
+- project_scope_code
+- name
+- scope_type
+- status
+
+### `ProjectScopeUpdated`
+Khi profile, metadata, parent-child grouping, hoặc owner context của scope thay đổi.
+
+Payload tối thiểu:
+- project_scope_id
+- changed_fields
+- after_summary
+
+### `ProjectScopeActivated`
+Khi scope chuyển từ `draft` hoặc `paused` sang `active`.
+
+Payload tối thiểu:
+- project_scope_id
+- old_status
+- new_status
+
+### `ProjectScopePaused`
+Khi scope bị tạm dừng mà chưa đóng lifecycle.
+
+Payload tối thiểu:
+- project_scope_id
+- old_status
+- new_status
+- reason
+
+### `ProjectScopeClosed`
+Khi scope được kết thúc ở mức nghiệp vụ.
+
+Payload tối thiểu:
+- project_scope_id
+- old_status
+- new_status
+- reason
+
+### `ProjectScopeArchived`
+Khi scope được archive khỏi lane vận hành thường xuyên nhưng vẫn giữ để audit/report.
+
+Payload tối thiểu:
+- project_scope_id
+- old_status
+- new_status
+
+## 3.0B Project assignment, contribution, và financial attribution events
+
+> Nhóm event này cũng là docs-first baseline. Chúng tồn tại để lock payload shape và semantics trước khi runtime slice được ship.
+
+### `ProjectAssignmentAdded`
+Khi một target được gắn vào một `ProjectScope`.
+
+Payload tối thiểu:
+- project_assignment_id
+- project_scope_id
+- target_type
+- target_id
+- assignment_role
+- attribution_kind
+- attribution_weight
+- confidence_level
+
+### `ProjectAssignmentConfirmed`
+Khi assignment được xác nhận là đủ tin cậy cho reporting hoặc workflow tiếp theo.
+
+Payload tối thiểu:
+- project_assignment_id
+- project_scope_id
+- target_type
+- target_id
+- confirmed_by
+- confirmed_at
+
+### `ProjectAssignmentAdjusted`
+Khi assignment đổi weight, đổi primary flag, hoặc đổi attribution kind.
+
+Payload tối thiểu:
+- project_assignment_id
+- old_summary
+- new_summary
+
+### `ProjectAssignmentRemoved`
+Khi assignment bị kết thúc hoặc revoke.
+
+Payload tối thiểu:
+- project_assignment_id
+- project_scope_id
+- target_type
+- target_id
+- reason
+
+### `ProjectContributionRecorded`
+Khi một contribution fact được ghi vào contribution ledger.
+
+Payload tối thiểu:
+- project_contribution_event_id
+- project_scope_id
+- actor_id
+- contribution_type
+- role
+- quantity
+- estimated_value
+- status
+
+### `ProjectContributionConfirmed`
+Khi contribution được xác nhận hợp lệ.
+
+Payload tối thiểu:
+- project_contribution_event_id
+- project_scope_id
+- confirmed_by
+- confirmed_at
+
+### `ProjectContributionRejected`
+Khi contribution bị từ chối.
+
+Payload tối thiểu:
+- project_contribution_event_id
+- project_scope_id
+- reason
+
+### `ProjectContributionReversed`
+Khi một contribution đã ghi cần bị đảo hoặc bù trừ bằng fact mới.
+
+Payload tối thiểu:
+- project_contribution_event_id
+- project_scope_id
+- reason
+
+### `CostRecorded`
+Khi một operational cost fact được ghi nhận.
+
+Payload tối thiểu:
+- cost_record_id
+- organization_id
+- project_scope_id
+- cost_type
+- amount
+- currency
+- recognized_at
+
+### `RevenueRecorded`
+Khi một operational revenue fact được ghi nhận.
+
+Payload tối thiểu:
+- revenue_record_id
+- organization_id
+- project_scope_id
+- revenue_type
+- gross_amount
+- net_amount
+- currency
+- recognized_at
+
+### `FinancialAllocationRecorded`
+Khi một cost hoặc revenue được split sang nhiều `ProjectScope`.
+
+Payload tối thiểu:
+- financial_allocation_id
+- source_record_type
+- source_record_id
+- project_scope_id
+- allocation_basis
+- allocation_weight
+- allocated_amount
+
+### `SharedResourceAllocated`
+Khi một shared resource được allocate cho một `ProjectScope`.
+
+Payload tối thiểu:
+- shared_resource_id
+- project_scope_id
+- allocation_basis
+- allocated_capacity
+- effective_at
+
+### `SharedResourceReleased`
+Khi một shared resource allocation kết thúc hoặc được trả lại.
+
+Payload tối thiểu:
+- shared_resource_id
+- project_scope_id
+- released_capacity
+- released_at
 
 ## 3.1 Customer events
 
@@ -167,6 +364,9 @@ Payload tối thiểu:
 ---
 
 ## 3.2 Preorder events
+
+Phase 1.x note:
+- preorder event payloads on the live runtime now carry nullable `organization_id` / `organizationId` context when the preorder belongs to an organization.
 
 ### `PreorderPlaced`
 Khi tạo một cam kết preorder mới.
@@ -266,6 +466,9 @@ Payload:
 
 ## 3.4 Lot events
 
+Phase 1.x note:
+- lot event payloads on the live runtime now carry nullable `organization_id` / `organizationId` context when the lot belongs to an organization.
+
 ### `HarvestedLotCreated`
 Khi một harvested lot mới được tạo từ crop cycle.
 
@@ -355,6 +558,9 @@ Payload:
 ---
 
 ## 3.5 Order events
+
+Phase 1.x note:
+- order event payloads on the live runtime now carry nullable `organization_id` / `organizationId` context when the order belongs to an organization.
 
 ### `OrderCreated`
 Payload:

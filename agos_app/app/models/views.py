@@ -20,6 +20,7 @@ class Customer360View(BaseModel):
 class AvailableLotView(BaseModel):
     lotId: str
     lotCode: str
+    organizationId: str | None = None
     productSkuId: str
     releasedQty: float
     availableQty: float
@@ -54,6 +55,7 @@ class FarmSummaryBoardResponse(BaseModel):
 class PendingFulfillmentView(BaseModel):
     orderId: str
     orderCode: str
+    organizationId: str | None = None
     customerName: str
     status: Literal["confirmed", "allocated", "packed", "shipped"]
     shippingDeadline: str | None = None

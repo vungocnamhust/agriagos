@@ -16,6 +16,7 @@ class OrderLine(BaseModel):
 class OrderDetail(BaseModel):
     orderId: str
     orderCode: str
+    organizationId: str | None = None
     customerId: str
     orderDate: str | None = None  # required in canonical model (04-canonical-data-model.md)
     channel: str
@@ -42,6 +43,7 @@ class CreateOrderLineRequest(BaseModel):
     sourcePreorderId: str | None = None
 
 class CreateOrderRequest(BaseModel):
+    organizationId: str | None = None
     customerId: str
     channel: str
     deliveryDateExpected: str | None = None

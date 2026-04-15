@@ -2718,6 +2718,11 @@ components:
         productSkuId:
           type: string
           title: Productskuid
+        organizationId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Organizationid
         releasedQty:
           type: number
           title: Releasedqty
@@ -2966,6 +2971,11 @@ components:
         customerId:
           type: string
           title: Customerid
+        organizationId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Organizationid
         channel:
           type: string
           title: Channel
@@ -3009,6 +3019,11 @@ components:
         customerId:
           type: string
           title: Customerid
+        organizationId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Organizationid
         productSkuId:
           type: string
           title: Productskuid
@@ -3050,6 +3065,11 @@ components:
         productSkuId:
           type: string
           title: Productskuid
+        organizationId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Organizationid
         processRefId:
           type: string
           title: Processrefid
@@ -3935,6 +3955,11 @@ components:
         productSkuId:
           type: string
           title: Productskuid
+        organizationId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Organizationid
         sourceType:
           type: string
           enum:
@@ -4107,6 +4132,11 @@ components:
         customerId:
           type: string
           title: Customerid
+        organizationId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Organizationid
         orderDate:
           anyOf:
           - type: string
@@ -4326,6 +4356,11 @@ components:
         orderCode:
           type: string
           title: Ordercode
+        organizationId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Organizationid
         customerName:
           type: string
           title: Customername
@@ -4460,6 +4495,11 @@ components:
         customerId:
           type: string
           title: Customerid
+        organizationId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Organizationid
         productSkuId:
           type: string
           title: Productskuid

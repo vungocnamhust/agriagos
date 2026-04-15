@@ -144,6 +144,7 @@ def test_available_lots_board_only_returns_released_positive_qty_lots() -> None:
         {
             "lotId": "lot-1",
             "lotCode": "LOT-001",
+            "organizationId": "org-lot-view-1",
             "productSkuId": "sku-1",
             "releasedQty": 10.0,
             "availableQty": 6.0,
@@ -177,6 +178,7 @@ def test_available_lots_board_only_returns_released_positive_qty_lots() -> None:
 
     assert response.status_code == 200
     assert [item["lotCode"] for item in response.json()["items"]] == ["LOT-001"]
+    assert response.json()["items"][0]["organizationId"] == "org-lot-view-1"
 
 
 def test_pending_fulfillment_returns_phase1_statuses_sorted_by_deadline() -> None:
@@ -187,6 +189,7 @@ def test_pending_fulfillment_returns_phase1_statuses_sorted_by_deadline() -> Non
         {
             "orderId": "order-1",
             "orderCode": "ORD-003",
+            "organizationId": "org-pending-1",
             "customerId": "customer-1",
             "channel": "direct",
             "status": "packed",
@@ -200,6 +203,7 @@ def test_pending_fulfillment_returns_phase1_statuses_sorted_by_deadline() -> Non
         {
             "orderId": "order-2",
             "orderCode": "ORD-001",
+            "organizationId": None,
             "customerId": "customer-2",
             "channel": "direct",
             "status": "confirmed",
@@ -228,6 +232,7 @@ def test_pending_fulfillment_returns_phase1_statuses_sorted_by_deadline() -> Non
     payload = response.json()["items"]
     assert [item["orderCode"] for item in payload] == ["ORD-001", "ORD-003"]
     assert [item["status"] for item in payload] == ["confirmed", "packed"]
+    assert [item["organizationId"] for item in payload] == [None, "org-pending-1"]
 
 
 def test_farm_view_returns_legacy_plot_and_cycle_lists() -> None:

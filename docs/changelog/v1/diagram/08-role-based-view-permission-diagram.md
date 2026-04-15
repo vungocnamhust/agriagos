@@ -59,6 +59,8 @@ flowchart LR
         V4["Farm View / Farm Summary Board"]
         V5["Scoped Event Stream"]
         V6["Audit Query Surface"]
+        V7["Project Scope Directory [Phase 2 🔜]"]
+        V8["Project Economics / Contribution Views [Phase 2 🔜]"]
     end
 
     subgraph Commands["Allowed Commands"]
@@ -68,6 +70,8 @@ flowchart LR
         CMD3["Order Commands"]
         CMD4["Customer / Preference / Follow-up Commands"]
         CMD5["Admin / Override Commands"]
+        CMD6["Project Scope Management Commands [Phase 2 🔜]"]
+        CMD7["Project Assignment / Contribution / Economics Commands [Phase 2 🔜]"]
     end
 
     C1 --> V1
@@ -76,6 +80,8 @@ flowchart LR
     C2 --> V4
     C5 --> V5
     C5 --> V6
+    C5 --> V7
+    C5 --> V8
 
     Founder --> V1
     Founder --> V0
@@ -84,8 +90,12 @@ flowchart LR
     Founder --> V4
     Founder --> V5
     Founder --> V6
+    Founder --> V7
+    Founder --> V8
     Founder --> CMD0
     Founder --> CMD5
+    Founder --> CMD6
+    Founder --> CMD7
 
     QC --> V2
     QC --> CMD2
@@ -116,25 +126,33 @@ flowchart LR
     Admin --> V4
     Admin --> V5
     Admin --> V6
+    Admin --> V7
+    Admin --> V8
     Admin --> CMD0
     Admin --> CMD5
+    Admin --> CMD6
+    Admin --> CMD7
 
     Accountant --> V3
     Accountant --> V5
     Accountant --> V6
+    Accountant --> V8
 
     Viewer --> V2
     Viewer --> V3
     Viewer --> V4
     Viewer --> V5
+    Viewer --> V8
 
     Agent -.-> V1
     Agent -.-> V2
     Agent -.-> V3
     Agent -.-> V4
     Agent -.-> V5
+    Agent -.-> V7
     Agent -.-> CMD3
     Agent -.-> CMD4
+    Agent -.-> CMD7
 ```
 
 ## Phase 1 notes
@@ -143,3 +161,4 @@ flowchart LR
 - `viewer / analyst` short-term đi qua `/api/v1/views/*` và scoped `/api/v1/events`; không dùng raw operational reads theo mặc định.
 - `agent / automation` vẫn advisory-first. Sơ đồ cho thấy nó có thể đọc hoặc tạo draft trong scope được cấp, nhưng không có bypass lane nào đang enable ở Phase 1.
 - `Organization Profile View [Phase 1 ✅]` và `Organization Management Commands [Phase 1 ✅]` hiện tương ứng với standalone `/api/v1/organizations` read/write lane. Association sang farm-side, commercial-side, và org-scoped RBAC vẫn là phase sau.
+- `Project Scope Directory [Phase 2 🔜]`, `Project Economics / Contribution Views [Phase 2 🔜]`, và các command nodes liên quan chỉ là docs-first baseline cho epic ProjectScope. Chúng chưa khẳng định runtime route hoặc authz đã tồn tại ở Phase 1.

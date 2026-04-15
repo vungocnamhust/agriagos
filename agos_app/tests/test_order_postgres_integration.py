@@ -53,6 +53,33 @@ def _admin_meta(correlation_id: str, idempotency_key: str) -> Meta:
     )
 
 
+def _seed_organization(postgres_db_session: Session, organization_id: str) -> None:
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO organizations (
+                organization_id,
+                organization_code,
+                name,
+                organization_type,
+                status
+            ) VALUES (
+                CAST(:organization_id AS uuid),
+                :organization_code,
+                :name,
+                    'household_producer',
+                'active'
+            )
+            """
+        ),
+        {
+            "organization_id": organization_id,
+            "organization_code": f"ORG-{organization_id[-6:].upper()}",
+            "name": "Order Org",
+        },
+    )
+
+
 @pytest.mark.postgres_integration
 def test_allocation_core_adjust_and_release_persist_on_postgres_path(
     postgres_db_session: Session,
@@ -304,6 +331,207 @@ def test_allocation_core_adjust_and_release_persist_on_postgres_path(
         ("release_reservation", 2.0),
         ("reserve", 4.0),
     ]
+
+
+@pytest.mark.postgres_integration
+def test_create_order_persists_organization_id_on_postgres_path(
+    postgres_db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_db, "is_enabled", lambda: True)
+    monkeypatch.setattr(_db, "read_session", lambda session=None: _bound_read_session(postgres_db_session))
+    monkeypatch.setattr(_db, "write_session", lambda session=None: _bound_write_session(postgres_db_session))
+    monkeypatch.setattr(order_service.postgres_sync, "is_enabled", lambda: True)
+    monkeypatch.setattr(order_service, "postgres_transaction", lambda: _bound_transaction(postgres_db_session))
+
+    organization_id = "00000000-0000-0000-0000-00000000f111"
+    _seed_organization(postgres_db_session, organization_id)
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO customers (
+                customer_id,
+                tenant_id,
+                customer_code,
+                full_name,
+                phone,
+                phone_normalized,
+                channel_source,
+                status,
+                tags,
+                notes
+            ) VALUES (
+                :customer_id,
+                'default',
+                'KH-ORDER-ORG-001',
+                'Order Org User',
+                '+84900000011',
+                '84900000011',
+                'internal_ui',
+                'active',
+                '[]'::jsonb,
+                null
+            )
+            """
+        ),
+        {"customer_id": "00000000-0000-0000-0000-00000000f001"},
+    )
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO product_skus (product_sku_id, tenant_id, sku_code, sku_name, unit, status)
+            VALUES (:product_sku_id, 'default', 'SKU-ORDER-ORG-1', 'Order Org SKU', 'kg', 'active')
+            """
+        ),
+        {"product_sku_id": "00000000-0000-0000-0000-00000000f501"},
+    )
+
+    created = order_service.create_order(
+        CreateOrderRequest(
+            customerId="00000000-0000-0000-0000-00000000f001",
+            organizationId=organization_id,
+            channel="web",
+            lines=[
+                CreateOrderLineRequest(
+                    productSkuId="00000000-0000-0000-0000-00000000f501",
+                    orderedQty=2,
+                    unit="kg",
+                )
+            ],
+            meta=_admin_meta("corr-pg-order-org-create", "idem-pg-order-org-create"),
+        )
+    )
+
+    row = postgres_db_session.execute(
+        text("SELECT organization_id::text FROM sales_orders WHERE order_id = CAST(:order_id AS uuid)"),
+        {"order_id": created.data.orderId},
+    ).mappings().one()
+
+    assert row["organization_id"] == organization_id
+    assert created.data.organizationId == organization_id
+
+
+@pytest.mark.postgres_integration
+def test_create_order_derives_organization_id_from_preorder_on_postgres_path(
+    postgres_db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_db, "is_enabled", lambda: True)
+    monkeypatch.setattr(_db, "read_session", lambda session=None: _bound_read_session(postgres_db_session))
+    monkeypatch.setattr(_db, "write_session", lambda session=None: _bound_write_session(postgres_db_session))
+    monkeypatch.setattr(order_service.postgres_sync, "is_enabled", lambda: True)
+    monkeypatch.setattr(order_service, "postgres_transaction", lambda: _bound_transaction(postgres_db_session))
+
+    organization_id = "00000000-0000-0000-0000-00000000f112"
+    _seed_organization(postgres_db_session, organization_id)
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO customers (
+                customer_id,
+                tenant_id,
+                customer_code,
+                full_name,
+                phone,
+                phone_normalized,
+                channel_source,
+                status,
+                tags,
+                notes
+            ) VALUES (
+                :customer_id,
+                'default',
+                'KH-ORDER-ORG-002',
+                'Order Org Derived User',
+                '+84900000012',
+                '84900000012',
+                'web',
+                'active',
+                '[]'::jsonb,
+                null
+            )
+            """
+        ),
+        {"customer_id": "00000000-0000-0000-0000-00000000f002"},
+    )
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO product_skus (product_sku_id, tenant_id, sku_code, sku_name, unit, status)
+            VALUES (:product_sku_id, 'default', 'SKU-ORDER-ORG-2', 'Order Org Derived SKU', 'kg', 'active')
+            """
+        ),
+        {"product_sku_id": "00000000-0000-0000-0000-00000000f502"},
+    )
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO preorders (
+                preorder_id,
+                tenant_id,
+                preorder_code,
+                customer_id,
+                product_sku_id,
+                organization_id,
+                committed_qty,
+                allocated_qty,
+                delivered_qty,
+                cancelled_qty,
+                remaining_qty,
+                delivery_cadence,
+                status,
+                start_date,
+                updated_at
+            ) VALUES (
+                :preorder_id,
+                'default',
+                'DT-ORDER-ORG-001',
+                :customer_id,
+                :product_sku_id,
+                CAST(:organization_id AS uuid),
+                8,
+                0,
+                0,
+                0,
+                8,
+                'weekly',
+                'active',
+                CURRENT_DATE,
+                now()
+            )
+            """
+        ),
+        {
+            "preorder_id": "00000000-0000-0000-0000-00000000f602",
+            "customer_id": "00000000-0000-0000-0000-00000000f002",
+            "product_sku_id": "00000000-0000-0000-0000-00000000f502",
+            "organization_id": organization_id,
+        },
+    )
+
+    created = order_service.create_order(
+        CreateOrderRequest(
+            customerId="00000000-0000-0000-0000-00000000f002",
+            channel="web",
+            lines=[
+                CreateOrderLineRequest(
+                    productSkuId="00000000-0000-0000-0000-00000000f502",
+                    orderedQty=2,
+                    unit="kg",
+                    sourcePreorderId="00000000-0000-0000-0000-00000000f602",
+                )
+            ],
+            meta=_admin_meta("corr-pg-order-derived-org-create", "idem-pg-order-derived-org-create"),
+        )
+    )
+
+    row = postgres_db_session.execute(
+        text("SELECT organization_id::text FROM sales_orders WHERE order_id = CAST(:order_id AS uuid)"),
+        {"order_id": created.data.orderId},
+    ).mappings().one()
+
+    assert row["organization_id"] == organization_id
+    assert created.data.organizationId == organization_id
 
 
 @pytest.mark.postgres_integration

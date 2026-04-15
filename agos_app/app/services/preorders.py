@@ -27,6 +27,7 @@ from app.models.preorders import (
 from app.services import audit as audit_service
 from app.store import postgres_sync
 from app.store import memory as store
+from app.store import organizations as organization_store
 from app.store._db import transaction as postgres_transaction
 
 
@@ -69,6 +70,7 @@ def _build_preorder_detail(record: dict[str, Any]) -> PreorderDetail:
     return PreorderDetail(
         preorderId=normalized["preorderId"],
         preorderCode=normalized["preorderCode"],
+        organizationId=normalized.get("organizationId"),
         customerId=normalized["customerId"],
         productSkuId=normalized["productSkuId"],
         committedQty=normalized["committedQty"],
@@ -219,6 +221,23 @@ def _get_preorder_record_or_404(
     return _normalized_preorder_record(record)
 
 
+def _organization_exists(organization_id: str) -> bool:
+    if postgres_sync.is_enabled():
+        return organization_store.organization_exists(organization_id)
+    return store.get_organization(organization_id) is not None
+
+
+def _validate_organization_id(organization_id: str | None) -> str | None:
+    if organization_id is None:
+        return None
+    normalized = organization_id.strip()
+    if not normalized:
+        raise HTTPException(status_code=422, detail="organizationId cannot be blank.")
+    if not _organization_exists(normalized):
+        raise HTTPException(status_code=422, detail="Referenced organization was not found.")
+    return normalized
+
+
 def create_preorder(payload: CreatePreorderRequest) -> PreorderResponse:
     context = meta_context(payload.meta)
     _assert_preorder_access(
@@ -250,11 +269,13 @@ def create_preorder(payload: CreatePreorderRequest) -> PreorderResponse:
 
     preorder_id = str(uuid.uuid4())
     preorder_code = _new_preorder_code()
+    organization_id = _validate_organization_id(payload.organizationId)
 
     record: dict[str, Any] = {
         "preorderId": preorder_id,
         "tenantId": "default",
         "preorderCode": preorder_code,
+        "organizationId": organization_id,
         "customerId": payload.customerId,
         "productSkuId": payload.productSkuId,
         "committedQty": payload.committedQty,

@@ -95,6 +95,27 @@ def test_create_order_postgres_path_uses_single_transaction(monkeypatch: pytest.
     assert "INSERT INTO idempotency_records" in sql
 
 
+def test_create_order_persists_explicit_organization_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(orders.postgres_sync, "is_enabled", lambda: False)
+    memory.save_customer("customer-1", {"customerId": "customer-1", "fullName": "Alice"})
+    memory.save_organization("org-1", {"organizationId": "org-1", "name": "Farm Org"})
+
+    created = orders.create_order(
+        CreateOrderRequest(
+            customerId="customer-1",
+            organizationId="org-1",
+            channel="direct",
+            lines=[CreateOrderLineRequest(productSkuId="sku-1", orderedQty=3, unit="kg")],
+            meta=_admin_meta("corr-order-org"),
+        )
+    )
+
+    stored = memory.get_order(created.data.orderId)
+    assert stored is not None
+    assert stored["organizationId"] == "org-1"
+    assert created.data.organizationId == "org-1"
+
+
 def test_confirm_order_missing_aggregate_writes_denied_audit(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(orders.postgres_sync, "is_enabled", lambda: False)
 
@@ -173,6 +194,127 @@ def _seed_preorder(*, preorder_id: str, remaining_qty: float) -> None:
             "adjustmentHistory": [],
         },
     )
+
+
+def test_create_order_derives_organization_id_from_linked_preorder(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(orders.postgres_sync, "is_enabled", lambda: False)
+    memory.save_customer("customer-1", {"customerId": "customer-1", "fullName": "Alice"})
+    memory.save_organization("org-1", {"organizationId": "org-1", "name": "Farm Org"})
+    _seed_preorder(preorder_id="preorder-1", remaining_qty=3)
+    preorder_record = memory.get_preorder("preorder-1")
+    assert preorder_record is not None
+    preorder_record["organizationId"] = "org-1"
+    memory.save_preorder("preorder-1", preorder_record)
+
+    created = orders.create_order(
+        CreateOrderRequest(
+            customerId="customer-1",
+            channel="direct",
+            lines=[
+                CreateOrderLineRequest(
+                    productSkuId="sku-1",
+                    orderedQty=3,
+                    unit="kg",
+                    sourcePreorderId="preorder-1",
+                )
+            ],
+            meta=_admin_meta("corr-order-derived-org"),
+        )
+    )
+
+    assert created.data.organizationId == "org-1"
+    stored = memory.get_order(created.data.orderId)
+    assert stored is not None
+    assert stored["organizationId"] == "org-1"
+
+
+def test_create_order_accepts_requested_organization_id_when_linked_preorder_has_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(orders.postgres_sync, "is_enabled", lambda: False)
+    memory.save_customer("customer-1", {"customerId": "customer-1", "fullName": "Alice"})
+    memory.save_organization("org-1", {"organizationId": "org-1", "name": "Farm Org"})
+    _seed_preorder(preorder_id="preorder-1", remaining_qty=3)
+
+    created = orders.create_order(
+        CreateOrderRequest(
+            customerId="customer-1",
+            organizationId="org-1",
+            channel="direct",
+            lines=[
+                CreateOrderLineRequest(
+                    productSkuId="sku-1",
+                    orderedQty=3,
+                    unit="kg",
+                    sourcePreorderId="preorder-1",
+                )
+            ],
+            meta=_admin_meta("corr-order-linked-preorder-no-org"),
+        )
+    )
+
+    assert created.data.organizationId == "org-1"
+
+
+def test_create_order_allows_null_organization_id_when_linked_preorder_has_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(orders.postgres_sync, "is_enabled", lambda: False)
+    memory.save_customer("customer-1", {"customerId": "customer-1", "fullName": "Alice"})
+    _seed_preorder(preorder_id="preorder-1", remaining_qty=3)
+
+    created = orders.create_order(
+        CreateOrderRequest(
+            customerId="customer-1",
+            channel="direct",
+            lines=[
+                CreateOrderLineRequest(
+                    productSkuId="sku-1",
+                    orderedQty=3,
+                    unit="kg",
+                    sourcePreorderId="preorder-1",
+                )
+            ],
+            meta=_admin_meta("corr-order-linked-preorder-both-null"),
+        )
+    )
+
+    assert created.data.organizationId is None
+
+
+def test_create_order_rejects_requested_organization_id_that_conflicts_with_linked_preorder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(orders.postgres_sync, "is_enabled", lambda: False)
+    memory.save_customer("customer-1", {"customerId": "customer-1", "fullName": "Alice"})
+    memory.save_organization("org-1", {"organizationId": "org-1", "name": "Farm Org"})
+    memory.save_organization("org-2", {"organizationId": "org-2", "name": "Other Org"})
+    _seed_preorder(preorder_id="preorder-1", remaining_qty=3)
+    preorder_record = memory.get_preorder("preorder-1")
+    assert preorder_record is not None
+    preorder_record["organizationId"] = "org-1"
+    memory.save_preorder("preorder-1", preorder_record)
+
+    with pytest.raises(HTTPException) as exc_info:
+        orders.create_order(
+            CreateOrderRequest(
+                customerId="customer-1",
+                organizationId="org-2",
+                channel="direct",
+                lines=[
+                    CreateOrderLineRequest(
+                        productSkuId="sku-1",
+                        orderedQty=3,
+                        unit="kg",
+                        sourcePreorderId="preorder-1",
+                    )
+                ],
+                meta=_admin_meta("corr-order-org-conflict"),
+            )
+        )
+
+    assert exc_info.value.status_code == 422
+    assert memory.list_audit_logs()[-1]["reasonCode"] == "organization_mismatch"
 
 
 def test_allocate_order_rejects_aggregate_overflow_on_same_lot(monkeypatch: pytest.MonkeyPatch) -> None:

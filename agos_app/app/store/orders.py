@@ -81,6 +81,7 @@ def upsert_order(record: dict[str, Any]) -> None:
                 INSERT INTO sales_orders (
                     order_id,
                     order_code,
+                    organization_id,
                     customer_id,
                     channel,
                     delivery_date_expected,
@@ -102,6 +103,7 @@ def upsert_order(record: dict[str, Any]) -> None:
                 ) VALUES (
                     :order_id,
                     :order_code,
+                    :organization_id,
                     :customer_id,
                     :channel,
                     :delivery_date_expected,
@@ -134,6 +136,7 @@ def upsert_order(record: dict[str, Any]) -> None:
                     payment_intent = EXCLUDED.payment_intent,
                     note = EXCLUDED.note,
                     source_preorder_flag = EXCLUDED.source_preorder_flag,
+                    organization_id = EXCLUDED.organization_id,
                     status = EXCLUDED.status,
                     payment_status = EXCLUDED.payment_status,
                     version = sales_orders.version + 1,
@@ -143,6 +146,7 @@ def upsert_order(record: dict[str, Any]) -> None:
             {
                 "order_id": record["orderId"],
                 "order_code": record["orderCode"],
+                "organization_id": record.get("organizationId"),
                 "customer_id": record["customerId"],
                 "channel": record["channel"],
                 "delivery_date_expected": record.get("deliveryDateExpected"),
@@ -231,6 +235,7 @@ def fetch_order(order_id: str) -> dict[str, Any] | None:
                     order_id,
                     tenant_id,
                     order_code,
+                    organization_id,
                     customer_id,
                     channel,
                     delivery_date_expected,
@@ -283,6 +288,7 @@ def fetch_order(order_id: str) -> dict[str, Any] | None:
         "orderId": str(order_row["order_id"]),
         "tenantId": order_row["tenant_id"],
         "orderCode": order_row["order_code"],
+        "organizationId": str(order_row["organization_id"]) if order_row["organization_id"] is not None else None,
         "customerId": str(order_row["customer_id"]),
         "channel": order_row["channel"],
         "deliveryDateExpected": (

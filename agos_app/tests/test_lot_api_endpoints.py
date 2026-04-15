@@ -31,6 +31,7 @@ def test_lot_routes_create_detail_and_adjust() -> None:
         {
             "cropCycleId": "cycle-api-1",
             "plotId": "plot-1",
+            "organizationId": "org-lot-api-1",
             "cropName": "rice",
             "growthStage": "harvested",
             "status": "harvested",
@@ -63,6 +64,7 @@ def test_lot_routes_create_detail_and_adjust() -> None:
     assert detail_response.status_code == 200
     assert detail_response.json()["lotId"] == created["lotId"]
     assert detail_response.json()["sourceRefId"] == "cycle-api-1"
+    assert detail_response.json()["organizationId"] == "org-lot-api-1"
 
     adjust_response = client.post(
         f"/api/v1/lots/{created['lotId']}/adjust",
@@ -113,11 +115,22 @@ def test_lot_create_route_rejects_invalid_quantity_and_missing_cycle() -> None:
 
 
 def test_processed_lot_route_accepts_processing_batch_source() -> None:
+    memory.save_organization(
+        "org-processed-api-1",
+        {
+            "organizationId": "org-processed-api-1",
+            "organizationCode": "ORG-PROC-API-1",
+            "name": "Processed API Org",
+            "organizationType": "family_business",
+            "status": "active",
+        },
+    )
     response = client.post(
         "/api/v1/lots/processed",
         headers=_auth_headers(),
         json={
             "productSkuId": "sku-1",
+            "organizationId": "org-processed-api-1",
             "processRefId": "batch-api-1",
             "actualQty": 14,
             "harvestOrProductionDate": "2026-04-11",
@@ -127,6 +140,7 @@ def test_processed_lot_route_accepts_processing_batch_source() -> None:
 
     assert response.status_code == 201
     assert response.json()["data"]["sourceType"] == "processing_batch"
+    assert response.json()["data"]["organizationId"] == "org-processed-api-1"
 
 
 def test_raw_lot_detail_route_denies_viewer() -> None:

@@ -86,6 +86,104 @@ Ví dụ:
 Phase hiện tại **không** tách brand thành aggregate riêng.
 Nếu một organization chỉ có một business-facing identity đơn giản, giữ nó trong profile của `Organization` là đủ.
 
+## 3.4 ProjectScope / Value Stream
+
+**Định nghĩa:** lớp scope mềm dưới `Organization` dùng để gom một dòng giá trị, initiative, experience, household livelihood stream, hoặc grouping node mà team cần theo dõi riêng.
+
+ProjectScope dùng để trả lời các câu hỏi như:
+- việc này thuộc dòng giá trị nào
+- dòng giá trị đó đang lời hay lỗ
+- những hộ hoặc actor nào đang bị tác động
+- tài nguyên nào đang được nhiều dòng giá trị dùng chung
+- ai đã đóng góp vào kết quả của dòng giá trị đó
+
+`value stream` là cách gọi nghiệp vụ gần nghĩa; `ProjectScope` là canonical term nên ưu tiên trong docs, model, schema, và API contracts khi rollout bắt đầu.
+
+**Không nên nhầm với:**
+- `Organization`: legal-operating owner của domain
+- `Tenant`: boundary triển khai hoặc tích hợp
+- Brand identity: lớp business-facing identity
+- task list hoặc PM board: ProjectScope không phải công cụ quản lý việc cứng
+
+## 3.5 Project Assignment
+
+**Định nghĩa:** liên kết additive gắn một record nghiệp vụ với một hoặc nhiều `ProjectScope`.
+
+Project assignment dùng khi:
+- một lot feed nhiều dòng giá trị
+- một resource dùng chung cho nhiều scope
+- một order hoặc inventory movement cần được gắn vào project sau khi write path đã hoàn tất
+
+Assignment có thể là:
+- primary
+- secondary
+- observational
+- financially eligible
+
+## 3.6 Contribution Ledger
+
+**Định nghĩa:** append-only ledger ghi nhận ai đã đóng góp gì vào một `ProjectScope`.
+
+Đóng góp có thể là:
+- công
+- tài sản
+- khách hàng hoặc lead source
+- nội dung
+- vốn
+- vận hành
+- tri thức
+- quan hệ
+
+Ledger này không thay thế event log toàn hệ; nó là canonical fact lane cho contribution của dòng giá trị.
+
+## 3.7 Shared Resource
+
+**Định nghĩa:** tài nguyên được nhiều `ProjectScope` cùng sử dụng và cần theo dõi allocation.
+
+Ví dụ:
+- labor pool
+- xe vận chuyển
+- sân phơi hoặc kho chung
+- marketing budget
+- content asset
+- host capacity cho Farm Visit hoặc retreat
+
+Shared resource không đồng nghĩa với lot inventory. Nó là resource allocation problem, không phải stock ownership problem.
+
+## 3.8 Cost Record
+
+**Định nghĩa:** một canonical operational fact ghi nhận chi phí phát sinh mà Agri OS cần dùng để tính hiệu quả theo `ProjectScope`.
+
+Cost record có thể đến từ:
+- input vật tư
+- công lao động
+- chi phí logistics
+- chi phí trải nghiệm hoặc vận hành
+- phân bổ shared resource
+
+Accounting final vẫn có thể nằm ở ERP, nhưng cost record trong Core phục vụ operational P&L theo project.
+
+## 3.9 Revenue Record
+
+**Định nghĩa:** một canonical operational fact ghi nhận doanh thu hoặc giá trị thương mại được nhận diện cho `ProjectScope`.
+
+Revenue record có thể seed từ:
+- delivered order
+- experience booking
+- package sale
+- campaign conversion được confirm
+
+Revenue record không thay thế invoice hoặc journal accounting final của ERP.
+
+## 3.10 Financial Allocation
+
+**Định nghĩa:** fact dùng để tách một cost hoặc revenue record sang nhiều `ProjectScope` khi tác động không thuộc duy nhất một scope.
+
+Financial allocation tồn tại để:
+- tránh duplicate cost hoặc revenue facts
+- cho phép shared-cost và shared-revenue attribution minh bạch
+- giữ tách biệt giữa impact reporting và financially eligible attribution
+
 ---
 
 ## 4. Customer

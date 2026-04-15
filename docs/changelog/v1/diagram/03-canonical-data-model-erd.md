@@ -14,6 +14,13 @@ ERD này mô tả các thực thể canonical mà Agri OS Core cần giữ để
 | Entity | Phase | Ghi chú |
 |---|---|---|
 | ORGANIZATION | Phase 2 🔜 | Architecture baseline locked in PR-1; runtime rollout starts after standalone schema/API slice |
+| PROJECT_SCOPE | Phase 2 🔜 | Soft value-stream scope dưới ORGANIZATION; rollout sau standalone Organization |
+| PROJECT_ASSIGNMENT | Phase 2 🔜 | Additive many-to-many assignment lane cho farm/commercial/economic records |
+| PROJECT_CONTRIBUTION_EVENT | Phase 2 🔜 | Append-only contribution ledger |
+| SHARED_RESOURCE | Phase 2 🔜 | Tài nguyên dùng chung giữa nhiều PROJECT_SCOPE |
+| COST_RECORD | Phase 2 🔜 | Operational cost truth cho project economics |
+| REVENUE_RECORD | Phase 2 🔜 | Operational revenue truth cho project economics |
+| FINANCIAL_ALLOCATION | Phase 2 🔜 | Split cost/revenue sang nhiều PROJECT_SCOPE |
 | CUSTOMER_PROFILE | Phase 1 ✅ | |
 | PREORDER | Phase 1 ✅ | Bị thiếu trong ERD cũ — đã thêm |
 | PRODUCT_SKU | Phase 1 ✅ | Bị thiếu trong ERD cũ — đã thêm |
@@ -45,6 +52,14 @@ erDiagram
     %% Customer-organization affinity, nếu cần, là read-model lane được duyệt riêng và
     %% không xuất hiện như canonical ownership edge trong ERD baseline này.
 
+    ORGANIZATION ||--o{ PROJECT_SCOPE : contains
+    PROJECT_SCOPE ||--o{ PROJECT_ASSIGNMENT : scopes
+    PROJECT_SCOPE ||--o{ PROJECT_CONTRIBUTION_EVENT : records
+    PROJECT_SCOPE ||--o{ COST_RECORD : incurs
+    PROJECT_SCOPE ||--o{ REVENUE_RECORD : realizes
+    PROJECT_SCOPE ||--o{ FINANCIAL_ALLOCATION : receives
+    PROJECT_SCOPE ||--o{ SHARED_RESOURCE : uses
+
     ORGANIZATION ||--o{ PLOT : operates
     ORGANIZATION ||--o{ CROP_CYCLE : scopes
     ORGANIZATION ||--o{ LOT_BATCH : owns_flow
@@ -62,6 +77,81 @@ erDiagram
         string status
         string region
         string locality_summary
+    }
+
+    PROJECT_SCOPE {
+        string project_scope_id PK
+        string organization_id FK
+        string project_scope_code
+        string name
+        string scope_type
+        string status
+        string season_year
+        string parent_project_scope_id FK
+    }
+
+    PROJECT_ASSIGNMENT {
+        string project_assignment_id PK
+        string project_scope_id FK
+        string target_type
+        string target_id
+        string assignment_role
+        decimal attribution_weight
+        string attribution_kind
+        string confidence_level
+    }
+
+    PROJECT_CONTRIBUTION_EVENT {
+        string project_contribution_event_id PK
+        string project_scope_id FK
+        string actor_id
+        string contribution_type
+        string role
+        decimal quantity
+        decimal estimated_value
+        string status
+    }
+
+    SHARED_RESOURCE {
+        string shared_resource_id PK
+        string organization_id FK
+        string resource_code
+        string name
+        string resource_type
+        string status
+    }
+
+    COST_RECORD {
+        string cost_record_id PK
+        string organization_id FK
+        string project_scope_id FK
+        string cost_type
+        decimal amount
+        string currency
+        string source_object_type
+        string source_object_id
+    }
+
+    REVENUE_RECORD {
+        string revenue_record_id PK
+        string organization_id FK
+        string project_scope_id FK
+        string revenue_type
+        decimal gross_amount
+        decimal net_amount
+        string currency
+        string source_object_type
+        string source_object_id
+    }
+
+    FINANCIAL_ALLOCATION {
+        string financial_allocation_id PK
+        string source_record_type
+        string source_record_id
+        string project_scope_id FK
+        string allocation_basis
+        decimal allocation_weight
+        decimal allocated_amount
     }
 
     PREORDER {

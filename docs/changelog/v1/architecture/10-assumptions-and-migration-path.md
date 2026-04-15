@@ -236,6 +236,21 @@ Rule baseline:
 - không ép mọi bảng phải có `organization_id` trong một migration duy nhất
 - backward compatibility của existing APIs phải được giữ cho đến khi slice rollout tương ứng được ship
 
+### ProjectScope rollout path
+Baseline cho aggregate `ProjectScope` và các lanes liên quan đi theo thứ tự sau:
+1. chốt authority docs + ADR cho `ProjectScope` như lớp soft value-stream scope dưới `Organization`
+2. thêm standalone `ProjectScope` schema, CRUD, lifecycle, và read surface tối thiểu
+3. thêm `ProjectAssignment` lane để gắn farm-side và commercial-side records vào scope mà không one-shot rewrite toàn bộ canonical tables
+4. thêm contribution ledger, shared resources, cost records, revenue records, và financial allocations theo vertical slices riêng
+5. thêm reporting views cho P&L, impacted households/actors, shared resources, customer source/repeat, và contribution ledger
+6. backfill selected records theo confidence-driven rules; giữ `unassigned` hợp lệ khi chưa có deterministic attribution
+
+Rule baseline:
+- không ép mọi canonical table phải có `project_scope_id` trong một migration duy nhất
+- không tạo một `default_project` giả để nuốt toàn bộ legacy data chưa rõ attribution
+- `unassigned`, `inferred`, và `needs_review` là trạng thái hợp lệ trong rollout project scope
+- impact reporting và financially eligible attribution là hai lane khác nhau; rollout phải giữ semantics này rõ ngay từ đầu
+
 ### Phase 3 - Read Models + Agent Support
 Mục tiêu:
 - customer 360

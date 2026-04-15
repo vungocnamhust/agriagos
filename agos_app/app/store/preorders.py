@@ -28,6 +28,7 @@ def _preorder_record_from_row(row: Any) -> dict[str, Any]:
         "preorderId": str(row["preorder_id"]),
         "tenantId": row["tenant_id"],
         "preorderCode": row["preorder_code"],
+        "organizationId": str(row["organization_id"]) if row["organization_id"] is not None else None,
         "customerId": str(row["customer_id"]),
         "productSkuId": str(row["product_sku_id"]),
         "committedQty": _float_value(row["committed_qty"]),
@@ -65,6 +66,7 @@ def upsert_preorder(record: dict[str, Any]) -> None:
                 INSERT INTO preorders (
                     preorder_id,
                     preorder_code,
+                    organization_id,
                     customer_id,
                     product_sku_id,
                     committed_qty,
@@ -82,6 +84,7 @@ def upsert_preorder(record: dict[str, Any]) -> None:
                 ) VALUES (
                     :preorder_id,
                     :preorder_code,
+                    :organization_id,
                     :customer_id,
                     :product_sku_id,
                     :committed_qty,
@@ -107,6 +110,7 @@ def upsert_preorder(record: dict[str, Any]) -> None:
                     deposit_amount = EXCLUDED.deposit_amount,
                     notes = EXCLUDED.notes,
                     status = EXCLUDED.status,
+                    organization_id = EXCLUDED.organization_id,
                     version = preorders.version + 1,
                     updated_at = now()
                 """
@@ -114,6 +118,7 @@ def upsert_preorder(record: dict[str, Any]) -> None:
             {
                 "preorder_id": record["preorderId"],
                 "preorder_code": record["preorderCode"],
+                "organization_id": record.get("organizationId"),
                 "customer_id": record["customerId"],
                 "product_sku_id": record["productSkuId"],
                 "committed_qty": record["committedQty"],
@@ -145,6 +150,7 @@ def fetch_preorder(preorder_id: str) -> dict[str, Any] | None:
                     preorder_id,
                     tenant_id,
                     preorder_code,
+                    organization_id,
                     customer_id,
                     product_sku_id,
                     committed_qty,
@@ -249,6 +255,7 @@ def increment_allocated_qty_atomic(preorder_id: str, qty_increment: float) -> di
                     preorder_id,
                     tenant_id,
                     preorder_code,
+                    organization_id,
                     customer_id,
                     product_sku_id,
                     committed_qty,
@@ -298,6 +305,7 @@ def decrement_allocated_qty_atomic(preorder_id: str, qty_decrement: float) -> di
                     preorder_id,
                     tenant_id,
                     preorder_code,
+                    organization_id,
                     customer_id,
                     product_sku_id,
                     committed_qty,
@@ -363,6 +371,7 @@ def increment_delivered_qty_atomic(preorder_id: str, qty_increment: float) -> di
                     preorder_id,
                     tenant_id,
                     preorder_code,
+                    organization_id,
                     customer_id,
                     product_sku_id,
                     committed_qty,

@@ -28,6 +28,13 @@ Nó chỉ chốt:
 
 | Tên trong tài liệu này | Tên implementation / canonical alias |
 |---|---|
+| Project / Value Stream Scope | `ProjectScope` |
+| Project Assignment | `ProjectAssignment` |
+| Contribution Ledger | `ProjectContributionEvent` |
+| Shared Resource | `SharedResource` |
+| Cost Record | `CostRecord` |
+| Revenue Record | `RevenueRecord` |
+| Financial Allocation | `FinancialAllocation` |
 | Customer | `CustomerProfile` |
 | Customer Preference | `CustomerPreference` |
 | Preorder | `Preorder` |
@@ -81,6 +88,7 @@ Một domain có thể xuất hiện ở nhiều hệ và nhiều dashboard, nh�
 | Domain | Canonical owner | Core phải giữ gì | Hệ ngoài chỉ giữ gì |
 |---|---|---|---|
 | Organization identity | Agri OS Core | legal-operating owner identity, organization code, organization profile tối thiểu, rollout policy cho association | integration systems chỉ giữ external mapping hoặc contract riêng theo nhu cầu của từng org |
+| Project / value stream scope | Agri OS Core | project scope identity, type, status, parent-child grouping, assignment rules, contribution and financial attribution baseline | ERP/CRM/LiteFarm chỉ giữ mapping hoặc project refs nếu integration slice cần |
 | Customer identity | Agri OS Core | customer profile, customer code, external mappings | CRM/ERP chỉ giữ mapped record theo nhu cầu riêng |
 | Customer preference confirmed | Agri OS Core | confirmed preference và operational segment dùng cho workflow | CRM và AI chỉ cung cấp candidate/input |
 | Preorder | Agri OS Core | commitment, quota balance, trạng thái preorder | ERP/CRM chỉ nhận summary nếu cần |
@@ -93,6 +101,7 @@ Một domain có thể xuất hiện ở nhiều hệ và nhiều dashboard, nh�
 
 ### Rule baseline
 - Core giữ `Organization` như business owner aggregate mới, nhưng không được dùng nó để cướp ownership của `CustomerProfile`, `Preorder`, `SalesOrder`, `LotBatch`, `Plot`, hay `CropCycle`.
+- `ProjectScope` là lớp scope dưới `Organization`, không thay `Organization` làm owner aggregate và không tự biến thành hard permission boundary trong slice đầu.
 - Core không được tạo source of truth thứ hai cho `accounting final` hoặc `conversations`.
 - ERP, LiteFarm, CRM không được tạo source of truth thứ hai cho `preorder`, `order vận hành`, `lot`, `allocation`.
 - Nếu `plot/crop` do LiteFarm giữ sâu, tenant đó vẫn phải chốt rõ snapshot tối thiểu nào đi vào Core.
@@ -155,6 +164,181 @@ Thứ tự rollout chi tiết xem ở `10-assumptions-and-migration-path.md`.
 - aggregate này không thay `tenant_id`
 - phase rollout đầu chỉ cần aggregate standalone; association sang farm-side và commercial-side là slice tiếp theo
 - brand/business-facing identity ở trong profile của `Organization`, không phải aggregate riêng trong baseline hiện tại
+
+## 4.0A Project / Value Stream Scope
+**Mục đích:** giữ lớp scope mềm để gom và theo dõi một dòng giá trị, initiative, experience, hoặc grouping node dưới một `Organization`.
+
+**Source of truth:** Agri OS Core
+
+### Field tối thiểu
+- `project_scope_id`
+- `organization_id`
+- `project_scope_code`
+- `name`
+- `scope_type`
+- `status`
+- `season_year`
+- `owner_actor_id`
+- `description`
+- `parent_project_scope_id`
+- `metadata_json`
+
+### Field nên có
+- `started_at`
+- `ended_at`
+- `tags`
+- `reporting_policy`
+- `attribution_mode`
+
+### Rule baseline
+- `ProjectScope` là subordinate scope của `Organization`, không phải owner aggregate song song với `Organization`
+- một `ProjectScope` có thể đại diện cho gạo mùa 2026, ngải cứu, hoa cúc, mật ong, Farm Visit, retreat, gói quà, hoặc một household livelihood stream
+- không ép mọi record canonical phải mang `project_scope_id` ngay; rollout theo assignment hoặc nullable propagation từng domain slice
+- `value stream` là business alias; canonical term trong model là `ProjectScope`
+
+## 4.0B Project Assignment
+**Mục đích:** gắn một record nghiệp vụ vào một hoặc nhiều `ProjectScope` mà không phá write path hiện tại.
+
+**Source of truth:** Agri OS Core
+
+### Field tối thiểu
+- `project_assignment_id`
+- `project_scope_id`
+- `target_type`
+- `target_id`
+- `assignment_role`
+- `is_primary`
+- `attribution_weight`
+- `attribution_kind`
+- `source`
+- `confidence_level`
+- `effective_at`
+- `ended_at`
+- `confirmed_by`
+- `confirmed_at`
+
+### Rule baseline
+- cùng một target có thể thuộc nhiều `ProjectScope`
+- `attribution_kind` phải tách được assignment dùng cho impact reporting với assignment đủ điều kiện financial reporting
+- `unassigned` là trạng thái dữ liệu hợp lệ khi chưa có deterministic attribution
+
+## 4.0C Project Contribution Event
+**Mục đích:** ghi nhận ai đóng góp gì vào một `ProjectScope`.
+
+**Source of truth:** Agri OS Core
+
+### Field tối thiểu
+- `project_contribution_event_id`
+- `project_scope_id`
+- `organization_id`
+- `actor_id`
+- `subject_type`
+- `subject_id`
+- `contribution_type`
+- `role`
+- `quantity`
+- `unit`
+- `estimated_value`
+- `currency`
+- `status`
+- `confirmed_by`
+- `confirmed_at`
+- `source`
+- `metadata_json`
+- `created_at`
+
+### Rule baseline
+- ledger này là append-only; không silent edit contribution đã ghi
+- contribution confirmation là fact riêng cần audit
+- một contribution có thể đi kèm subject như order, lot, content asset, customer source, hay shared resource allocation
+
+## 4.0D Shared Resource
+**Mục đích:** giữ canonical danh mục tài nguyên được nhiều `ProjectScope` cùng sử dụng.
+
+**Source of truth:** Agri OS Core
+
+### Field tối thiểu
+- `shared_resource_id`
+- `organization_id`
+- `resource_code`
+- `name`
+- `resource_type`
+- `status`
+- `capacity_value`
+- `capacity_unit`
+- `description`
+
+### Rule baseline
+- shared resource không phải lot inventory hay allocation record của bán hàng
+- một shared resource cần đi kèm resource allocation hoặc cost allocation khi được nhiều scope dùng chung
+
+## 4.0E Cost Record
+**Mục đích:** giữ operational cost truth đủ dùng để tính hiệu quả theo `ProjectScope`.
+
+**Source of truth:** Agri OS Core cho operational P&L; ERP vẫn có thể giữ accounting final
+
+### Field tối thiểu
+- `cost_record_id`
+- `organization_id`
+- `project_scope_id`
+- `cost_type`
+- `amount`
+- `currency`
+- `recognized_at`
+- `source_object_type`
+- `source_object_id`
+- `attribution_policy`
+- `metadata_json`
+
+### Rule baseline
+- `project_scope_id` có thể null khi cost ban đầu chưa được assign rõ
+- nếu cost phục vụ nhiều scope, phải đi qua `FinancialAllocation` thay vì duplicate fact
+
+## 4.0F Revenue Record
+**Mục đích:** giữ operational revenue truth đủ dùng để tính hiệu quả theo `ProjectScope`.
+
+**Source of truth:** Agri OS Core cho operational P&L; ERP vẫn có thể giữ invoice/journal final
+
+### Field tối thiểu
+- `revenue_record_id`
+- `organization_id`
+- `project_scope_id`
+- `revenue_type`
+- `gross_amount`
+- `net_amount`
+- `currency`
+- `recognized_at`
+- `source_object_type`
+- `source_object_id`
+- `customer_id`
+- `metadata_json`
+
+### Rule baseline
+- revenue có thể seed từ delivered order, experience booking, package sale, hoặc campaign conversion đã confirm
+- nếu revenue phục vụ nhiều scope, phải đi qua `FinancialAllocation`
+
+## 4.0G Financial Allocation
+**Mục đích:** chia một `CostRecord` hoặc `RevenueRecord` sang nhiều `ProjectScope` một cách minh bạch.
+
+**Source of truth:** Agri OS Core
+
+### Field tối thiểu
+- `financial_allocation_id`
+- `source_record_type`
+- `source_record_id`
+- `project_scope_id`
+- `allocation_basis`
+- `allocation_weight`
+- `allocated_amount`
+- `currency`
+- `confidence_level`
+- `confirmed_by`
+- `confirmed_at`
+
+### Rule baseline
+- không duplicate cost hoặc revenue facts để xử lý shared attribution
+- report tài chính phải chỉ dùng allocations đủ điều kiện financial
+- report impact có thể đọc thêm assignments hoặc allocations observational mà không làm bẩn P&L
 
 ## 4.1 Customer
 **Mục đích:** giữ canonical customer identity.

@@ -14,6 +14,23 @@ Sơ đồ này mô tả các event mốc của chuỗi giá trị và các comma
 
 ```mermaid
 flowchart LR
+    subgraph ScopeDomain["Project Scope / Economics [Phase 2 🔜]"]
+        S0["Command: CreateProjectScope"] --> S1["Event: ProjectScopeCreated"]
+        S2["Command: UpdateProjectScope"] --> S3["Event: ProjectScopeUpdated"]
+        S4["Command: ActivateProjectScope"] --> S5["Event: ProjectScopeActivated"]
+        S6["Command: PauseProjectScope"] --> S7["Event: ProjectScopePaused"]
+        S8["Command: CloseProjectScope"] --> S9["Event: ProjectScopeClosed"]
+        S10["Command: ArchiveProjectScope"] --> S11["Event: ProjectScopeArchived"]
+        S12["Command: AddProjectAssignment"] --> S13["Event: ProjectAssignmentAdded"]
+        S14["Command: ConfirmProjectAssignment"] --> S15["Event: ProjectAssignmentConfirmed"]
+        S16["Command: RecordContribution"] --> S17["Event: ProjectContributionRecorded"]
+        S18["Command: ConfirmContribution"] --> S19["Event: ProjectContributionConfirmed"]
+        S20["Command: RecordCost"] --> S21["Event: CostRecorded"]
+        S22["Command: RecordRevenue"] --> S23["Event: RevenueRecorded"]
+        S24["Command: AllocateSharedResource"] --> S25["Event: SharedResourceAllocated"]
+        S26["Command: RecordFinancialAllocation"] --> S27["Event: FinancialAllocationRecorded"]
+    end
+
     subgraph CustomerDomain["Customer / Demand [Phase 1 ✅]"]
         C0["Command: CreateCustomer"] --> E0["Event: CustomerCreated\norder.created → CustomerCreated"]
         C2["Command: UpdatePreference"] --> E2["Event: CustomerPreferenceUpdated"]
@@ -69,10 +86,16 @@ flowchart LR
     O5 --> O7
     O7 --> O9
     O9 --> E2
+    S1 --> S12
+    S13 --> S21
+    S13 --> S23
+    S13 --> S24
+    S17 --> S19
 
     P1["Policy: only released lot can allocate"] -.-> O2
     P2["Policy: packed order cancel needs approval [Phase 2 🔜]"] -.-> O13
     P3["Policy: minimum evidence before QC [Phase 2 🔜]"] -.-> Q1
+    P4["Policy: project scope là optional soft scope; `unassigned` là hợp lệ trong rollout"] -.-> S12
 ```
 
 ## Event Name Reference (Phase 1)

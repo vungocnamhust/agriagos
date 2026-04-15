@@ -86,7 +86,7 @@ def fetch_available_lots_board(product_sku_id: str | None) -> list[dict[str, Any
         return []
 
     query = """
-        SELECT lot_id, lot_code, product_sku_id, released_qty, available_qty, status
+        SELECT lot_id, lot_code, organization_id, product_sku_id, released_qty, available_qty, status
         FROM available_lots_board
     """
     params: dict[str, Any] = {}
@@ -102,6 +102,7 @@ def fetch_available_lots_board(product_sku_id: str | None) -> list[dict[str, Any
         {
             "lotId": str(row["lot_id"]),
             "lotCode": row["lot_code"],
+            "organizationId": str(row["organization_id"]) if row["organization_id"] is not None else None,
             "productSkuId": str(row["product_sku_id"]),
             "releasedQty": _db.to_float(row["released_qty"]),
             "availableQty": _db.to_float(row["available_qty"]),
@@ -179,7 +180,7 @@ def fetch_pending_fulfillment_board() -> list[dict[str, Any]]:
         rows = session.execute(
             text(
                 """
-                SELECT order_id, order_code, customer_name, status, shipping_deadline
+                SELECT order_id, order_code, organization_id, customer_name, status, shipping_deadline
                 FROM pending_fulfillment_board
                 ORDER BY shipping_deadline NULLS LAST, order_code
                 """
@@ -190,6 +191,7 @@ def fetch_pending_fulfillment_board() -> list[dict[str, Any]]:
         {
             "orderId": str(row["order_id"]),
             "orderCode": row["order_code"],
+            "organizationId": str(row["organization_id"]) if row["organization_id"] is not None else None,
             "customerName": row["customer_name"],
             "status": row["status"],
             "shippingDeadline": _iso(row["shipping_deadline"]),

@@ -68,6 +68,18 @@ Policy baseline cho runtime hiện tại và các slice tiếp theo:
 - việc một role nào đó được thao tác records thuộc một organization không tự động đồng nghĩa role đó được sửa organization aggregate
 - org-scoped RBAC/ABAC và membership theo organization là phase sau, không được ngầm giả định đã tồn tại
 
+### 3.7 ProjectScope baseline policy
+`ProjectScope` là lớp soft scope dưới `Organization`. PR docs này chỉ chốt policy baseline; runtime authz sẽ rollout theo các slice sau.
+
+Policy baseline:
+- Founder / Super Admin và Admin là nhóm chính được tạo, sửa, activate, pause, close, archive `ProjectScope`
+- Farm Manager, Ops, Sales có thể là owner nghiệp vụ của records nằm trong một scope, nhưng không mặc định có quyền mutate `ProjectScope` aggregate
+- việc một role được gắn record vào scope không tự động đồng nghĩa role đó được sửa scope profile hoặc parent-child grouping
+- assignment sang `ProjectScope` nên mở theo domain-owner lane: Farm Manager cho plot/crop/lot, Sales hoặc Admin cho preorder/order/customer source, Ops cho inventory movement, Accountant hoặc Admin cho financial allocations
+- confirmation của contribution hoặc financially eligible assignment là lane nhạy cảm; Founder / Super Admin / Admin là baseline approvers, có thể mở thêm approver role riêng ở phase sau
+- P&L theo `ProjectScope` là read surface nhạy cảm; Founder / Super Admin / Admin / Accountant là baseline readers, Viewer / Analyst chỉ nên vào qua read models được duyệt
+- project-scoped membership, per-scope ABAC, và delegated agent permissions là phase sau; docs này không ngầm khẳng định runtime đã enforce các lane đó
+
 ---
 
 ## 4. Phạm vi quyền theo domain

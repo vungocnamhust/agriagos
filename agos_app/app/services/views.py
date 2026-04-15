@@ -145,6 +145,7 @@ def get_available_lots_board(product_sku_id: str | None = None) -> AvailableLotL
         AvailableLotView(
             lotId=lot["lotId"],
             lotCode=lot["lotCode"],
+            organizationId=lot.get("organizationId"),
             productSkuId=lot["productSkuId"],
             releasedQty=lot["releasedQty"],
             availableQty=lot["availableQty"],
@@ -168,6 +169,7 @@ def get_pending_fulfillment() -> PendingFulfillmentListResponse:
         PendingFulfillmentView(
             orderId=o["orderId"],
             orderCode=o["orderCode"],
+            organizationId=_string_value(o.get("organizationId")),
             customerName=customer_map.get(o["customerId"], "Unknown"),
             status=o["status"],
             shippingDeadline=o.get("deliveryDateExpected"),

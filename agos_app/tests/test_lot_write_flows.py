@@ -37,6 +37,7 @@ def test_create_lot_records_event_audit_and_idempotency(monkeypatch: pytest.Monk
         {
             "cropCycleId": "cycle-1",
             "plotId": "plot-1",
+            "organizationId": "org-lot-1",
             "cropName": "rice",
             "growthStage": "harvested",
             "status": "harvested",
@@ -55,6 +56,7 @@ def test_create_lot_records_event_audit_and_idempotency(monkeypatch: pytest.Monk
     )
 
     assert memory.get_lot(response.data.lotId) is not None
+    assert memory.get_lot(response.data.lotId)["organizationId"] == "org-lot-1"
     assert memory.list_events()[-1]["eventName"] == "lot.harvest.created"
     assert memory.list_audit_logs()[-1]["actionName"] == "lot.create"
     assert memory.get_idempotent_result("idem-lot")["data"]["lotId"] == response.data.lotId
@@ -62,10 +64,21 @@ def test_create_lot_records_event_audit_and_idempotency(monkeypatch: pytest.Monk
 
 def test_create_processed_lot_records_processed_event(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(lots.postgres_sync, "is_enabled", lambda: False)
+    memory.save_organization(
+        "org-lot-process-1",
+        {
+            "organizationId": "org-lot-process-1",
+            "organizationCode": "ORG-LOT-PROCESS-1",
+            "name": "Processed Lot Org",
+            "organizationType": "family_business",
+            "status": "active",
+        },
+    )
 
     response = lots.create_processed_lot(
         CreateProcessedLotRequest(
             productSkuId="sku-1",
+            organizationId="org-lot-process-1",
             processRefId="batch-1",
             actualQty=18,
             harvestOrProductionDate="2026-04-11",
@@ -74,6 +87,7 @@ def test_create_processed_lot_records_processed_event(monkeypatch: pytest.Monkey
     )
 
     assert response.data.sourceType == "processing_batch"
+    assert response.data.organizationId == "org-lot-process-1"
     assert memory.list_events()[-1]["eventName"] == "lot.processed.created"
 
 

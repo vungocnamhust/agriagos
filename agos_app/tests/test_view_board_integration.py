@@ -145,9 +145,46 @@ def test_fetch_available_lots_board_filters_to_released_positive_qty_and_honors_
     postgres_db_session.execute(
         text(
             """
+            INSERT INTO organizations (
+                organization_id,
+                organization_code,
+                name,
+                organization_type,
+                status
+            ) VALUES (
+                CAST(:organization_id AS uuid),
+                :organization_code,
+                :name,
+                'family_business',
+                'active'
+            )
+            ON CONFLICT (organization_id) DO NOTHING
+            """
+        ),
+        {
+            "organization_id": str(uuid.uuid4()),
+            "organization_code": f"ORG-LOT-{code_suffix}",
+            "name": "Lot View Org",
+        },
+    )
+    organization_id = postgres_db_session.execute(
+        text(
+            """
+            SELECT organization_id
+            FROM organizations
+            WHERE organization_code = :organization_code
+            """
+        ),
+        {"organization_code": f"ORG-LOT-{code_suffix}"},
+    ).scalar_one()
+
+    postgres_db_session.execute(
+        text(
+            """
             INSERT INTO lots (
                 lot_id,
                 lot_code,
+                organization_id,
                 product_sku_id,
                 source_type,
                 source_ref_id,
@@ -161,6 +198,7 @@ def test_fetch_available_lots_board_filters_to_released_positive_qty_and_honors_
             (
                 CAST(:lot_id_1 AS uuid),
                 :lot_code_1,
+                CAST(:organization_id AS uuid),
                 CAST(:sku_1 AS uuid),
                 'crop_cycle',
                 'cycle-a',
@@ -174,6 +212,7 @@ def test_fetch_available_lots_board_filters_to_released_positive_qty_and_honors_
             (
                 CAST(:lot_id_2 AS uuid),
                 :lot_code_2,
+                NULL,
                 CAST(:sku_1 AS uuid),
                 'crop_cycle',
                 'cycle-b',
@@ -187,6 +226,7 @@ def test_fetch_available_lots_board_filters_to_released_positive_qty_and_honors_
             (
                 CAST(:lot_id_3 AS uuid),
                 :lot_code_3,
+                NULL,
                 CAST(:sku_2 AS uuid),
                 'crop_cycle',
                 'cycle-c',
@@ -200,6 +240,7 @@ def test_fetch_available_lots_board_filters_to_released_positive_qty_and_honors_
             (
                 CAST(:lot_id_4 AS uuid),
                 :lot_code_4,
+                NULL,
                 CAST(:sku_2 AS uuid),
                 'crop_cycle',
                 'cycle-d',
@@ -215,6 +256,7 @@ def test_fetch_available_lots_board_filters_to_released_positive_qty_and_honors_
         {
             "lot_id_1": str(uuid.uuid4()),
             "lot_code_1": f"LOT-IT-{code_suffix}-1",
+            "organization_id": str(organization_id),
             "lot_id_2": str(uuid.uuid4()),
             "lot_code_2": f"LOT-IT-{code_suffix}-2",
             "lot_id_3": str(uuid.uuid4()),
@@ -233,6 +275,7 @@ def test_fetch_available_lots_board_filters_to_released_positive_qty_and_honors_
 
     assert [row["lotCode"] for row in scoped_all_rows] == [f"LOT-IT-{code_suffix}-3", f"LOT-IT-{code_suffix}-1"]
     assert [row["lotCode"] for row in scoped_filtered_rows] == [f"LOT-IT-{code_suffix}-1"]
+    assert scoped_filtered_rows[0]["organizationId"] == str(organization_id)
     assert all(row["status"] == "released" for row in scoped_all_rows)
     assert all(row["availableQty"] > 0 for row in scoped_all_rows)
 
@@ -247,8 +290,33 @@ def test_fetch_pending_fulfillment_board_keeps_phase1_statuses_and_sorts_by_dead
     code_suffix = uuid.uuid4().hex[:8]
     customer_1 = str(uuid.uuid4())
     customer_2 = str(uuid.uuid4())
+    organization_id = str(uuid.uuid4())
     _insert_customer(postgres_db_session, customer_1, f"KH-PEND-{code_suffix}-1", "Alice Pending")
     _insert_customer(postgres_db_session, customer_2, f"KH-PEND-{code_suffix}-2", "Bao Pending")
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO organizations (
+                organization_id,
+                organization_code,
+                name,
+                organization_type,
+                status
+            ) VALUES (
+                CAST(:organization_id AS uuid),
+                :organization_code,
+                :name,
+                'family_business',
+                'active'
+            )
+            """
+        ),
+        {
+            "organization_id": organization_id,
+            "organization_code": f"ORG-PEND-{code_suffix}",
+            "name": "Pending Org",
+        },
+    )
 
     postgres_db_session.execute(
         text(
@@ -256,6 +324,7 @@ def test_fetch_pending_fulfillment_board_keeps_phase1_statuses_and_sorts_by_dead
             INSERT INTO sales_orders (
                 order_id,
                 order_code,
+                organization_id,
                 customer_id,
                 channel,
                 delivery_date_expected,
@@ -266,6 +335,7 @@ def test_fetch_pending_fulfillment_board_keeps_phase1_statuses_and_sorts_by_dead
             (
                 CAST(:order_id_1 AS uuid),
                 :order_code_1,
+                CAST(:organization_id AS uuid),
                 CAST(:customer_1 AS uuid),
                 'zalo',
                 CAST('2026-04-13T00:00:00+00:00' AS timestamptz),
@@ -276,6 +346,7 @@ def test_fetch_pending_fulfillment_board_keeps_phase1_statuses_and_sorts_by_dead
             (
                 CAST(:order_id_2 AS uuid),
                 :order_code_2,
+                NULL,
                 CAST(:customer_2 AS uuid),
                 'phone',
                 NULL,
@@ -286,6 +357,7 @@ def test_fetch_pending_fulfillment_board_keeps_phase1_statuses_and_sorts_by_dead
             (
                 CAST(:order_id_3 AS uuid),
                 :order_code_3,
+                NULL,
                 CAST(:customer_1 AS uuid),
                 'admin',
                 CAST('2026-04-14T00:00:00+00:00' AS timestamptz),
@@ -296,6 +368,7 @@ def test_fetch_pending_fulfillment_board_keeps_phase1_statuses_and_sorts_by_dead
             (
                 CAST(:order_id_4 AS uuid),
                 :order_code_4,
+                NULL,
                 CAST(:customer_2 AS uuid),
                 'web',
                 CAST('2026-04-12T00:00:00+00:00' AS timestamptz),
@@ -316,6 +389,7 @@ def test_fetch_pending_fulfillment_board_keeps_phase1_statuses_and_sorts_by_dead
             "order_code_4": f"ORD-PEND-{code_suffix}-4",
             "customer_1": customer_1,
             "customer_2": customer_2,
+            "organization_id": organization_id,
         },
     )
 
@@ -329,6 +403,7 @@ def test_fetch_pending_fulfillment_board_keeps_phase1_statuses_and_sorts_by_dead
     ]
     assert [row["status"] for row in scoped_rows] == ["confirmed", "shipped", "packed"]
     assert [row["customerName"] for row in scoped_rows] == ["Alice Pending", "Alice Pending", "Bao Pending"]
+    assert [row["organizationId"] for row in scoped_rows] == [organization_id, None, None]
 
 
 @pytest.mark.postgres_integration
@@ -714,13 +789,39 @@ def test_pending_fulfillment_endpoint_reads_real_postgres_projection(
 
     code_suffix = uuid.uuid4().hex[:8]
     customer_id = str(uuid.uuid4())
+    organization_id = str(uuid.uuid4())
     _insert_customer(postgres_db_session, customer_id, f"KH-PF-{code_suffix}", "Pending Endpoint")
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO organizations (
+                organization_id,
+                organization_code,
+                name,
+                organization_type,
+                status
+            ) VALUES (
+                CAST(:organization_id AS uuid),
+                :organization_code,
+                :name,
+                'family_business',
+                'active'
+            )
+            """
+        ),
+        {
+            "organization_id": organization_id,
+            "organization_code": f"ORG-PF-{code_suffix}",
+            "name": "Pending Endpoint Org",
+        },
+    )
     postgres_db_session.execute(
         text(
             """
             INSERT INTO sales_orders (
                 order_id,
                 order_code,
+                organization_id,
                 customer_id,
                 channel,
                 delivery_date_expected,
@@ -731,6 +832,7 @@ def test_pending_fulfillment_endpoint_reads_real_postgres_projection(
             (
                 CAST(:order_id_1 AS uuid),
                 :order_code_1,
+                CAST(:organization_id AS uuid),
                 CAST(:customer_id AS uuid),
                 'phone',
                 CAST('2026-04-16T00:00:00+00:00' AS timestamptz),
@@ -741,6 +843,7 @@ def test_pending_fulfillment_endpoint_reads_real_postgres_projection(
             (
                 CAST(:order_id_2 AS uuid),
                 :order_code_2,
+                NULL,
                 CAST(:customer_id AS uuid),
                 'phone',
                 NULL,
@@ -756,6 +859,7 @@ def test_pending_fulfillment_endpoint_reads_real_postgres_projection(
             "order_id_2": str(uuid.uuid4()),
             "order_code_2": f"ORD-PF-{code_suffix}-2",
             "customer_id": customer_id,
+            "organization_id": organization_id,
         },
     )
 
@@ -764,6 +868,7 @@ def test_pending_fulfillment_endpoint_reads_real_postgres_projection(
 
     assert response.status_code == 200
     assert [row["orderCode"] for row in scoped_rows] == [f"ORD-PF-{code_suffix}-1", f"ORD-PF-{code_suffix}-2"]
+    assert [row["organizationId"] for row in scoped_rows] == [organization_id, None]
     assert [row["status"] for row in scoped_rows] == ["confirmed", "packed"]
 
 

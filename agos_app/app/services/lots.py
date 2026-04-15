@@ -33,6 +33,7 @@ from app.models.lots import (
 from app.services import audit as audit_service
 from app.services.read_authz import authorize_read_surface
 from app.store import farm as farm_store
+from app.store import organizations as organization_store
 from app.store.lots import (
     append_lot_evidence,
     create_lot_evidence,
@@ -110,6 +111,7 @@ def _build_lot_detail(record: dict[str, Any]) -> LotDetail:
     return LotDetail(
         lotId=record["lotId"],
         lotCode=record["lotCode"],
+        organizationId=record.get("organizationId"),
         productSkuId=record["productSkuId"],
         sourceType=record["sourceType"],
         sourceRefId=record["sourceRefId"],
@@ -165,6 +167,26 @@ def _crop_cycle_exists(crop_cycle_id: str) -> bool:
     return any(cycle.get("cropCycleId") == crop_cycle_id for cycle in store.list_crop_cycles())
 
 
+def _organization_exists(organization_id: str) -> bool:
+    if postgres_sync.is_enabled():
+        return organization_store.organization_exists(organization_id)
+    return store.get_organization(organization_id) is not None
+
+
+def _resolve_crop_cycle_organization_id(crop_cycle_id: str) -> str | None:
+    if postgres_sync.is_enabled():
+        record = farm_store.fetch_crop_cycle(crop_cycle_id)
+    else:
+        record = next(
+            (cycle for cycle in store.list_crop_cycles() if cycle.get("cropCycleId") == crop_cycle_id),
+            None,
+        )
+    if record is None:
+        return None
+    value = record.get("organizationId")
+    return str(value) if value is not None else None
+
+
 def _validate_harvested_lot_source(source_type: str, source_ref_id: str) -> None:
     if source_type != "crop_cycle":
         raise HTTPException(status_code=422, detail="Unsupported sourceType.")
@@ -179,6 +201,17 @@ def _validate_processed_lot_source(process_ref_id: str) -> None:
         raise HTTPException(status_code=422, detail="processRefId is required.")
 
 
+def _validate_organization_id(organization_id: str | None) -> str | None:
+    if organization_id is None:
+        return None
+    normalized = organization_id.strip()
+    if not normalized:
+        raise HTTPException(status_code=422, detail="organizationId cannot be blank.")
+    if not _organization_exists(normalized):
+        raise HTTPException(status_code=422, detail="Referenced organization was not found.")
+    return normalized
+
+
 def _determine_initial_status(payload: CreateHarvestedLotRequest) -> str:
     if payload.requiresQc:
         return LotStatus.qc_pending.value
@@ -187,6 +220,7 @@ def _determine_initial_status(payload: CreateHarvestedLotRequest) -> str:
 
 def _create_lot_record(
     *,
+    organization_id: str | None,
     product_sku_id: str,
     source_type: str,
     source_ref_id: str,
@@ -202,6 +236,7 @@ def _create_lot_record(
         "lotId": lot_id,
         "tenantId": "default",
         "lotCode": _new_lot_code(product_sku_id),
+        "organizationId": organization_id,
         "productSkuId": product_sku_id,
         "sourceType": source_type,
         "sourceRefId": source_ref_id,
@@ -416,6 +451,7 @@ def create_harvested_lot(payload: CreateHarvestedLotRequest) -> LotResponse:
         _validate_harvested_lot_source(payload.sourceType, payload.sourceRefId)
         unit = _normalize_unit(payload.unit)
         initial_status = _determine_initial_status(payload)
+        organization_id = _resolve_crop_cycle_organization_id(payload.sourceRefId)
     except HTTPException as exc:
         reason_code = "invalid_quantity"
         if exc.detail == "Unsupported sourceType.":
@@ -437,6 +473,7 @@ def create_harvested_lot(payload: CreateHarvestedLotRequest) -> LotResponse:
         raise
 
     record = _create_lot_record(
+        organization_id=organization_id,
         product_sku_id=payload.productSkuId,
         source_type=payload.sourceType,
         source_ref_id=payload.sourceRefId,
@@ -475,12 +512,17 @@ def create_processed_lot(payload: CreateProcessedLotRequest) -> LotResponse:
         _validate_processed_lot_source(payload.processRefId)
         unit = _normalize_unit(payload.unit)
         status = LotStatus.qc_pending.value if payload.requiresQc else LotStatus.harvested.value
+        organization_id = _validate_organization_id(payload.organizationId)
     except HTTPException as exc:
         reason_code = "invalid_quantity"
         if exc.detail == "processRefId is required.":
             reason_code = "invalid_source_ref"
         elif exc.detail == "Unsupported lot unit.":
             reason_code = "invalid_unit"
+        elif exc.detail == "organizationId cannot be blank.":
+            reason_code = "invalid_organization_ref"
+        elif exc.detail == "Referenced organization was not found.":
+            reason_code = "organization_not_found"
         _audit_lot(
             "lot.processed_create",
             f"pending:processing_batch:{payload.processRefId}",
@@ -492,6 +534,7 @@ def create_processed_lot(payload: CreateProcessedLotRequest) -> LotResponse:
         raise
 
     record = _create_lot_record(
+        organization_id=organization_id,
         product_sku_id=payload.productSkuId,
         source_type="processing_batch",
         source_ref_id=payload.processRefId,

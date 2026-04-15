@@ -114,6 +114,33 @@ def _seed_customer_and_sku(postgres_db_session: Session) -> tuple[str, str]:
     return customer_id, sku_id
 
 
+def _seed_organization(postgres_db_session: Session, organization_id: str) -> None:
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO organizations (
+                organization_id,
+                organization_code,
+                name,
+                organization_type,
+                status
+            ) VALUES (
+                CAST(:organization_id AS uuid),
+                :organization_code,
+                :name,
+                    'household_producer',
+                'active'
+            )
+            """
+        ),
+        {
+            "organization_id": organization_id,
+            "organization_code": f"ORG-{organization_id[-6:].upper()}",
+            "name": "Preorder Org",
+        },
+    )
+
+
 @pytest.mark.postgres_integration
 def test_preorder_core_persists_adjustment_history_and_remaining_qty(
     postgres_db_session: Session,
@@ -242,6 +269,40 @@ def test_preorder_core_persists_adjustment_history_and_remaining_qty(
     assert float(adjustment_rows[0]["new_committed_qty"]) == 25
     assert adjustment_rows[0]["reason"] == "expand commitment"
     assert adjustment_rows[0]["actor_id"] == "sales-2"
+
+
+@pytest.mark.postgres_integration
+def test_create_preorder_persists_organization_id_on_postgres_path(
+    postgres_db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _bind_postgres_preorder_service(monkeypatch, postgres_db_session)
+    customer_id, sku_id = _seed_customer_and_sku(postgres_db_session)
+    organization_id = str(uuid.uuid4())
+    _seed_organization(postgres_db_session, organization_id)
+
+    created = preorder_service.create_preorder(
+        CreatePreorderRequest(
+            customerId=customer_id,
+            productSkuId=sku_id,
+            committedQty=20,
+            organizationId=organization_id,
+            meta=Meta(
+                correlationId="corr-pg-preorder-org-create",
+                idempotencyKey="idem-pg-preorder-org-create",
+                actorId="sales-1",
+                actorRole="sales",
+            ),
+        )
+    )
+
+    row = postgres_db_session.execute(
+        text("SELECT organization_id::text FROM preorders WHERE preorder_id = CAST(:preorder_id AS uuid)"),
+        {"preorder_id": created.data.preorderId},
+    ).mappings().one()
+
+    assert row["organization_id"] == organization_id
+    assert created.data.organizationId == organization_id
 
 
 @pytest.mark.postgres_integration

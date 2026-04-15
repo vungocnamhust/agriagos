@@ -79,6 +79,42 @@ Rule này áp dụng cho các aggregate đang được harden trong Phase 1 như
 - không nên cho phép cascade cross-domain tự động chỉ vì organization đổi state trong slice đầu
 - việc chặn farm-side hoặc commercial-side actions theo organization state là rollout phase sau, không phải docs này ngầm khẳng định runtime đã enforce
 
+## 2B. ProjectScope state baseline
+
+> `ProjectScope` là docs-first baseline trong PR này. Runtime gateway enforcement sẽ đến sau khi aggregate được implement.
+
+### State
+- `draft`
+- `active`
+- `paused`
+- `closed`
+- `archived`
+
+### Ý nghĩa
+- `draft`: scope mới tạo, đã có identity nhưng chưa sẵn sàng dùng cho vận hành hoặc reporting chuẩn
+- `active`: scope đang được dùng để gắn record, contribution, cost/revenue, và reporting
+- `paused`: scope tạm dừng nhập mới hoặc follow-up nghiệp vụ nhưng chưa kết thúc
+- `closed`: scope đã kết thúc ở mức nghiệp vụ, không nên phát sinh thêm work facts mới trừ correction flows
+- `archived`: scope được rút khỏi lane vận hành thường xuyên nhưng vẫn giữ cho audit và historical reporting
+
+### Transition hợp lệ
+- draft → active
+- draft → archived
+- active → paused
+- active → closed
+- paused → active
+- paused → closed
+- closed → archived
+
+### Guard baseline
+- archive không được ngầm đóng lot, preorder, order, hay shared resource allocations thuộc scope đó
+- `closed` hoặc `archived` không nên tự reopen bằng side effects từ domain khác; nếu cần mở lại phải đi qua explicit policy/action riêng
+- assignment, contribution, cost, revenue, và allocation facts có thể mang trạng thái ledger riêng; không nên model mọi status của chúng thành aggregate state machine giống `ProjectScope`
+
+### Ledger status note
+- `ProjectAssignment` có thể dùng `tentative`, `confirmed`, `ended` như operational statuses, nhưng đây là assignment facts chứ không phải aggregate lifecycle gốc
+- `ProjectContributionEvent` có thể dùng `proposed`, `confirmed`, `rejected`, `reversed`; đây là ledger semantics, không phải state machine của `ProjectScope`
+
 ---
 
 ## 3. Customer state

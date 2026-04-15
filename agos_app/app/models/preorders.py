@@ -13,6 +13,7 @@ class PreorderAdjustmentEntry(BaseModel):
 class PreorderDetail(BaseModel):
     preorderId: str
     preorderCode: str
+    organizationId: str | None = None
     customerId: str
     productSkuId: str
     committedQty: float
@@ -26,6 +27,7 @@ class PreorderDetail(BaseModel):
     adjustmentHistory: list[PreorderAdjustmentEntry] = Field(default_factory=list)
 
 class CreatePreorderRequest(BaseModel):
+    organizationId: str | None = None
     customerId: str
     productSkuId: str
     committedQty: float
