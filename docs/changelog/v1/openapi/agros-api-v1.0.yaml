@@ -712,6 +712,539 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/projects:
+    post:
+      tags:
+      - ProjectScopes
+      summary: Create Project Scope
+      operationId: create_project_scope_api_v1_projects_post
+      parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/ExternalRefHeader'
+      - $ref: '#/components/parameters/DelegatedActorIdHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectScopeRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectScopeResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags:
+      - ProjectScopes
+      summary: List Project Scopes
+      operationId: list_project_scopes_api_v1_projects_get
+      parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/ExternalRefHeader'
+      - $ref: '#/components/parameters/DelegatedActorIdHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectScopeListResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/projects/{project_scope_id}:
+    get:
+      tags:
+      - ProjectScopes
+      summary: Get Project Scope
+      operationId: get_project_scope_api_v1_projects__project_scope_id__get
+      parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/ExternalRefHeader'
+      - $ref: '#/components/parameters/DelegatedActorIdHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
+      - name: project_scope_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Scope Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectScopeDetail'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      tags:
+      - ProjectScopes
+      summary: Update Project Scope
+      operationId: update_project_scope_api_v1_projects__project_scope_id__patch
+      parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/ExternalRefHeader'
+      - $ref: '#/components/parameters/DelegatedActorIdHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
+      - name: project_scope_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Scope Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProjectScopeRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectScopeResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/projects/{project_scope_id}/activate:
+    post:
+      tags:
+      - ProjectScopes
+      summary: Activate Project Scope
+      operationId: activate_project_scope_api_v1_projects__project_scope_id__activate_post
+      parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/ExternalRefHeader'
+      - $ref: '#/components/parameters/DelegatedActorIdHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
+      - name: project_scope_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Scope Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivateProjectScopeRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectScopeResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/projects/{project_scope_id}/pause:
+    post:
+      tags:
+      - ProjectScopes
+      summary: Pause Project Scope
+      operationId: pause_project_scope_api_v1_projects__project_scope_id__pause_post
+      parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/ExternalRefHeader'
+      - $ref: '#/components/parameters/DelegatedActorIdHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
+      - name: project_scope_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Scope Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PauseProjectScopeRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectScopeResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/projects/{project_scope_id}/close:
+    post:
+      tags:
+      - ProjectScopes
+      summary: Close Project Scope
+      operationId: close_project_scope_api_v1_projects__project_scope_id__close_post
+      parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/ExternalRefHeader'
+      - $ref: '#/components/parameters/DelegatedActorIdHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
+      - name: project_scope_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Scope Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CloseProjectScopeRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectScopeResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/projects/{project_scope_id}/archive:
+    post:
+      tags:
+      - ProjectScopes
+      summary: Archive Project Scope
+      operationId: archive_project_scope_api_v1_projects__project_scope_id__archive_post
+      parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/ExternalRefHeader'
+      - $ref: '#/components/parameters/DelegatedActorIdHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
+      - name: project_scope_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Scope Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArchiveProjectScopeRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectScopeResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/projects/{project_scope_id}/assignments:
+    post:
+      tags:
+      - ProjectScopes
+      summary: Create Project Assignment
+      operationId: create_project_assignment_api_v1_projects__project_scope_id__assignments_post
+      parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/ExternalRefHeader'
+      - $ref: '#/components/parameters/DelegatedActorIdHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
+      - name: project_scope_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Scope Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectAssignmentRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectAssignmentResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags:
+      - ProjectScopes
+      summary: List Project Assignments
+      operationId: list_project_assignments_api_v1_projects__project_scope_id__assignments_get
+      parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/ExternalRefHeader'
+      - $ref: '#/components/parameters/DelegatedActorIdHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
+      - name: project_scope_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Scope Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectAssignmentListResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/projects/{project_scope_id}/assignments/{project_assignment_id}/end:
+    post:
+      tags:
+      - ProjectScopes
+      summary: End Project Assignment
+      operationId: end_project_assignment_api_v1_projects__project_scope_id__assignments__project_assignment_id__end_post
+      parameters:
+      - $ref: '#/components/parameters/ActorIdHeader'
+      - $ref: '#/components/parameters/ActorRoleHeader'
+      - $ref: '#/components/parameters/BypassRequestedHeader'
+      - $ref: '#/components/parameters/ExternalRefHeader'
+      - $ref: '#/components/parameters/DelegatedActorIdHeader'
+      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
+      - name: project_scope_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Scope Id
+      - name: project_assignment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Assignment Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EndProjectAssignmentRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectAssignmentResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/preorders:
     post:
       tags:
@@ -3539,6 +4072,445 @@ components:
       - startup_operator
       - other
       title: OrganizationType
+    ProjectScopeDetail:
+      properties:
+        createdAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdat
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        metadata:
+          anyOf:
+          - additionalProperties:
+              type: string
+            type: object
+          - type: 'null'
+          title: Metadata
+        name:
+          type: string
+          title: Name
+        organizationId:
+          type: string
+          title: Organizationid
+        ownerActorId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Owneractorid
+        parentProjectScopeId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Parentprojectscopeid
+        projectScopeCode:
+          type: string
+          title: Projectscopecode
+        projectScopeId:
+          type: string
+          title: Projectscopeid
+        projectScopeType:
+          $ref: '#/components/schemas/ProjectScopeType'
+        seasonYear:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Seasonyear
+        status:
+          $ref: '#/components/schemas/ProjectScopeStatus'
+        updatedAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Updatedat
+      type: object
+      required:
+      - projectScopeId
+      - organizationId
+      - projectScopeCode
+      - name
+      - projectScopeType
+      - status
+      title: ProjectScopeDetail
+    CreateProjectAssignmentRequest:
+      properties:
+        attributionWeight:
+          anyOf:
+          - maximum: 1.0
+            minimum: 0.0
+            type: number
+          - type: 'null'
+          title: Attributionweight
+        isPrimary:
+          type: boolean
+          title: Isprimary
+          default: false
+        metadata:
+          anyOf:
+          - additionalProperties:
+              type: string
+            type: object
+          - type: 'null'
+          title: Metadata
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+        targetId:
+          type: string
+          title: Targetid
+        targetType:
+          $ref: '#/components/schemas/ProjectAssignmentTargetType'
+      type: object
+      required:
+      - targetType
+      - targetId
+      title: CreateProjectAssignmentRequest
+    EndProjectAssignmentRequest:
+      properties:
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+        reason:
+          type: string
+          title: Reason
+      type: object
+      required:
+      - reason
+      title: EndProjectAssignmentRequest
+    ProjectAssignmentDetail:
+      properties:
+        attributionWeight:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Attributionweight
+        createdAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdat
+        endedAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Endedat
+        endedReason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Endedreason
+        isPrimary:
+          type: boolean
+          title: Isprimary
+          default: false
+        metadata:
+          anyOf:
+          - additionalProperties:
+              type: string
+            type: object
+          - type: 'null'
+          title: Metadata
+        projectAssignmentId:
+          type: string
+          title: Projectassignmentid
+        projectScopeId:
+          type: string
+          title: Projectscopeid
+        targetId:
+          type: string
+          title: Targetid
+        targetType:
+          $ref: '#/components/schemas/ProjectAssignmentTargetType'
+      type: object
+      required:
+      - projectAssignmentId
+      - projectScopeId
+      - targetType
+      - targetId
+      title: ProjectAssignmentDetail
+    ProjectAssignmentListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ProjectAssignmentSummary'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: ProjectAssignmentListResponse
+    ProjectAssignmentResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/ProjectAssignmentDetail'
+      type: object
+      required:
+      - data
+      title: ProjectAssignmentResponse
+    ProjectAssignmentSummary:
+      properties:
+        attributionWeight:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Attributionweight
+        createdAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdat
+        endedAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Endedat
+        isPrimary:
+          type: boolean
+          title: Isprimary
+          default: false
+        projectAssignmentId:
+          type: string
+          title: Projectassignmentid
+        projectScopeId:
+          type: string
+          title: Projectscopeid
+        targetId:
+          type: string
+          title: Targetid
+        targetType:
+          $ref: '#/components/schemas/ProjectAssignmentTargetType'
+      type: object
+      required:
+      - projectAssignmentId
+      - projectScopeId
+      - targetType
+      - targetId
+      title: ProjectAssignmentSummary
+    ProjectAssignmentTargetType:
+      type: string
+      enum:
+      - plot
+      - crop_cycle
+      - lot
+      - preorder
+      - order
+      title: ProjectAssignmentTargetType
+    ProjectScopeListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ProjectScopeSummary'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: ProjectScopeListResponse
+    ProjectScopeResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/ProjectScopeDetail'
+      type: object
+      required:
+      - data
+      title: ProjectScopeResponse
+    ProjectScopeStatus:
+      type: string
+      enum:
+      - draft
+      - active
+      - paused
+      - closed
+      - archived
+      title: ProjectScopeStatus
+    ProjectScopeSummary:
+      properties:
+        createdAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdat
+        name:
+          type: string
+          title: Name
+        organizationId:
+          type: string
+          title: Organizationid
+        ownerActorId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Owneractorid
+        projectScopeCode:
+          type: string
+          title: Projectscopecode
+        projectScopeId:
+          type: string
+          title: Projectscopeid
+        projectScopeType:
+          $ref: '#/components/schemas/ProjectScopeType'
+        seasonYear:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Seasonyear
+        status:
+          $ref: '#/components/schemas/ProjectScopeStatus'
+      type: object
+      required:
+      - projectScopeId
+      - organizationId
+      - projectScopeCode
+      - name
+      - projectScopeType
+      - status
+      title: ProjectScopeSummary
+    ProjectScopeType:
+      type: string
+      enum:
+      - value_stream
+      - product_line
+      - household_livelihood
+      - experience
+      - campaign
+      - umbrella_program
+      - shared_service
+      title: ProjectScopeType
+    CreateProjectScopeRequest:
+      properties:
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+        metadata:
+          anyOf:
+          - additionalProperties:
+              type: string
+            type: object
+          - type: 'null'
+          title: Metadata
+        name:
+          type: string
+          title: Name
+        organizationId:
+          type: string
+          title: Organizationid
+        ownerActorId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Owneractorid
+        parentProjectScopeId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Parentprojectscopeid
+        projectScopeType:
+          $ref: '#/components/schemas/ProjectScopeType'
+        seasonYear:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Seasonyear
+      type: object
+      required:
+      - organizationId
+      - name
+      - projectScopeType
+      title: CreateProjectScopeRequest
+    UpdateProjectScopeRequest:
+      properties:
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+        metadata:
+          anyOf:
+          - additionalProperties:
+              type: string
+            type: object
+          - type: 'null'
+          title: Metadata
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        ownerActorId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Owneractorid
+        parentProjectScopeId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Parentprojectscopeid
+        seasonYear:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Seasonyear
+      type: object
+      title: UpdateProjectScopeRequest
+    ActivateProjectScopeRequest:
+      properties:
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      title: ActivateProjectScopeRequest
+    PauseProjectScopeRequest:
+      properties:
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+        reason:
+          type: string
+          title: Reason
+      type: object
+      required:
+      - reason
+      title: PauseProjectScopeRequest
+    CloseProjectScopeRequest:
+      properties:
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+        reason:
+          type: string
+          title: Reason
+      type: object
+      required:
+      - reason
+      title: CloseProjectScopeRequest
+    ArchiveProjectScopeRequest:
+      properties:
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      title: ArchiveProjectScopeRequest
     PauseOrganizationRequest:
       properties:
         meta:

@@ -19,6 +19,8 @@ _customers: dict[str, dict[str, Any]] = {}
 _preferences: dict[str, list[dict[str, Any]]] = defaultdict(list)  # customer_id → [pref]
 _customer_duplicate_candidates: dict[str, dict[str, Any]] = {}
 _organizations: dict[str, dict[str, Any]] = {}
+_project_scopes: dict[str, dict[str, Any]] = {}
+_project_assignments: dict[str, dict[str, Any]] = {}
 
 _preorders: dict[str, dict[str, Any]] = {}
 _orders: dict[str, dict[str, Any]] = {}
@@ -55,6 +57,17 @@ def list_customers() -> list[dict[str, Any]]:
 
 def list_organizations() -> list[dict[str, Any]]:
     return list(_organizations.values())
+
+
+def list_project_scopes() -> list[dict[str, Any]]:
+    return list(_project_scopes.values())
+
+
+def list_project_assignments(project_scope_id: str | None = None) -> list[dict[str, Any]]:
+    items = list(_project_assignments.values())
+    if project_scope_id is not None:
+        items = [item for item in items if item.get("projectScopeId") == project_scope_id]
+    return items
 
 
 def list_customer_preferences(customer_id: str) -> list[dict[str, Any]]:
@@ -101,12 +114,28 @@ def get_organization(organization_id: str) -> dict[str, Any] | None:
     return _organizations.get(organization_id)
 
 
+def get_project_scope(project_scope_id: str) -> dict[str, Any] | None:
+    return _project_scopes.get(project_scope_id)
+
+
+def get_project_assignment(project_assignment_id: str) -> dict[str, Any] | None:
+    return _project_assignments.get(project_assignment_id)
+
+
 def save_customer(customer_id: str, record: dict[str, Any]) -> None:
     _customers[customer_id] = record
 
 
 def save_organization(organization_id: str, record: dict[str, Any]) -> None:
     _organizations[organization_id] = record
+
+
+def save_project_scope(project_scope_id: str, record: dict[str, Any]) -> None:
+    _project_scopes[project_scope_id] = record
+
+
+def save_project_assignment(project_assignment_id: str, record: dict[str, Any]) -> None:
+    _project_assignments[project_assignment_id] = record
 
 
 def customer_phone_exists(phone: str) -> bool:
@@ -186,8 +215,16 @@ def save_plot(plot_id: str, record: dict[str, Any]) -> None:
     _plots[plot_id] = record
 
 
+def get_plot(plot_id: str) -> dict[str, Any] | None:
+    return _plots.get(plot_id)
+
+
 def save_crop_cycle(crop_cycle_id: str, record: dict[str, Any]) -> None:
     _crop_cycles[crop_cycle_id] = record
+
+
+def get_crop_cycle(crop_cycle_id: str) -> dict[str, Any] | None:
+    return _crop_cycles.get(crop_cycle_id)
 
 
 def get_lot_evidence(lot_id: str) -> list[dict[str, Any]]:
@@ -345,6 +382,8 @@ def reset_state() -> None:
     _preferences.clear()
     _customer_duplicate_candidates.clear()
     _organizations.clear()
+    _project_scopes.clear()
+    _project_assignments.clear()
     _preorders.clear()
     _orders.clear()
     _allocations.clear()

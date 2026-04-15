@@ -9,9 +9,12 @@ from alembic.config import Config
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.core import gateway
 from app.services import customers as customer_service
 from app.services import farm as farm_service
 from app.services import organizations as organization_service
+from app.services import project_assignments as project_assignment_service
+from app.services import project_scopes as project_scope_service
 from app.services import views as views_service
 from app.store import _db
 from app.store import farm as farm_store
@@ -33,8 +36,11 @@ def default_to_memory_store(monkeypatch: pytest.MonkeyPatch, request: pytest.Fix
         return
     monkeypatch.setattr(_db, "is_enabled", lambda: False)
     monkeypatch.setattr(postgres_sync, "is_enabled", lambda: False)
+    monkeypatch.setattr(gateway, "postgres_enabled", lambda: False)
     monkeypatch.setattr(customer_service, "postgres_enabled", lambda: False)
     monkeypatch.setattr(organization_service, "postgres_enabled", lambda: False)
+    monkeypatch.setattr(project_assignment_service, "postgres_enabled", lambda: False)
+    monkeypatch.setattr(project_scope_service, "postgres_enabled", lambda: False)
     monkeypatch.setattr(views_service.postgres_sync, "is_enabled", lambda: False)
     monkeypatch.setattr(farm_service.postgres_sync, "is_enabled", lambda: False)
     monkeypatch.setattr(view_store, "is_enabled", lambda: False)

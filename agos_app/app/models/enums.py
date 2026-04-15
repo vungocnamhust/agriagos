@@ -27,6 +27,32 @@ class OrganizationType(str, Enum):
     other = "other"
 
 
+class ProjectScopeStatus(str, Enum):
+    draft = "draft"
+    active = "active"
+    paused = "paused"
+    closed = "closed"
+    archived = "archived"
+
+
+class ProjectScopeType(str, Enum):
+    value_stream = "value_stream"
+    product_line = "product_line"
+    household_livelihood = "household_livelihood"
+    experience = "experience"
+    campaign = "campaign"
+    umbrella_program = "umbrella_program"
+    shared_service = "shared_service"
+
+
+class ProjectAssignmentTargetType(str, Enum):
+    plot = "plot"
+    crop_cycle = "crop_cycle"
+    lot = "lot"
+    preorder = "preorder"
+    order = "order"
+
+
 class PreorderStatus(str, Enum):
     draft = "draft"
     confirmed = "confirmed"

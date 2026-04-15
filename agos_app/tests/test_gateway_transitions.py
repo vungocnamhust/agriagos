@@ -8,8 +8,9 @@ from app.core.gateway import (
     assert_organization_transition,
     assert_order_transition_outcome,
     assert_preorder_transition,
+    assert_project_scope_transition,
 )
-from app.models.enums import LotStatus, OrderStatus, OrganizationStatus, PreorderStatus
+from app.models.enums import LotStatus, OrderStatus, OrganizationStatus, PreorderStatus, ProjectScopeStatus
 
 
 def test_order_transition_outcome_allows_partial_allocate_from_confirmed() -> None:
@@ -117,3 +118,47 @@ def test_organization_closed_is_terminal() -> None:
 
     assert exc_info.value.status_code == 422
     assert exc_info.value.detail == "Organization transition 'activate' not allowed from state 'closed'."
+
+
+def test_project_scope_draft_can_activate() -> None:
+    next_status = assert_project_scope_transition(
+        {"status": ProjectScopeStatus.draft.value},
+        "activate",
+    )
+
+    assert next_status == ProjectScopeStatus.active.value
+
+
+def test_project_scope_draft_can_archive() -> None:
+    next_status = assert_project_scope_transition(
+        {"status": ProjectScopeStatus.draft.value},
+        "archive",
+    )
+
+    assert next_status == ProjectScopeStatus.archived.value
+
+
+def test_project_scope_active_can_pause() -> None:
+    next_status = assert_project_scope_transition(
+        {"status": ProjectScopeStatus.active.value},
+        "pause",
+    )
+
+    assert next_status == ProjectScopeStatus.paused.value
+
+
+def test_project_scope_closed_can_archive() -> None:
+    next_status = assert_project_scope_transition(
+        {"status": ProjectScopeStatus.closed.value},
+        "archive",
+    )
+
+    assert next_status == ProjectScopeStatus.archived.value
+
+
+def test_project_scope_archived_is_terminal() -> None:
+    with pytest.raises(HTTPException) as exc_info:
+        assert_project_scope_transition({"status": ProjectScopeStatus.archived.value}, "activate")
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail == "ProjectScope transition 'activate' not allowed from state 'archived'."

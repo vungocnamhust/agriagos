@@ -105,16 +105,7 @@ def get_customer_360(customer_id: str) -> Customer360View:
     ]
 
     recent_orders = [
-        OrderDetail(
-            orderId=o["orderId"],
-            orderCode=o["orderCode"],
-            customerId=o["customerId"],
-            channel=o["channel"],
-            status=o["status"],
-            paymentStatus=o["paymentStatus"],
-            deliveryDateExpected=o.get("deliveryDateExpected"),
-            lines=[OrderLine(**ln) for ln in o.get("lines", [])],
-        )
+        OrderDetail(**{**o, "lines": [OrderLine(**ln) for ln in o.get("lines", [])]})
         for o in sorted(list_orders(), key=_order_code_desc, reverse=True)
         if o["customerId"] == customer_id
     ][:10]

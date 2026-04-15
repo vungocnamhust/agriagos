@@ -7,7 +7,7 @@ from sqlalchemy import text
 
 from app.store import _db
 
-__all__ = ["fetch_crop_cycle", "fetch_crop_cycles", "fetch_plots", "is_enabled"]
+__all__ = ["fetch_crop_cycle", "fetch_crop_cycles", "fetch_plot", "fetch_plots", "is_enabled"]
 
 
 def is_enabled() -> bool:
@@ -56,6 +56,45 @@ def fetch_plots() -> list[dict[str, Any]]:
         }
         for row in rows
     ]
+
+
+def fetch_plot(plot_id: str) -> dict[str, Any] | None:
+    if not is_enabled():
+        return None
+
+    with _db.read_session() as session:
+        row = session.execute(
+            text(
+                """
+                SELECT
+                    plot_id,
+                    plot_code,
+                    organization_id,
+                    name,
+                    location_text,
+                    area_value,
+                    area_unit,
+                    status
+                FROM plots
+                WHERE plot_id = CAST(:plot_id AS uuid)
+                """
+            ),
+            {"plot_id": plot_id},
+        ).mappings().first()
+
+    if row is None:
+        return None
+
+    return {
+        "plotId": str(row["plot_id"]),
+        "plotCode": row["plot_code"],
+        "organizationId": str(row["organization_id"]) if row["organization_id"] is not None else None,
+        "name": row["name"],
+        "locationText": row["location_text"],
+        "areaValue": _db.to_float(row["area_value"]),
+        "areaUnit": row["area_unit"],
+        "status": row["status"],
+    }
 
 
 def fetch_crop_cycles(plot_id: str | None, status: str | None) -> list[dict[str, Any]]:

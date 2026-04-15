@@ -40,6 +40,11 @@ def generate_organization_code(now: datetime | None = None) -> str:
     return f"ORG-{t:%Y%m}-{_next_seq('ORG', t):04d}"
 
 
+def generate_project_scope_code(now: datetime | None = None) -> str:
+    t = now or _now()
+    return f"PRJ-{t:%Y%m}-{_next_seq('PRJ', t):04d}"
+
+
 def generate_preorder_code(now: datetime | None = None) -> str:
     t = now or _now()
     return f"DT-{t:%Y%m}-{_next_seq('DT', t):04d}"

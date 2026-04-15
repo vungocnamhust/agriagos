@@ -9,7 +9,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from app.models.enums import LotStatus, OrderStatus, OrganizationStatus, PreorderStatus
+from app.models.enums import LotStatus, OrderStatus, OrganizationStatus, PreorderStatus, ProjectScopeStatus
 from app.store import idempotency as idempotency_store
 from app.store import memory as store
 from app.store._db import is_enabled as postgres_enabled
@@ -100,6 +100,25 @@ ORGANIZATION_TRANSITIONS: dict[str, dict[str, str]] = {
         "close": OrganizationStatus.closed.value,
     },
     OrganizationStatus.closed.value: {},
+}
+
+PROJECT_SCOPE_TRANSITIONS: dict[str, dict[str, str]] = {
+    ProjectScopeStatus.draft.value: {
+        "activate": ProjectScopeStatus.active.value,
+        "archive": ProjectScopeStatus.archived.value,
+    },
+    ProjectScopeStatus.active.value: {
+        "pause": ProjectScopeStatus.paused.value,
+        "close": ProjectScopeStatus.closed.value,
+    },
+    ProjectScopeStatus.paused.value: {
+        "activate": ProjectScopeStatus.active.value,
+        "close": ProjectScopeStatus.closed.value,
+    },
+    ProjectScopeStatus.closed.value: {
+        "archive": ProjectScopeStatus.archived.value,
+    },
+    ProjectScopeStatus.archived.value: {},
 }
 
 LEGACY_ORDER_STATES: dict[str, str] = {
@@ -209,5 +228,16 @@ def assert_organization_transition(organization: dict[str, Any], action: str) ->
         raise HTTPException(
             status_code=422,
             detail=f"Organization transition '{action}' not allowed from state '{current}'.",
+        )
+    return allowed[action]
+
+
+def assert_project_scope_transition(project_scope: dict[str, Any], action: str) -> str:
+    current = project_scope.get("status", "")
+    allowed = PROJECT_SCOPE_TRANSITIONS.get(current, {})
+    if action not in allowed:
+        raise HTTPException(
+            status_code=422,
+            detail=f"ProjectScope transition '{action}' not allowed from state '{current}'.",
         )
     return allowed[action]

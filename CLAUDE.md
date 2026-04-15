@@ -110,6 +110,8 @@ Phase 1 runtime stores the implemented core entities in PostgreSQL tables and st
 
 `Organization` is now implemented as a standalone canonical business aggregate for the legal-operating owner via ADR-012, with schema, CRUD/state routes, event emission, and additive `organization_id` propagation on farm-side canonical records plus the first commercial-side canonical records and current Phase 1 read-model surfaces in place. The remaining intentional gap tracked in `docs/changelog/v1/divergence-ledger.md` entry `DL-20260415-01` is staged `organization_id` propagation into integration-facing flows.
 
+Architecture docs now also include `ProjectScope` via ADR-013 as the additive soft value-stream scope under `Organization`. The runtime now includes the standalone `ProjectScope` schema/API slice plus the first assignment lane for `plot`, `crop_cycle`, `lot`, `preorder`, and `order`, while contribution, economics, reporting, and backfill lanes remain deferred and tracked in `docs/changelog/v1/divergence-ledger.md` entry `DL-20260416-01`.
+
 Architecture docs use canonical aliases such as `CustomerProfile`, `Preorder`, `SalesOrder`, `SalesOrderLine`, `ProductSKU`, `LotBatch`, `Plot`, and `CropCycle` for cross-reference with business terms. They may also discuss future or broader entities such as `Farmer` and `CropTask`, but those are not yet implemented in the current Phase 1 runtime.
 
 Vietnamese architecture docs sometimes use shorter business names such as `Customer`, `Order`, and `Lot`. For the mapping between business labels and implementation names, see `docs/changelog/v1/architecture/04-canonical-data-model.md`.
@@ -121,6 +123,7 @@ All endpoints are under `/api/v1/`. The route groups are:
 - `/health` — liveness check
 - `/customers` — customer CRUD and preferences
 - `/organizations` — standalone organization CRUD and state transitions
+- `/projects` — standalone project scope CRUD, state transitions, and project assignments
 - `/preorders` — pre-order management
 - `/orders` — full order lifecycle (create → confirm → allocate → adjust/release allocation → pack → ship → deliver / fail-delivery / cancel)
 - `/lots` — lot/batch management, evidence, and QC reviews
