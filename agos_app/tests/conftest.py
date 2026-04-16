@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.core import gateway
 from app.services import customers as customer_service
 from app.services import farm as farm_service
+from app.services import financial_allocations as financial_allocation_service
 from app.services import organizations as organization_service
 from app.services import project_assignments as project_assignment_service
 from app.services import project_contributions as project_contribution_service
@@ -46,6 +47,7 @@ def default_to_memory_store(monkeypatch: pytest.MonkeyPatch, request: pytest.Fix
     monkeypatch.setattr(project_assignment_service, "postgres_enabled", lambda: False)
     monkeypatch.setattr(project_contribution_service, "postgres_enabled", lambda: False)
     monkeypatch.setattr(project_cost_record_service, "postgres_enabled", lambda: False)
+    monkeypatch.setattr(financial_allocation_service, "postgres_enabled", lambda: False)
     monkeypatch.setattr(project_revenue_record_service, "postgres_enabled", lambda: False)
     monkeypatch.setattr(project_scope_service, "postgres_enabled", lambda: False)
     monkeypatch.setattr(shared_resource_service, "postgres_enabled", lambda: False)

@@ -7,6 +7,11 @@ from fastapi import APIRouter, Request
 
 from app.api.routes._meta import apply_request_correlation, request_meta
 from app.models.common import ErrorResponse
+from app.models.financial_allocations import (
+    CreateFinancialAllocationRequest,
+    FinancialAllocationListResponse,
+    FinancialAllocationResponse,
+)
 from app.models.project_assignments import (
     CreateProjectAssignmentRequest,
     EndProjectAssignmentRequest,
@@ -42,6 +47,7 @@ from app.models.project_scopes import (
     UpdateProjectScopeRequest,
 )
 from app.services import project_scopes as svc
+from app.services import financial_allocations as financial_allocation_svc
 from app.services import project_assignments as assignment_svc
 from app.services import project_contributions as contribution_svc
 from app.services import project_cost_records as cost_record_svc
@@ -54,6 +60,11 @@ PROJECT_SCOPE_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     403: {"model": ErrorResponse, "description": "Forbidden"},
     404: {"model": ErrorResponse, "description": "Aggregate not found"},
     422: {"model": ErrorResponse, "description": "Validation error"},
+}
+
+FINANCIAL_ALLOCATION_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
+    **PROJECT_SCOPE_ERROR_RESPONSES,
+    409: {"model": ErrorResponse, "description": "Conflict"},
 }
 
 
@@ -238,6 +249,37 @@ def create_project_revenue_record(
 def list_project_revenue_records(project_scope_id: UUID, request: Request) -> ProjectRevenueRecordListResponse:
     return ProjectRevenueRecordListResponse(
         items=revenue_record_svc.list_project_revenue_records_for_actor(
+            str(project_scope_id),
+            meta=request_meta(request),
+        )
+    )
+
+
+@router.post(
+    "/{project_scope_id}/financial-allocations",
+    response_model=FinancialAllocationResponse,
+    status_code=201,
+    responses=FINANCIAL_ALLOCATION_ERROR_RESPONSES,
+)
+def create_financial_allocation(
+    project_scope_id: UUID,
+    request: Request,
+    payload: CreateFinancialAllocationRequest,
+) -> FinancialAllocationResponse:
+    return financial_allocation_svc.create_financial_allocation(
+        str(project_scope_id),
+        apply_request_correlation(request, payload),
+    )
+
+
+@router.get(
+    "/{project_scope_id}/financial-allocations",
+    response_model=FinancialAllocationListResponse,
+    responses=PROJECT_SCOPE_ERROR_RESPONSES,
+)
+def list_financial_allocations(project_scope_id: UUID, request: Request) -> FinancialAllocationListResponse:
+    return FinancialAllocationListResponse(
+        items=financial_allocation_svc.list_financial_allocations_for_actor(
             str(project_scope_id),
             meta=request_meta(request),
         )

@@ -106,6 +106,38 @@ def list_project_cost_records(project_scope_id: str) -> list[dict[str, Any]]:
     return [_map_project_cost_record_row(row) for row in rows]
 
 
+def fetch_project_cost_record(cost_record_id: str) -> dict[str, Any] | None:
+    if not _db.is_enabled():
+        return None
+
+    with _db.read_session() as session:
+        row = session.execute(
+            text(
+                """
+                SELECT
+                    cost_record_id,
+                    project_scope_id,
+                    organization_id,
+                    cost_type,
+                    amount,
+                    currency,
+                    recognized_at,
+                    source_object_type,
+                    source_object_id,
+                    attribution_policy,
+                    metadata_json,
+                    created_at
+                FROM project_cost_records
+                WHERE cost_record_id = :cost_record_id
+                """
+            ),
+            {"cost_record_id": cost_record_id},
+        ).mappings().first()
+    if row is None:
+        return None
+    return _map_project_cost_record_row(row)
+
+
 def _map_project_cost_record_row(row: Mapping[Any, Any]) -> dict[str, Any]:
     return {
         "costRecordId": str(row["cost_record_id"]),

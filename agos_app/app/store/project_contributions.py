@@ -8,7 +8,27 @@ from typing import Any
 
 from sqlalchemy import text
 
+from app.models.enums import ProjectContributionVerificationSource, ProjectContributionVerificationStatus
 from app.store import _db
+
+
+def _build_metadata_json(record: dict[str, Any]) -> str:
+    metadata = dict(record.get("metadata") or {})
+    verification_metadata = {
+        "actorType": record.get("actorType", "person"),
+        "verificationStatus": record.get(
+            "verificationStatus",
+            ProjectContributionVerificationStatus.self_reported.value,
+        ),
+        "verificationSource": record.get(
+            "verificationSource",
+            ProjectContributionVerificationSource.manual_submission.value,
+        ),
+        "verificationNote": record.get("verificationNote"),
+        "verificationEvidenceRef": record.get("verificationEvidenceRef"),
+    }
+    metadata.update({key: value for key, value in verification_metadata.items() if value is not None})
+    return json.dumps(metadata)
 
 
 def upsert_project_contribution(record: dict[str, Any]) -> None:
@@ -92,7 +112,7 @@ def upsert_project_contribution(record: dict[str, Any]) -> None:
                 "confirmed_at": record.get("confirmedAt"),
                 "rejection_reason": record.get("rejectionReason"),
                 "source": record.get("source", "manual"),
-                "metadata_json": json.dumps(record.get("metadata") or {}),
+                "metadata_json": _build_metadata_json(record),
                 "created_at": record.get("createdAt"),
             },
         )
@@ -179,17 +199,86 @@ def fetch_project_contribution(project_contribution_event_id: str) -> dict[str, 
     return _map_project_contribution_row(row)
 
 
+def transition_project_contribution_from_proposed(record: dict[str, Any]) -> dict[str, Any] | None:
+    if not _db.is_enabled():
+        return None
+
+    with _db.write_session() as (session, should_commit):
+        row = session.execute(
+            text(
+                """
+                UPDATE project_contribution_events
+                SET
+                    status = :status,
+                    confirmed_by = :confirmed_by,
+                    confirmed_at = :confirmed_at,
+                    rejection_reason = :rejection_reason,
+                    metadata_json = CAST(:metadata_json AS jsonb),
+                    updated_at = now()
+                WHERE project_contribution_event_id = :project_contribution_event_id
+                  AND status = 'proposed'
+                RETURNING
+                    project_contribution_event_id,
+                    project_scope_id,
+                    project_assignment_id,
+                    organization_id,
+                    actor_id,
+                    subject_type,
+                    subject_id,
+                    contribution_type,
+                    role,
+                    quantity,
+                    unit,
+                    estimated_value,
+                    currency,
+                    status,
+                    confirmed_by,
+                    confirmed_at,
+                    rejection_reason,
+                    source,
+                    metadata_json,
+                    created_at
+                """
+            ),
+            {
+                "project_contribution_event_id": record["projectContributionEventId"],
+                "status": record["status"],
+                "confirmed_by": record.get("confirmedBy"),
+                "confirmed_at": record.get("confirmedAt"),
+                "rejection_reason": record.get("rejectionReason"),
+                "metadata_json": _build_metadata_json(record),
+            },
+        ).mappings().first()
+        if row is None:
+            return None
+        if should_commit:
+            session.commit()
+    return _map_project_contribution_row(row)
+
+
 def _map_project_contribution_row(row: Mapping[Any, Any]) -> dict[str, Any]:
+    metadata = dict(row["metadata_json"] or {})
     return {
         "projectContributionEventId": str(row["project_contribution_event_id"]),
         "projectScopeId": str(row["project_scope_id"]),
         "projectAssignmentId": str(row["project_assignment_id"]),
         "organizationId": str(row["organization_id"]),
         "actorId": str(row["actor_id"]),
+        "actorType": metadata.get("actorType", "person"),
         "subjectType": row["subject_type"],
         "subjectId": str(row["subject_id"]),
         "contributionType": row["contribution_type"],
         "role": row["role"],
+        "verificationStatus": metadata.get(
+            "verificationStatus",
+            ProjectContributionVerificationStatus.self_reported.value,
+        ),
+        "verificationSource": metadata.get(
+            "verificationSource",
+            ProjectContributionVerificationSource.manual_submission.value,
+        ),
+        "verificationNote": metadata.get("verificationNote"),
+        "verificationEvidenceRef": metadata.get("verificationEvidenceRef"),
         "quantity": _db.to_float(row["quantity"]),
         "unit": row["unit"],
         "estimatedValue": _db.to_float(row["estimated_value"]) if row["estimated_value"] is not None else None,
@@ -199,6 +288,6 @@ def _map_project_contribution_row(row: Mapping[Any, Any]) -> dict[str, Any]:
         "confirmedAt": row["confirmed_at"].isoformat() if row["confirmed_at"] else None,
         "rejectionReason": row["rejection_reason"],
         "source": row["source"],
-        "metadata": dict(row["metadata_json"] or {}),
+        "metadata": metadata,
         "createdAt": row["created_at"].isoformat() if row["created_at"] else None,
     }

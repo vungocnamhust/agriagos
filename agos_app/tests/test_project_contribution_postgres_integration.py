@@ -5,6 +5,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -16,6 +17,7 @@ from app.models.project_contributions import (
 )
 from app.services import project_contributions as project_contribution_service
 from app.store import _db
+from app.store import project_contributions as project_contribution_store
 
 
 @contextmanager
@@ -162,10 +164,15 @@ def test_project_contribution_persists_full_lifecycle_on_postgres_path(
             projectAssignmentId=assignment_id,
             organizationId=organization_id,
             actorId=str(uuid.uuid4()),
+            actorType="person",
             subjectType="lot",
             subjectId=project_contribution_service._get_project_assignment_record_or_404(assignment_id)["targetId"],
             contributionType="labor_day",
             role="producer",
+            verificationStatus="system_detected",
+            verificationSource="field_log",
+            verificationNote="Imported from field ops note",
+            verificationEvidenceRef="field-log-001",
             quantity=3,
             unit="day",
             estimatedValue=750000,
@@ -183,6 +190,8 @@ def test_project_contribution_persists_full_lifecycle_on_postgres_path(
         project_scope_id,
         created.data.projectContributionEventId,
         ConfirmProjectContributionRequest(
+            verificationNote="Verified against supervisor checklist",
+            verificationEvidenceRef="approval-001",
             meta=Meta(
                 correlationId="corr-pg-project-contribution-confirm",
                 idempotencyKey="idem-pg-project-contribution-confirm",
@@ -198,6 +207,7 @@ def test_project_contribution_persists_full_lifecycle_on_postgres_path(
             projectAssignmentId=assignment_id,
             organizationId=organization_id,
             actorId=str(uuid.uuid4()),
+            actorType="partner",
             subjectType="lot",
             subjectId=project_contribution_service._get_project_assignment_record_or_404(assignment_id)["targetId"],
             contributionType="cash_support",
@@ -235,8 +245,14 @@ def test_project_contribution_persists_full_lifecycle_on_postgres_path(
     )
 
     assert confirmed.data.status.value == "confirmed"
+    assert confirmed.data.verificationStatus == "verified"
+    assert confirmed.data.verificationSource == "admin_confirmed"
+    assert confirmed.data.verificationEvidenceRef == "approval-001"
     assert rejected.data.status.value == "rejected"
+    assert rejected.data.verificationStatus == "rejected"
     assert [item.status.value for item in listed] == ["confirmed", "rejected"]
+    assert listed[0].verificationStatus == "verified"
+    assert listed[1].verificationStatus == "rejected"
 
     rows = postgres_db_session.execute(
         text(
@@ -248,7 +264,8 @@ def test_project_contribution_persists_full_lifecycle_on_postgres_path(
                 confirmed_at,
                 rejection_reason,
                 estimated_value,
-                currency
+                currency,
+                metadata_json
             FROM project_contribution_events
             WHERE project_scope_id = CAST(:project_scope_id AS uuid)
             ORDER BY created_at, project_contribution_event_id
@@ -263,6 +280,11 @@ def test_project_contribution_persists_full_lifecycle_on_postgres_path(
     assert rows[1]["rejection_reason"] == "duplicate entry"
     assert [float(row["estimated_value"]) for row in rows] == [750000.0, 250000.0]
     assert [row["currency"] for row in rows] == ["VND", "VND"]
+    assert rows[0]["metadata_json"]["actorType"] == "person"
+    assert rows[0]["metadata_json"]["verificationStatus"] == "verified"
+    assert rows[0]["metadata_json"]["verificationEvidenceRef"] == "approval-001"
+    assert rows[1]["metadata_json"]["actorType"] == "partner"
+    assert rows[1]["metadata_json"]["verificationStatus"] == "rejected"
 
     event_rows = postgres_db_session.execute(
         text(
@@ -329,3 +351,193 @@ def test_project_contribution_rejects_unknown_assignment_on_postgres_path(
         {"project_scope_id": project_scope_id},
     ).scalar_one()
     assert persisted == 0
+
+
+@pytest.mark.postgres_integration
+def test_project_contribution_reject_does_not_overwrite_confirmed_record_after_stale_read(
+    postgres_db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _bind_postgres_project_contribution_service(monkeypatch, postgres_db_session)
+
+    organization_id = str(uuid.uuid4())
+    project_scope_id = str(uuid.uuid4())
+    assignment_id = str(uuid.uuid4())
+    _seed_organization(postgres_db_session, organization_id)
+    _seed_project_scope(postgres_db_session, project_scope_id, organization_id)
+    _seed_project_assignment(postgres_db_session, assignment_id, project_scope_id)
+
+    created = project_contribution_service.record_project_contribution(
+        project_scope_id,
+        RecordProjectContributionRequest(
+            projectAssignmentId=assignment_id,
+            organizationId=organization_id,
+            actorId=str(uuid.uuid4()),
+            subjectType="lot",
+            subjectId=project_contribution_service._get_project_assignment_record_or_404(assignment_id)["targetId"],
+            contributionType="labor_day",
+            role="producer",
+            quantity=1,
+            unit="day",
+            meta=Meta(
+                correlationId="corr-pg-project-contribution-stale-create",
+                idempotencyKey="idem-pg-project-contribution-stale-create",
+                actorId="admin-pg-1",
+                actorRole="admin",
+            ),
+        ),
+    )
+
+    project_contribution_service.confirm_project_contribution(
+        project_scope_id,
+        created.data.projectContributionEventId,
+        ConfirmProjectContributionRequest(
+            meta=Meta(
+                correlationId="corr-pg-project-contribution-stale-confirm",
+                idempotencyKey="idem-pg-project-contribution-stale-confirm",
+                actorId="admin-pg-1",
+                actorRole="admin",
+            )
+        ),
+    )
+
+    original_fetch = project_contribution_store.fetch_project_contribution
+    stale_record = {**created.data.model_dump(), "status": "proposed"}
+    fetch_call_count = {"count": 0}
+
+    def fetch_with_stale_first(project_contribution_event_id: str) -> dict[str, object] | None:
+        if (
+            project_contribution_event_id == created.data.projectContributionEventId
+            and fetch_call_count["count"] == 0
+        ):
+            fetch_call_count["count"] += 1
+            return stale_record
+        return original_fetch(project_contribution_event_id)
+
+    monkeypatch.setattr(project_contribution_store, "fetch_project_contribution", fetch_with_stale_first)
+
+    with pytest.raises(HTTPException) as exc_info:
+        project_contribution_service.reject_project_contribution(
+            project_scope_id,
+            created.data.projectContributionEventId,
+            RejectProjectContributionRequest(
+                reason="stale conflicting reject",
+                meta=Meta(
+                    correlationId="corr-pg-project-contribution-stale-reject",
+                    idempotencyKey="idem-pg-project-contribution-stale-reject",
+                    actorId="admin-pg-1",
+                    actorRole="admin",
+                ),
+            ),
+        )
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail == "Project contribution is not rejectable."
+
+    row = postgres_db_session.execute(
+        text(
+            """
+            SELECT status, rejection_reason
+            FROM project_contribution_events
+            WHERE project_contribution_event_id = CAST(:project_contribution_event_id AS uuid)
+            """
+        ),
+        {"project_contribution_event_id": created.data.projectContributionEventId},
+    ).mappings().one()
+    assert row["status"] == "confirmed"
+    assert row["rejection_reason"] is None
+
+
+@pytest.mark.postgres_integration
+def test_project_contribution_confirm_does_not_overwrite_rejected_record_after_stale_read(
+    postgres_db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _bind_postgres_project_contribution_service(monkeypatch, postgres_db_session)
+
+    organization_id = str(uuid.uuid4())
+    project_scope_id = str(uuid.uuid4())
+    assignment_id = str(uuid.uuid4())
+    _seed_organization(postgres_db_session, organization_id)
+    _seed_project_scope(postgres_db_session, project_scope_id, organization_id)
+    _seed_project_assignment(postgres_db_session, assignment_id, project_scope_id)
+
+    created = project_contribution_service.record_project_contribution(
+        project_scope_id,
+        RecordProjectContributionRequest(
+            projectAssignmentId=assignment_id,
+            organizationId=organization_id,
+            actorId=str(uuid.uuid4()),
+            subjectType="lot",
+            subjectId=project_contribution_service._get_project_assignment_record_or_404(assignment_id)["targetId"],
+            contributionType="labor_day",
+            role="producer",
+            quantity=1,
+            unit="day",
+            meta=Meta(
+                correlationId="corr-pg-project-contribution-stale-create-2",
+                idempotencyKey="idem-pg-project-contribution-stale-create-2",
+                actorId="admin-pg-1",
+                actorRole="admin",
+            ),
+        ),
+    )
+
+    project_contribution_service.reject_project_contribution(
+        project_scope_id,
+        created.data.projectContributionEventId,
+        RejectProjectContributionRequest(
+            reason="duplicate entry",
+            meta=Meta(
+                correlationId="corr-pg-project-contribution-stale-reject-2",
+                idempotencyKey="idem-pg-project-contribution-stale-reject-2",
+                actorId="admin-pg-1",
+                actorRole="admin",
+            ),
+        ),
+    )
+
+    original_fetch = project_contribution_store.fetch_project_contribution
+    stale_record = {**created.data.model_dump(), "status": "proposed"}
+    fetch_call_count = {"count": 0}
+
+    def fetch_with_stale_first(project_contribution_event_id: str) -> dict[str, object] | None:
+        if (
+            project_contribution_event_id == created.data.projectContributionEventId
+            and fetch_call_count["count"] == 0
+        ):
+            fetch_call_count["count"] += 1
+            return stale_record
+        return original_fetch(project_contribution_event_id)
+
+    monkeypatch.setattr(project_contribution_store, "fetch_project_contribution", fetch_with_stale_first)
+
+    with pytest.raises(HTTPException) as exc_info:
+        project_contribution_service.confirm_project_contribution(
+            project_scope_id,
+            created.data.projectContributionEventId,
+            ConfirmProjectContributionRequest(
+                meta=Meta(
+                    correlationId="corr-pg-project-contribution-stale-confirm-2",
+                    idempotencyKey="idem-pg-project-contribution-stale-confirm-2",
+                    actorId="admin-pg-1",
+                    actorRole="admin",
+                )
+            ),
+        )
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail == "Project contribution is not confirmable."
+
+    row = postgres_db_session.execute(
+        text(
+            """
+            SELECT status, confirmed_by
+            FROM project_contribution_events
+            WHERE project_contribution_event_id = CAST(:project_contribution_event_id AS uuid)
+            """
+        ),
+        {"project_contribution_event_id": created.data.projectContributionEventId},
+    ).mappings().one()
+    assert row["status"] == "rejected"
+    assert row["confirmed_by"] is None

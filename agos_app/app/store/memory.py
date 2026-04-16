@@ -107,6 +107,13 @@ def list_project_revenue_records(project_scope_id: str | None = None) -> list[di
     return items
 
 
+def list_financial_allocations(project_scope_id: str | None = None) -> list[dict[str, Any]]:
+    items = list(_financial_allocations.values())
+    if project_scope_id is not None:
+        items = [item for item in items if item.get("projectScopeId") == project_scope_id]
+    return items
+
+
 def list_customer_preferences(customer_id: str) -> list[dict[str, Any]]:
     return list(_preferences.get(customer_id, []))
 
@@ -159,6 +166,10 @@ def get_shared_resource(shared_resource_id: str) -> dict[str, Any] | None:
     return _shared_resources.get(shared_resource_id)
 
 
+def get_shared_resource_allocation(allocation_id: str) -> dict[str, Any] | None:
+    return _shared_resource_allocations.get(allocation_id)
+
+
 def get_project_assignment(project_assignment_id: str) -> dict[str, Any] | None:
     return _project_assignments.get(project_assignment_id)
 
@@ -175,6 +186,10 @@ def get_project_revenue_record(revenue_record_id: str) -> dict[str, Any] | None:
     return _project_revenue_records.get(revenue_record_id)
 
 
+def get_financial_allocation(financial_allocation_id: str) -> dict[str, Any] | None:
+    return _financial_allocations.get(financial_allocation_id)
+
+
 def find_project_revenue_record_by_source(project_scope_id: str, source_object_type: str, source_object_id: str) -> dict[str, Any] | None:
     for record in _project_revenue_records.values():
         if (
@@ -184,6 +199,32 @@ def find_project_revenue_record_by_source(project_scope_id: str, source_object_t
         ):
             return record
     return None
+
+
+def find_financial_allocation_by_source(project_scope_id: str, source_record_type: str, source_record_id: str) -> dict[str, Any] | None:
+    for record in _financial_allocations.values():
+        if (
+            record.get("projectScopeId") == project_scope_id
+            and record.get("sourceRecordType") == source_record_type
+            and record.get("sourceRecordId") == source_record_id
+        ):
+            return record
+    return None
+
+
+def find_financial_allocation_by_source_record(source_record_type: str, source_record_id: str) -> dict[str, Any] | None:
+    for record in _financial_allocations.values():
+        if record.get("sourceRecordType") == source_record_type and record.get("sourceRecordId") == source_record_id:
+            return record
+    return None
+
+
+def list_financial_allocations_by_source_record(source_record_type: str, source_record_id: str) -> list[dict[str, Any]]:
+    return [
+        record
+        for record in _financial_allocations.values()
+        if record.get("sourceRecordType") == source_record_type and record.get("sourceRecordId") == source_record_id
+    ]
 
 
 def save_customer(customer_id: str, record: dict[str, Any]) -> None:

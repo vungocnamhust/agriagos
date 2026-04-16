@@ -2,7 +2,13 @@ from uuid import UUID
 
 from fastapi import HTTPException
 
-from app.models.enums import CropCycleStatus, GrowthStage, LotStatus
+from app.core.policy_sets import (
+    PROJECT_CONTRIBUTION_BOARD_READ_ROLES,
+    PROJECT_ORDER_ALLOCATION_READ_ROLES,
+    PROJECT_PNL_READ_ROLES,
+    SHARED_RESOURCE_ALLOCATION_READ_ROLES,
+)
+from app.models.enums import CropCycleStatus, GrowthStage, LotStatus, ProjectContributionStatus
 from app.models.farm import CropCycleSummary, FarmView, PlotSummary
 from app.models.common import Meta
 from app.models.orders import OrderDetail, OrderLine
@@ -16,12 +22,18 @@ from app.models.views import (
     FarmSummaryBoardResponse,
     PendingFulfillmentListResponse,
     PendingFulfillmentView,
+    ProjectContributionLedgerItem,
+    ProjectContributionLedgerResponse,
+    ProjectImpactedActorSummaryItem,
+    ProjectImpactedActorSummaryResponse,
     ProjectContributionSummaryItem,
     ProjectContributionSummaryResponse,
     ProjectOrderAllocationSummaryItem,
     ProjectOrderAllocationSummaryResponse,
     ProjectPnlSummaryItem,
     ProjectPnlSummaryResponse,
+    SharedResourceAllocationSummaryItem,
+    SharedResourceAllocationSummaryResponse,
 )
 from app.services.read_authz import authorize_read_surface
 from app.services import customers as cust_svc
@@ -290,25 +302,171 @@ def get_project_contribution_summary(project_scope_id: str | None = None) -> Pro
                 "confirmedCount": 0,
                 "rejectedCount": 0,
                 "confirmedQuantity": 0.0,
-                "confirmedEstimatedValue": 0.0,
+                "confirmedEstimatedValue": None,
                 "currency": None,
             },
         )
         status = contribution["status"]
-        if status == "proposed":
+        if status == ProjectContributionStatus.proposed.value:
             summary["proposedCount"] = int(summary["proposedCount"]) + 1
-        elif status == "confirmed":
+        elif status == ProjectContributionStatus.confirmed.value:
             summary["confirmedCount"] = int(summary["confirmedCount"]) + 1
             summary["confirmedQuantity"] = float(summary["confirmedQuantity"]) + float(contribution["quantity"])
             if contribution.get("estimatedValue") is not None:
-                summary["confirmedEstimatedValue"] = float(summary["confirmedEstimatedValue"]) + float(contribution["estimatedValue"])
-            if summary["currency"] is None:
-                summary["currency"] = contribution.get("currency")
-        elif status == "rejected":
+                current_estimated_value = summary.get("confirmedEstimatedValue")
+                summary["confirmedEstimatedValue"] = (
+                    (float(current_estimated_value) if current_estimated_value is not None else 0.0)
+                    + float(contribution["estimatedValue"])
+                )
+                contribution_currency = contribution.get("currency")
+                current_currency = summary.get("currency")
+                if current_currency is None:
+                    summary["currency"] = contribution_currency
+                elif contribution_currency is not None and current_currency != contribution_currency:
+                    summary["currency"] = None
+        elif status == ProjectContributionStatus.rejected.value:
             summary["rejectedCount"] = int(summary["rejectedCount"]) + 1
 
     items = [ProjectContributionSummaryItem(**item) for item in sorted(summary_by_scope.values(), key=lambda item: str(item["projectScopeCode"]))]
     return ProjectContributionSummaryResponse(items=items)
+
+
+def get_project_impacted_actors_summary(
+    project_scope_id: str | None = None,
+) -> ProjectImpactedActorSummaryResponse:
+    _validate_optional_project_scope_id(project_scope_id)
+    if postgres_sync.is_enabled():
+        items = [
+            ProjectImpactedActorSummaryItem(**row)
+            for row in view_store.fetch_project_impacted_actors_summary(project_scope_id)
+        ]
+        return ProjectImpactedActorSummaryResponse(items=items)
+
+    scope_records = memory_store.list_project_scopes()
+    scope_map = {record["projectScopeId"]: record for record in scope_records}
+    contribution_records = memory_store.list_project_contributions(project_scope_id)
+    summary_by_actor: dict[tuple[str, str, str, str], dict[str, object]] = {}
+
+    for contribution in contribution_records:
+        scope_id = contribution["projectScopeId"]
+        scope = scope_map.get(scope_id)
+        if scope is None:
+            continue
+        actor_id = contribution["actorId"]
+        actor_type = contribution["actorType"]
+        role = contribution["role"]
+        key = (scope_id, actor_id, actor_type, role)
+        summary = summary_by_actor.setdefault(
+            key,
+            {
+                "projectScopeId": scope_id,
+                "projectScopeCode": scope["projectScopeCode"],
+                "projectScopeName": scope["name"],
+                "actorId": actor_id,
+                "actorType": actor_type,
+                "role": role,
+                "contributionCount": 0,
+                "confirmedContributionCount": 0,
+                "proposedContributionCount": 0,
+                "rejectedContributionCount": 0,
+                "confirmedQuantity": 0.0,
+                "confirmedEstimatedValue": None,
+                "currency": None,
+            },
+        )
+        summary["contributionCount"] = int(summary["contributionCount"]) + 1
+        status = contribution["status"]
+        if status == ProjectContributionStatus.confirmed.value:
+            summary["confirmedContributionCount"] = int(summary["confirmedContributionCount"]) + 1
+            summary["confirmedQuantity"] = float(summary["confirmedQuantity"]) + float(contribution["quantity"])
+            if contribution.get("estimatedValue") is not None:
+                current_estimated_value = summary.get("confirmedEstimatedValue")
+                summary["confirmedEstimatedValue"] = (
+                    (float(current_estimated_value) if current_estimated_value is not None else 0.0)
+                    + float(contribution["estimatedValue"])
+                )
+                contribution_currency = contribution.get("currency")
+                current_currency = summary.get("currency")
+                if current_currency is None:
+                    summary["currency"] = contribution_currency
+                elif contribution_currency is not None and current_currency != contribution_currency:
+                    summary["currency"] = None
+        elif status == ProjectContributionStatus.proposed.value:
+            summary["proposedContributionCount"] = int(summary["proposedContributionCount"]) + 1
+        elif status == ProjectContributionStatus.rejected.value:
+            summary["rejectedContributionCount"] = int(summary["rejectedContributionCount"]) + 1
+
+    items = [
+        ProjectImpactedActorSummaryItem(**item)
+        for item in sorted(
+            summary_by_actor.values(),
+            key=lambda item: (
+                str(item["projectScopeCode"]),
+                str(item["actorId"]),
+                str(item["role"]),
+            ),
+        )
+    ]
+    return ProjectImpactedActorSummaryResponse(items=items)
+
+
+def get_project_contribution_ledger(
+    project_scope_id: str | None = None,
+) -> ProjectContributionLedgerResponse:
+    _validate_optional_project_scope_id(project_scope_id)
+    if postgres_sync.is_enabled():
+        items = [ProjectContributionLedgerItem(**row) for row in view_store.fetch_project_contribution_ledger(project_scope_id)]
+        return ProjectContributionLedgerResponse(items=items)
+
+    scope_records = memory_store.list_project_scopes()
+    scope_map = {record["projectScopeId"]: record for record in scope_records}
+    assignment_records = memory_store.list_project_assignments(project_scope_id)
+    assignment_map = {record["projectAssignmentId"]: record for record in assignment_records}
+    contribution_records = memory_store.list_project_contributions(project_scope_id)
+
+    items: list[ProjectContributionLedgerItem] = []
+    for contribution in sorted(
+        contribution_records,
+        key=lambda item: (
+            str(item.get("createdAt") or ""),
+            str(item.get("projectContributionEventId") or ""),
+        ),
+    ):
+        scope = scope_map.get(contribution["projectScopeId"])
+        assignment = assignment_map.get(contribution["projectAssignmentId"])
+        if scope is None or assignment is None:
+            continue
+        items.append(
+            ProjectContributionLedgerItem(
+                projectScopeId=contribution["projectScopeId"],
+                projectScopeCode=scope["projectScopeCode"],
+                projectScopeName=scope["name"],
+                projectContributionEventId=contribution["projectContributionEventId"],
+                projectAssignmentId=contribution["projectAssignmentId"],
+                assignmentTargetType=assignment["targetType"],
+                assignmentTargetId=assignment["targetId"],
+                actorId=contribution["actorId"],
+                actorType=contribution["actorType"],
+                subjectType=contribution["subjectType"],
+                subjectId=contribution["subjectId"],
+                contributionType=contribution["contributionType"],
+                role=contribution["role"],
+                verificationStatus=contribution["verificationStatus"],
+                verificationSource=contribution["verificationSource"],
+                quantity=float(contribution["quantity"]),
+                unit=contribution["unit"],
+                estimatedValue=(
+                    float(contribution["estimatedValue"])
+                    if contribution.get("estimatedValue") is not None else None
+                ),
+                currency=contribution.get("currency"),
+                status=str(contribution["status"]),
+                createdAt=contribution.get("createdAt"),
+                confirmedAt=contribution.get("confirmedAt"),
+                confirmedBy=contribution.get("confirmedBy"),
+            )
+        )
+    return ProjectContributionLedgerResponse(items=items)
 
 
 def get_project_pnl_summary(project_scope_id: str | None = None) -> ProjectPnlSummaryResponse:
@@ -456,6 +614,66 @@ def get_project_order_allocation_summary(
 
     return ProjectOrderAllocationSummaryResponse(items=items)
 
+def get_shared_resource_allocation_summary(
+    organization_id: str | None = None,
+    resource_type: str | None = None,
+) -> SharedResourceAllocationSummaryResponse:
+    if postgres_sync.is_enabled():
+        items = [
+            SharedResourceAllocationSummaryItem(**row)
+            for row in view_store.fetch_shared_resource_allocation_summary(organization_id, resource_type)
+        ]
+        return SharedResourceAllocationSummaryResponse(items=items)
+
+    allocations_by_resource: dict[str, list[dict[str, object]]] = {}
+    for resource in memory_store.list_shared_resources():
+        allocations_by_resource[resource["sharedResourceId"]] = memory_store.list_shared_resource_allocations(
+            resource["sharedResourceId"]
+        )
+
+    items: list[SharedResourceAllocationSummaryItem] = []
+    for resource in sorted(memory_store.list_shared_resources(), key=lambda item: str(item["resourceCode"])):
+        if organization_id is not None and str(resource.get("organizationId")) != organization_id:
+            continue
+        if resource_type is not None and str(resource.get("resourceType")) != resource_type:
+            continue
+
+        allocations = allocations_by_resource.get(resource["sharedResourceId"], [])
+        allocation_count = len(allocations)
+        active_allocations = [allocation for allocation in allocations if allocation.get("status") == "active"]
+        allocated_capacity_total = sum(float(allocation.get("allocatedCapacity") or 0.0) for allocation in allocations)
+        released_capacity_total = sum(float(allocation.get("releasedCapacity") or 0.0) for allocation in allocations)
+        active_capacity_total = sum(
+            float(allocation.get("allocatedCapacity") or 0.0) - float(allocation.get("releasedCapacity") or 0.0)
+            for allocation in active_allocations
+        )
+
+        capacity_value = _float_value(resource.get("capacityValue"))
+        utilization_pct = None
+        if capacity_value is not None and capacity_value > 0:
+            utilization_pct = round((active_capacity_total / capacity_value) * 100, 2)
+
+        items.append(
+            SharedResourceAllocationSummaryItem(
+                sharedResourceId=resource["sharedResourceId"],
+                organizationId=resource["organizationId"],
+                resourceCode=resource["resourceCode"],
+                name=resource["name"],
+                resourceType=str(resource["resourceType"]),
+                status=str(resource["status"]),
+                capacityValue=capacity_value,
+                capacityUnit=_string_value(resource.get("capacityUnit")),
+                allocationCount=allocation_count,
+                activeAllocationCount=len(active_allocations),
+                allocatedCapacityTotal=allocated_capacity_total,
+                releasedCapacityTotal=released_capacity_total,
+                activeCapacityTotal=active_capacity_total,
+                utilizationPct=utilization_pct,
+            )
+        )
+
+    return SharedResourceAllocationSummaryResponse(items=items)
+
 
 def get_customer_360_for_actor(customer_id: str, meta: Meta | None) -> Customer360View:
     authorize_read_surface(
@@ -531,7 +749,7 @@ def get_project_contribution_summary_for_actor(
         action_name="view.project_contribution_summary",
         target_type="ProjectContributionSummaryBoard",
         target_id=project_scope_id or "all",
-        allowed_roles={"founder", "super_admin", "admin", "accountant", "viewer"},
+        allowed_roles=PROJECT_CONTRIBUTION_BOARD_READ_ROLES,
         reason_code="forbidden_project_contribution_summary_view",
         detail="Actor is not allowed to read project contribution summary boards.",
     )
@@ -547,7 +765,7 @@ def get_project_pnl_summary_for_actor(
         action_name="view.project_pnl_summary",
         target_type="ProjectPnlSummaryBoard",
         target_id=project_scope_id or "all",
-        allowed_roles={"founder", "super_admin", "admin", "accountant"},
+        allowed_roles=PROJECT_PNL_READ_ROLES,
         reason_code="forbidden_project_pnl_summary_view",
         detail="Actor is not allowed to read project P&L summary boards.",
     )
@@ -563,8 +781,56 @@ def get_project_order_allocation_summary_for_actor(
         action_name="view.project_order_allocation_summary",
         target_type="ProjectOrderAllocationSummaryBoard",
         target_id=project_scope_id or "all",
-        allowed_roles={"founder", "super_admin", "admin", "accountant", "sales", "ops", "viewer"},
+        allowed_roles=PROJECT_ORDER_ALLOCATION_READ_ROLES,
         reason_code="forbidden_project_order_allocation_summary_view",
         detail="Actor is not allowed to read project order allocation summary boards.",
     )
     return get_project_order_allocation_summary(project_scope_id)
+
+
+def get_project_contribution_ledger_for_actor(
+    project_scope_id: str | None,
+    meta: Meta | None,
+) -> ProjectContributionLedgerResponse:
+    authorize_read_surface(
+        meta=meta,
+        action_name="view.project_contribution_ledger",
+        target_type="ProjectContributionLedgerBoard",
+        target_id=project_scope_id or "all",
+        allowed_roles=PROJECT_CONTRIBUTION_BOARD_READ_ROLES,
+        reason_code="forbidden_project_contribution_ledger_view",
+        detail="Actor is not allowed to read project contribution ledger boards.",
+    )
+    return get_project_contribution_ledger(project_scope_id)
+
+
+def get_project_impacted_actors_summary_for_actor(
+    project_scope_id: str | None,
+    meta: Meta | None,
+) -> ProjectImpactedActorSummaryResponse:
+    authorize_read_surface(
+        meta=meta,
+        action_name="view.project_impacted_actors_summary",
+        target_type="ProjectImpactedActorsSummaryBoard",
+        target_id=project_scope_id or "all",
+        allowed_roles=PROJECT_CONTRIBUTION_BOARD_READ_ROLES,
+        reason_code="forbidden_project_impacted_actors_summary_view",
+        detail="Actor is not allowed to read project impacted actors summary boards.",
+    )
+    return get_project_impacted_actors_summary(project_scope_id)
+
+def get_shared_resource_allocation_summary_for_actor(
+    organization_id: str | None,
+    resource_type: str | None,
+    meta: Meta | None,
+) -> SharedResourceAllocationSummaryResponse:
+    authorize_read_surface(
+        meta=meta,
+        action_name="view.shared_resource_allocation_summary",
+        target_type="SharedResourceAllocationSummaryBoard",
+        target_id=organization_id or resource_type or "all",
+        allowed_roles=SHARED_RESOURCE_ALLOCATION_READ_ROLES,
+        reason_code="forbidden_shared_resource_allocation_summary_view",
+        detail="Actor is not allowed to read shared resource allocation summary boards.",
+    )
+    return get_shared_resource_allocation_summary(organization_id, resource_type)

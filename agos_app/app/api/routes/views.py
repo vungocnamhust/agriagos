@@ -8,9 +8,12 @@ from app.models.views import (
     Customer360View,
     FarmSummaryBoardResponse,
     PendingFulfillmentListResponse,
+    ProjectContributionLedgerResponse,
+    ProjectImpactedActorSummaryResponse,
     ProjectContributionSummaryResponse,
     ProjectOrderAllocationSummaryResponse,
     ProjectPnlSummaryResponse,
+    SharedResourceAllocationSummaryResponse,
 )
 from app.services import views as svc
 
@@ -56,6 +59,30 @@ def get_project_contribution_summary(request: Request, projectScopeId: str | Non
 
 
 @router.get(
+    "/project-contribution-ledger",
+    response_model=ProjectContributionLedgerResponse,
+    responses={403: {"model": ErrorResponse, "description": "Forbidden"}},
+)
+def get_project_contribution_ledger(
+    request: Request,
+    projectScopeId: str | None = None,
+) -> ProjectContributionLedgerResponse:
+    return svc.get_project_contribution_ledger_for_actor(projectScopeId, request_meta(request))
+
+
+@router.get(
+    "/project-impacted-actors-summary",
+    response_model=ProjectImpactedActorSummaryResponse,
+    responses={403: {"model": ErrorResponse, "description": "Forbidden"}},
+)
+def get_project_impacted_actors_summary(
+    request: Request,
+    projectScopeId: str | None = None,
+) -> ProjectImpactedActorSummaryResponse:
+    return svc.get_project_impacted_actors_summary_for_actor(projectScopeId, request_meta(request))
+
+
+@router.get(
     "/project-pnl-summary",
     response_model=ProjectPnlSummaryResponse,
     responses={403: {"model": ErrorResponse, "description": "Forbidden"}},
@@ -74,3 +101,19 @@ def get_project_order_allocation_summary(
     projectScopeId: str | None = None,
 ) -> ProjectOrderAllocationSummaryResponse:
     return svc.get_project_order_allocation_summary_for_actor(projectScopeId, request_meta(request))
+
+@router.get(
+    "/shared-resource-allocation-summary",
+    response_model=SharedResourceAllocationSummaryResponse,
+    responses={403: {"model": ErrorResponse, "description": "Forbidden"}},
+)
+def get_shared_resource_allocation_summary(
+    request: Request,
+    organizationId: str | None = None,
+    resourceType: str | None = None,
+) -> SharedResourceAllocationSummaryResponse:
+    return svc.get_shared_resource_allocation_summary_for_actor(
+        organizationId,
+        resourceType,
+        request_meta(request),
+    )

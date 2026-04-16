@@ -581,6 +581,198 @@ def test_project_order_allocation_summary_returns_operational_totals_per_scope()
     assert payload[0]["unit"] == "kg"
 
 
+def test_project_contribution_summary_nulls_estimated_value_when_confirmed_rows_have_no_values() -> None:
+    memory.save_project_scope(
+        "scope-summary-null",
+        {
+            "projectScopeId": "scope-summary-null",
+            "projectScopeCode": "PRJ-SUM-NULL",
+            "name": "Summary Null Scope",
+            "organizationId": "org-summary-null",
+            "projectScopeType": "value_stream",
+            "status": "active",
+        },
+    )
+    memory.save_project_contribution(
+        "contribution-summary-null-1",
+        {
+            "projectContributionEventId": "contribution-summary-null-1",
+            "projectScopeId": "scope-summary-null",
+            "projectAssignmentId": "assignment-summary-null-1",
+            "organizationId": "org-summary-null",
+            "actorId": "actor-summary-null-1",
+            "actorType": "person",
+            "subjectType": "lot",
+            "subjectId": "lot-summary-null-1",
+            "contributionType": "labor_day",
+            "role": "producer",
+            "verificationStatus": "verified",
+            "verificationSource": "admin_confirmed",
+            "verificationNote": None,
+            "verificationEvidenceRef": None,
+            "quantity": 2.0,
+            "unit": "day",
+            "estimatedValue": None,
+            "currency": None,
+            "status": "confirmed",
+            "confirmedBy": "admin-1",
+            "confirmedAt": "2026-04-16T10:00:00Z",
+            "rejectionReason": None,
+            "source": "manual",
+            "metadata": {},
+            "createdAt": "2026-04-16T09:00:00Z",
+        },
+    )
+
+    response = client.get(
+        "/api/v1/views/project-contribution-summary",
+        headers=_auth_headers(actor_role="admin", actor_id="admin-1"),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["items"]
+    assert len(payload) == 1
+    assert payload[0]["projectScopeCode"] == "PRJ-SUM-NULL"
+    assert payload[0]["confirmedCount"] == 1
+    assert payload[0]["confirmedQuantity"] == 2.0
+    assert payload[0]["confirmedEstimatedValue"] is None
+    assert payload[0]["currency"] is None
+
+
+def test_project_impacted_actors_summary_returns_confirmed_and_pending_activity_per_actor() -> None:
+    memory.save_project_scope(
+        "scope-actor-1",
+        {
+            "projectScopeId": "scope-actor-1",
+            "projectScopeCode": "PRJ-ACTOR-001",
+            "name": "Actor Scope",
+            "organizationId": "org-actor-1",
+            "projectScopeType": "value_stream",
+            "status": "active",
+        },
+    )
+    memory.save_project_contribution(
+        "contribution-actor-1",
+        {
+            "projectContributionEventId": "contribution-actor-1",
+            "projectScopeId": "scope-actor-1",
+            "projectAssignmentId": "assignment-actor-1",
+            "organizationId": "org-actor-1",
+            "actorId": "actor-1",
+            "actorType": "person",
+            "subjectType": "lot",
+            "subjectId": "lot-actor-1",
+            "contributionType": "labor_day",
+            "role": "producer",
+            "verificationStatus": "verified",
+            "verificationSource": "admin_confirmed",
+            "verificationNote": None,
+            "verificationEvidenceRef": None,
+            "quantity": 2.0,
+            "unit": "day",
+            "estimatedValue": 500000.0,
+            "currency": "VND",
+            "status": "confirmed",
+            "confirmedBy": "admin-1",
+            "confirmedAt": "2026-04-16T10:00:00Z",
+            "rejectionReason": None,
+            "source": "manual",
+            "metadata": {},
+            "createdAt": "2026-04-16T09:00:00Z",
+        },
+    )
+    memory.save_project_contribution(
+        "contribution-actor-2",
+        {
+            "projectContributionEventId": "contribution-actor-2",
+            "projectScopeId": "scope-actor-1",
+            "projectAssignmentId": "assignment-actor-2",
+            "organizationId": "org-actor-1",
+            "actorId": "actor-1",
+            "actorType": "person",
+            "subjectType": "order",
+            "subjectId": "order-actor-1",
+            "contributionType": "cash_support",
+            "role": "producer",
+            "verificationStatus": "system_detected",
+            "verificationSource": "field_log",
+            "verificationNote": None,
+            "verificationEvidenceRef": None,
+            "quantity": 1.0,
+            "unit": "entry",
+            "estimatedValue": None,
+            "currency": None,
+            "status": "proposed",
+            "confirmedBy": None,
+            "confirmedAt": None,
+            "rejectionReason": None,
+            "source": "manual",
+            "metadata": {},
+            "createdAt": "2026-04-16T11:00:00Z",
+        },
+    )
+    memory.save_project_contribution(
+        "contribution-actor-3",
+        {
+            "projectContributionEventId": "contribution-actor-3",
+            "projectScopeId": "scope-actor-1",
+            "projectAssignmentId": "assignment-actor-3",
+            "organizationId": "org-actor-1",
+            "actorId": "actor-2",
+            "actorType": "partner",
+            "subjectType": "lot",
+            "subjectId": "lot-actor-2",
+            "contributionType": "labor_day",
+            "role": "supporter",
+            "verificationStatus": "rejected",
+            "verificationSource": "admin_rejected",
+            "verificationNote": None,
+            "verificationEvidenceRef": None,
+            "quantity": 1.0,
+            "unit": "day",
+            "estimatedValue": 100000.0,
+            "currency": "USD",
+            "status": "rejected",
+            "confirmedBy": None,
+            "confirmedAt": None,
+            "rejectionReason": "duplicate",
+            "source": "manual",
+            "metadata": {},
+            "createdAt": "2026-04-16T12:00:00Z",
+        },
+    )
+
+    response = client.get(
+        "/api/v1/views/project-impacted-actors-summary",
+        headers=_auth_headers(actor_role="viewer", actor_id="viewer-1"),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["items"]
+    assert len(payload) == 2
+    assert payload[0]["projectScopeCode"] == "PRJ-ACTOR-001"
+    assert payload[0]["actorId"] == "actor-1"
+    assert payload[0]["actorType"] == "person"
+    assert payload[0]["role"] == "producer"
+    assert payload[0]["contributionCount"] == 2
+    assert payload[0]["confirmedContributionCount"] == 1
+    assert payload[0]["proposedContributionCount"] == 1
+    assert payload[0]["rejectedContributionCount"] == 0
+    assert payload[0]["confirmedQuantity"] == 2.0
+    assert payload[0]["confirmedEstimatedValue"] == 500000.0
+    assert payload[0]["currency"] == "VND"
+    assert payload[1]["actorId"] == "actor-2"
+    assert payload[1]["actorType"] == "partner"
+    assert payload[1]["role"] == "supporter"
+    assert payload[1]["contributionCount"] == 1
+    assert payload[1]["confirmedContributionCount"] == 0
+    assert payload[1]["proposedContributionCount"] == 0
+    assert payload[1]["rejectedContributionCount"] == 1
+    assert payload[1]["confirmedQuantity"] == 0.0
+    assert payload[1]["confirmedEstimatedValue"] is None
+    assert payload[1]["currency"] is None
+
+
 def test_project_pnl_summary_denies_non_finance_roles() -> None:
     response = client.get(
         "/api/v1/views/project-pnl-summary",
@@ -756,6 +948,19 @@ def test_project_contribution_ledger_denies_unauthorized_roles() -> None:
     assert memory.list_audit_logs()[-1]["reasonCode"] == "forbidden_project_contribution_ledger_view"
 
 
+def test_project_impacted_actors_summary_denies_unauthorized_roles() -> None:
+    response = client.get(
+        "/api/v1/views/project-impacted-actors-summary",
+        headers=_auth_headers(actor_role="sales", actor_id="sales-1"),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "FORBIDDEN"
+    assert response.json()["message"] == "Actor is not allowed to read project impacted actors summary boards."
+    assert memory.list_audit_logs()[-1]["actionName"] == "view.project_impacted_actors_summary"
+    assert memory.list_audit_logs()[-1]["reasonCode"] == "forbidden_project_impacted_actors_summary_view"
+
+
 def test_project_scope_summary_views_reject_invalid_project_scope_id() -> None:
     contribution_response = client.get(
         "/api/v1/views/project-contribution-summary?projectScopeId=not-a-uuid",
@@ -773,6 +978,10 @@ def test_project_scope_summary_views_reject_invalid_project_scope_id() -> None:
         "/api/v1/views/project-contribution-ledger?projectScopeId=not-a-uuid",
         headers=_auth_headers(actor_role="admin", actor_id="admin-1"),
     )
+    impacted_actors_response = client.get(
+        "/api/v1/views/project-impacted-actors-summary?projectScopeId=not-a-uuid",
+        headers=_auth_headers(actor_role="admin", actor_id="admin-1"),
+    )
 
     assert contribution_response.status_code == 422
     assert contribution_response.json()["message"] == "projectScopeId must be a valid UUID."
@@ -782,3 +991,5 @@ def test_project_scope_summary_views_reject_invalid_project_scope_id() -> None:
     assert allocation_response.json()["message"] == "projectScopeId must be a valid UUID."
     assert ledger_response.status_code == 422
     assert ledger_response.json()["message"] == "projectScopeId must be a valid UUID."
+    assert impacted_actors_response.status_code == 422
+    assert impacted_actors_response.json()["message"] == "projectScopeId must be a valid UUID."

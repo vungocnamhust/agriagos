@@ -4,20 +4,24 @@ from __future__ import annotations
 
 import uuid
 from contextlib import nullcontext
-from typing import Any
+from typing import Any, NoReturn
 
 from fastapi import HTTPException
 
 from app.core import events
 from app.core.authz import ensure_bypass_permitted, normalize_actor_role
+from app.core.event_registry import AggregateType, ProjectCostRecordEventName
 from app.core.gateway import check_idempotency, record_idempotency
+from app.core.policy_sets import PROJECT_FINANCE_ROLES
 from app.core.write_context import append_audit_decision, build_request_hash, meta_context
 from app.models.common import Meta
+from app.models.enums import ProjectContributionStatus
 from app.models.project_cost_records import (
     CreateProjectCostRecordRequest,
     ProjectCostRecordDetail,
     ProjectCostRecordResponse,
 )
+from app.services._audit_metadata import build_authority_audit_metadata
 from app.services.read_authz import authorize_read_surface
 from app.store import memory as memory_store
 from app.store import project_contributions as project_contribution_store
@@ -26,8 +30,8 @@ from app.store import project_scopes as project_scope_store
 from app.store._db import is_enabled as postgres_enabled, transaction as postgres_transaction
 
 
-_PROJECT_COST_RECORD_READ_ROLES = frozenset({"founder", "super_admin", "admin", "accountant"})
-_PROJECT_COST_RECORD_WRITE_ROLES = frozenset({"founder", "super_admin", "admin", "accountant"})
+_PROJECT_COST_RECORD_READ_ROLES = PROJECT_FINANCE_ROLES
+_PROJECT_COST_RECORD_WRITE_ROLES = PROJECT_FINANCE_ROLES
 
 
 def _build_project_cost_record_detail(record: dict[str, Any]) -> ProjectCostRecordDetail:
@@ -83,7 +87,7 @@ def _assert_can_write_project_cost_record(
         "denied",
         context,
         reason_code="forbidden_project_cost_record_write",
-        metadata={"message": detail},
+        metadata={"message": detail, **build_authority_audit_metadata(context)},
     )
     raise HTTPException(status_code=403, detail=detail)
 
@@ -102,6 +106,26 @@ def _get_project_contribution_record_or_404(project_contribution_event_id: str) 
     raise HTTPException(status_code=404, detail="Cost source contribution not found.")
 
 
+def _raise_project_cost_record_error(
+    *,
+    context: dict[str, Any],
+    cost_record_id: str,
+    status_code: int,
+    detail: str,
+    reason_code: str,
+    metadata: dict[str, Any] | None = None,
+) -> NoReturn:
+    _audit_project_cost_record(
+        "project_cost_record.record",
+        cost_record_id,
+        "denied",
+        context,
+        reason_code=reason_code,
+        metadata={"message": detail, **build_authority_audit_metadata(context), **(metadata or {})},
+    )
+    raise HTTPException(status_code=status_code, detail=detail)
+
+
 def create_project_cost_record(project_scope_id: str, payload: CreateProjectCostRecordRequest) -> ProjectCostRecordResponse:
     context = meta_context(payload.meta)
     scope = _get_project_scope_record_or_404(project_scope_id)
@@ -116,11 +140,35 @@ def create_project_cost_record(project_scope_id: str, payload: CreateProjectCost
     if cached := check_idempotency(key):
         return ProjectCostRecordResponse(**cached)
     with postgres_transaction() if postgres_enabled() else nullcontext():
-        contribution = _get_project_contribution_record_or_404(payload.sourceObjectId)
+        try:
+            contribution = _get_project_contribution_record_or_404(payload.sourceObjectId)
+        except HTTPException as exc:
+            _raise_project_cost_record_error(
+                context=context,
+                cost_record_id="pending",
+                status_code=exc.status_code,
+                detail=str(exc.detail),
+                reason_code="project_cost_record_source_not_found",
+                metadata={"sourceObjectId": payload.sourceObjectId},
+            )
         if contribution.get("projectScopeId") != project_scope_id:
-            raise HTTPException(status_code=404, detail="Cost source contribution not found.")
-        if contribution.get("status") != "confirmed":
-            raise HTTPException(status_code=422, detail="Cost source contribution must be confirmed.")
+            _raise_project_cost_record_error(
+                context=context,
+                cost_record_id="pending",
+                status_code=404,
+                detail="Cost source contribution not found.",
+                reason_code="project_cost_record_source_scope_mismatch",
+                metadata={"sourceObjectId": payload.sourceObjectId},
+            )
+        if contribution.get("status") != ProjectContributionStatus.confirmed.value:
+            _raise_project_cost_record_error(
+                context=context,
+                cost_record_id="pending",
+                status_code=422,
+                detail="Cost source contribution must be confirmed.",
+                reason_code="project_cost_record_source_unconfirmed",
+                metadata={"sourceObjectId": payload.sourceObjectId},
+            )
 
         timestamp = memory_store.now_iso()
         cost_record_id = str(uuid.uuid4())
@@ -143,8 +191,8 @@ def create_project_cost_record(project_scope_id: str, payload: CreateProjectCost
         if not postgres_enabled():
             memory_store.save_project_cost_record(cost_record_id, record)
         event = events.emit(
-            event_name="project_cost_record.recorded",
-            aggregate_type="ProjectCostRecord",
+            event_name=ProjectCostRecordEventName.recorded,
+            aggregate_type=AggregateType.project_cost_record,
             aggregate_id=cost_record_id,
             payload={
                 "costRecordId": cost_record_id,
@@ -167,6 +215,7 @@ def create_project_cost_record(project_scope_id: str, payload: CreateProjectCost
             context,
             after_snapshot=record,
             event=event,
+            metadata=build_authority_audit_metadata(context),
         )
         record_idempotency(
             key,

@@ -15,6 +15,7 @@
 | [ADR-011](ADR-011-api-contract-committed-spec.md) | OpenAPI spec phải là committed artifact trong git | Accepted |
 | ADR-012 | Organization là legal-operating owner aggregate; tenant giữ nghĩa deployment boundary | Proposed |
 | ADR-013 | ProjectScope là lớp soft scope cho value stream dưới Organization | Proposed |
+| ADR-014 | Authority model separates identity, affiliation, contribution, and grant | Accepted |
 
 Tài liệu này là chỉ mục nhanh cho các quyết định kiến trúc đã được khóa trong baseline hiện tại.
 

@@ -120,3 +120,72 @@ class ProjectOrderAllocationSummaryItem(BaseModel):
 
 class ProjectOrderAllocationSummaryResponse(BaseModel):
     items: list[ProjectOrderAllocationSummaryItem]
+
+
+class ProjectContributionLedgerItem(BaseModel):
+    projectScopeId: str
+    projectScopeCode: str
+    projectScopeName: str
+    projectContributionEventId: str
+    projectAssignmentId: str
+    assignmentTargetType: str
+    assignmentTargetId: str
+    actorId: str
+    actorType: str
+    subjectType: str
+    subjectId: str
+    contributionType: str
+    role: str
+    verificationStatus: str
+    verificationSource: str
+    quantity: float
+    unit: str
+    estimatedValue: float | None = None
+    currency: str | None = None
+    status: str
+    createdAt: str | None = None
+    confirmedAt: str | None = None
+    confirmedBy: str | None = None
+
+
+class ProjectContributionLedgerResponse(BaseModel):
+    items: list[ProjectContributionLedgerItem]
+
+
+class ProjectImpactedActorSummaryItem(BaseModel):
+    projectScopeId: str
+    projectScopeCode: str
+    projectScopeName: str
+    actorId: str
+    actorType: str
+    role: str
+    contributionCount: int
+    confirmedContributionCount: int
+    proposedContributionCount: int
+    rejectedContributionCount: int
+    confirmedQuantity: float
+    confirmedEstimatedValue: float | None = None
+    currency: str | None = None
+
+
+class ProjectImpactedActorSummaryResponse(BaseModel):
+    items: list[ProjectImpactedActorSummaryItem]
+    
+class SharedResourceAllocationSummaryItem(BaseModel):
+    sharedResourceId: str
+    organizationId: str
+    resourceCode: str
+    name: str
+    resourceType: str
+    status: str
+    capacityValue: float | None = None
+    capacityUnit: str | None = None
+    allocationCount: int
+    activeAllocationCount: int
+    allocatedCapacityTotal: float
+    releasedCapacityTotal: float
+    activeCapacityTotal: float
+    utilizationPct: float | None = None
+
+class SharedResourceAllocationSummaryResponse(BaseModel):
+    items: list[SharedResourceAllocationSummaryItem]

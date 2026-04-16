@@ -2954,6 +2954,74 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/views/project-impacted-actors-summary:
+    get:
+      tags:
+      - Views
+      summary: Get Project Impacted Actors Summary
+      operationId: get_project_impacted_actors_summary_api_v1_views_project_impacted_actors_summary_get
+      parameters:
+      - name: projectScopeId
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Projectscopeid
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectImpactedActorSummaryResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/views/project-contribution-ledger:
+    get:
+      tags:
+      - Views
+      summary: Get Project Contribution Ledger
+      operationId: get_project_contribution_ledger_api_v1_views_project_contribution_ledger_get
+      parameters:
+      - name: projectScopeId
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Projectscopeid
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectContributionLedgerResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/events:
     get:
       tags:
@@ -5958,6 +6026,189 @@ components:
       required:
       - items
       title: ProjectOrderAllocationSummaryResponse
+    ProjectContributionLedgerItem:
+      properties:
+        projectScopeId:
+          type: string
+          title: Projectscopeid
+        projectScopeCode:
+          type: string
+          title: Projectscopecode
+        projectScopeName:
+          type: string
+          title: Projectscopename
+        projectContributionEventId:
+          type: string
+          title: Projectcontributioneventid
+        projectAssignmentId:
+          type: string
+          title: Projectassignmentid
+        assignmentTargetType:
+          type: string
+          title: Assignmenttargettype
+        assignmentTargetId:
+          type: string
+          title: Assignmenttargetid
+        actorId:
+          type: string
+          title: Actorid
+        actorType:
+          type: string
+          title: Actortype
+        subjectType:
+          type: string
+          title: Subjecttype
+        subjectId:
+          type: string
+          title: Subjectid
+        contributionType:
+          type: string
+          title: Contributiontype
+        role:
+          type: string
+          title: Role
+        verificationStatus:
+          type: string
+          title: Verificationstatus
+        verificationSource:
+          type: string
+          title: Verificationsource
+        quantity:
+          type: number
+          title: Quantity
+        unit:
+          type: string
+          title: Unit
+        estimatedValue:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Estimatedvalue
+        currency:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Currency
+        status:
+          type: string
+          title: Status
+        createdAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdat
+        confirmedAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Confirmedat
+        confirmedBy:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Confirmedby
+      type: object
+      required:
+      - projectScopeId
+      - projectScopeCode
+      - projectScopeName
+      - projectContributionEventId
+      - projectAssignmentId
+      - assignmentTargetType
+      - assignmentTargetId
+      - actorId
+      - actorType
+      - subjectType
+      - subjectId
+      - contributionType
+      - role
+      - verificationStatus
+      - verificationSource
+      - quantity
+      - unit
+      - status
+      title: ProjectContributionLedgerItem
+    ProjectContributionLedgerResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ProjectContributionLedgerItem'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: ProjectContributionLedgerResponse
+    ProjectImpactedActorSummaryItem:
+      properties:
+        projectScopeId:
+          type: string
+          title: Projectscopeid
+        projectScopeCode:
+          type: string
+          title: Projectscopecode
+        projectScopeName:
+          type: string
+          title: Projectscopename
+        actorId:
+          type: string
+          title: Actorid
+        actorType:
+          type: string
+          title: Actortype
+        role:
+          type: string
+          title: Role
+        contributionCount:
+          type: integer
+          title: Contributioncount
+        confirmedContributionCount:
+          type: integer
+          title: Confirmedcontributioncount
+        proposedContributionCount:
+          type: integer
+          title: Proposedcontributioncount
+        rejectedContributionCount:
+          type: integer
+          title: Rejectedcontributioncount
+        confirmedQuantity:
+          type: number
+          title: Confirmedquantity
+        confirmedEstimatedValue:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Confirmedestimatedvalue
+        currency:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Currency
+      type: object
+      required:
+      - projectScopeId
+      - projectScopeCode
+      - projectScopeName
+      - actorId
+      - actorType
+      - role
+      - contributionCount
+      - confirmedContributionCount
+      - proposedContributionCount
+      - rejectedContributionCount
+      - confirmedQuantity
+      title: ProjectImpactedActorSummaryItem
+    ProjectImpactedActorSummaryResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ProjectImpactedActorSummaryItem'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: ProjectImpactedActorSummaryResponse
     ProjectCostRecordDetail:
       properties:
         costRecordId:

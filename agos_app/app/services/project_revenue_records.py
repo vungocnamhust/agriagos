@@ -4,21 +4,25 @@ from __future__ import annotations
 
 import uuid
 from contextlib import nullcontext
-from typing import Any
+from typing import Any, NoReturn
 
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 
 from app.core import events
 from app.core.authz import ensure_bypass_permitted, normalize_actor_role
+from app.core.event_registry import AggregateType, ProjectRevenueRecordEventName
 from app.core.gateway import check_idempotency, record_idempotency
+from app.core.policy_sets import PROJECT_FINANCE_ROLES
 from app.core.write_context import append_audit_decision, build_request_hash, meta_context
 from app.models.common import Meta
+from app.models.enums import OrderStatus
 from app.models.project_revenue_records import (
     CreateProjectRevenueRecordRequest,
     ProjectRevenueRecordDetail,
     ProjectRevenueRecordResponse,
 )
+from app.services._audit_metadata import build_authority_audit_metadata
 from app.services.read_authz import authorize_read_surface
 from app.store import memory as memory_store
 from app.store import orders as order_store
@@ -28,8 +32,8 @@ from app.store import project_scopes as project_scope_store
 from app.store._db import is_enabled as postgres_enabled, transaction as postgres_transaction
 
 
-_PROJECT_REVENUE_RECORD_READ_ROLES = frozenset({"founder", "super_admin", "admin", "accountant"})
-_PROJECT_REVENUE_RECORD_WRITE_ROLES = frozenset({"founder", "super_admin", "admin", "accountant"})
+_PROJECT_REVENUE_RECORD_READ_ROLES = PROJECT_FINANCE_ROLES
+_PROJECT_REVENUE_RECORD_WRITE_ROLES = PROJECT_FINANCE_ROLES
 
 
 def _build_project_revenue_record_detail(record: dict[str, Any]) -> ProjectRevenueRecordDetail:
@@ -85,7 +89,7 @@ def _assert_can_write_project_revenue_record(
         "denied",
         context,
         reason_code="forbidden_project_revenue_record_write",
-        metadata={"message": detail},
+        metadata={"message": detail, **build_authority_audit_metadata(context)},
     )
     raise HTTPException(status_code=403, detail=detail)
 
@@ -134,6 +138,26 @@ def _has_active_project_scope_assignment(project_scope_id: str, order_id: str) -
     )
 
 
+def _raise_project_revenue_record_error(
+    *,
+    context: dict[str, Any],
+    revenue_record_id: str,
+    status_code: int,
+    detail: str,
+    reason_code: str,
+    metadata: dict[str, Any] | None = None,
+) -> NoReturn:
+    _audit_project_revenue_record(
+        "project_revenue_record.record",
+        revenue_record_id,
+        "denied",
+        context,
+        reason_code=reason_code,
+        metadata={"message": detail, **build_authority_audit_metadata(context), **(metadata or {})},
+    )
+    raise HTTPException(status_code=status_code, detail=detail)
+
+
 def create_project_revenue_record(project_scope_id: str, payload: CreateProjectRevenueRecordRequest) -> ProjectRevenueRecordResponse:
     context = meta_context(payload.meta)
     _get_project_scope_record_or_404(project_scope_id)
@@ -149,16 +173,44 @@ def create_project_revenue_record(project_scope_id: str, payload: CreateProjectR
         return ProjectRevenueRecordResponse(**cached)
 
     if payload.grossAmount < payload.netAmount:
-        raise HTTPException(status_code=422, detail="Gross amount must be greater than or equal to net amount.")
+        _raise_project_revenue_record_error(
+            context=context,
+            revenue_record_id="pending",
+            status_code=422,
+            detail="Gross amount must be greater than or equal to net amount.",
+            reason_code="project_revenue_record_invalid_amounts",
+            metadata={"sourceObjectId": payload.sourceObjectId},
+        )
 
     with postgres_transaction() if postgres_enabled() else nullcontext():
-        order = _get_order_record_or_404(payload.sourceObjectId)
-        if order.get("status") != "delivered" or order.get("deliveredAt") is None:
-            raise HTTPException(status_code=422, detail="Revenue source order must be delivered.")
+        try:
+            order = _get_order_record_or_404(payload.sourceObjectId)
+        except HTTPException as exc:
+            _raise_project_revenue_record_error(
+                context=context,
+                revenue_record_id="pending",
+                status_code=exc.status_code,
+                detail=str(exc.detail),
+                reason_code="project_revenue_record_source_not_found",
+                metadata={"sourceObjectId": payload.sourceObjectId},
+            )
+        if order.get("status") != OrderStatus.delivered.value or order.get("deliveredAt") is None:
+            _raise_project_revenue_record_error(
+                context=context,
+                revenue_record_id="pending",
+                status_code=422,
+                detail="Revenue source order must be delivered.",
+                reason_code="project_revenue_record_source_undelivered",
+                metadata={"sourceObjectId": payload.sourceObjectId},
+            )
         if not _has_active_project_scope_assignment(project_scope_id, payload.sourceObjectId):
-            raise HTTPException(
+            _raise_project_revenue_record_error(
+                context=context,
+                revenue_record_id="pending",
                 status_code=422,
                 detail="Revenue source order must be actively assigned to the project scope.",
+                reason_code="project_revenue_record_assignment_required",
+                metadata={"sourceObjectId": payload.sourceObjectId},
             )
         existing = _get_project_revenue_record_by_source(
             project_scope_id,
@@ -166,9 +218,13 @@ def create_project_revenue_record(project_scope_id: str, payload: CreateProjectR
             payload.sourceObjectId,
         )
         if existing is not None:
-            raise HTTPException(
+            _raise_project_revenue_record_error(
+                context=context,
+                revenue_record_id=str(existing["revenueRecordId"]),
                 status_code=409,
                 detail="Revenue source order already has a revenue record for this project scope.",
+                reason_code="project_revenue_record_duplicate_source",
+                metadata={"sourceObjectId": payload.sourceObjectId},
             )
 
         revenue_record_id = str(uuid.uuid4())
@@ -206,8 +262,8 @@ def create_project_revenue_record(project_scope_id: str, payload: CreateProjectR
         if not postgres_enabled():
             memory_store.save_project_revenue_record(revenue_record_id, record)
         event = events.emit(
-            event_name="project_revenue_record.recorded",
-            aggregate_type="ProjectRevenueRecord",
+            event_name=ProjectRevenueRecordEventName.recorded,
+            aggregate_type=AggregateType.project_revenue_record,
             aggregate_id=revenue_record_id,
             payload={
                 "revenueRecordId": revenue_record_id,
@@ -233,6 +289,7 @@ def create_project_revenue_record(project_scope_id: str, payload: CreateProjectR
             context,
             after_snapshot=record,
             event=event,
+            metadata=build_authority_audit_metadata(context),
         )
         record_idempotency(
             key,

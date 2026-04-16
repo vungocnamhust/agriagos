@@ -12,9 +12,12 @@ __all__ = [
     "fetch_available_lots_board",
     "fetch_customer_360",
     "fetch_farm_summary_board",
+    "fetch_project_contribution_ledger",
+    "fetch_project_impacted_actors_summary",
     "fetch_project_order_allocation_summary",
     "fetch_project_contribution_summary",
     "fetch_project_pnl_summary",
+    "fetch_shared_resource_allocation_summary",
     "fetch_pending_fulfillment_board",
     "is_enabled",
     "SessionLocal",
@@ -253,6 +256,78 @@ def fetch_project_contribution_summary(project_scope_id: str | None = None) -> l
     ]
 
 
+def fetch_project_contribution_ledger(project_scope_id: str | None = None) -> list[dict[str, Any]]:
+    if not is_enabled():
+        return []
+
+    query = """
+        SELECT
+            ps.project_scope_id,
+            ps.project_scope_code,
+            ps.name AS project_scope_name,
+            pce.project_contribution_event_id,
+            pce.project_assignment_id,
+            pa.target_type AS assignment_target_type,
+            pa.target_id AS assignment_target_id,
+            pce.actor_id,
+            COALESCE(pce.metadata_json ->> 'actorType', 'person') AS actor_type,
+            pce.subject_type,
+            pce.subject_id,
+            pce.contribution_type,
+            pce.role,
+            COALESCE(pce.metadata_json ->> 'verificationStatus', 'self_reported') AS verification_status,
+            COALESCE(pce.metadata_json ->> 'verificationSource', 'manual_submission') AS verification_source,
+            pce.quantity,
+            pce.unit,
+            pce.estimated_value,
+            pce.currency,
+            pce.status,
+            pce.created_at,
+            pce.confirmed_at,
+            pce.confirmed_by
+        FROM project_contribution_events pce
+        JOIN project_scopes ps ON ps.project_scope_id = pce.project_scope_id
+        JOIN project_assignments pa ON pa.project_assignment_id = pce.project_assignment_id
+    """
+    params: dict[str, Any] = {}
+    if project_scope_id is not None:
+        query += " WHERE pce.project_scope_id = CAST(:project_scope_id AS uuid)"
+        params["project_scope_id"] = project_scope_id
+    query += " ORDER BY pce.created_at, pce.project_contribution_event_id"
+
+    with SessionLocal() as session:
+        rows = session.execute(text(query), params).mappings().all()
+
+    return [
+        {
+            "projectScopeId": str(row["project_scope_id"]),
+            "projectScopeCode": row["project_scope_code"],
+            "projectScopeName": row["project_scope_name"],
+            "projectContributionEventId": str(row["project_contribution_event_id"]),
+            "projectAssignmentId": str(row["project_assignment_id"]),
+            "assignmentTargetType": row["assignment_target_type"],
+            "assignmentTargetId": str(row["assignment_target_id"]),
+            "actorId": str(row["actor_id"]),
+            "actorType": row["actor_type"],
+            "subjectType": row["subject_type"],
+            "subjectId": str(row["subject_id"]),
+            "contributionType": row["contribution_type"],
+            "role": row["role"],
+            "verificationStatus": row["verification_status"],
+            "verificationSource": row["verification_source"],
+            "quantity": _db.to_float(row["quantity"]),
+            "unit": row["unit"],
+            "estimatedValue": _db.to_float(row["estimated_value"]) if row["estimated_value"] is not None else None,
+            "currency": row["currency"],
+            "status": row["status"],
+            "createdAt": _iso(row["created_at"]),
+            "confirmedAt": _iso(row["confirmed_at"]),
+            "confirmedBy": str(row["confirmed_by"]) if row["confirmed_by"] is not None else None,
+        }
+        for row in rows
+    ]
+
+
 def fetch_project_pnl_summary(project_scope_id: str | None = None) -> list[dict[str, Any]]:
     if not is_enabled():
         return []
@@ -387,6 +462,163 @@ def fetch_project_order_allocation_summary(project_scope_id: str | None = None) 
             "activeAllocatedQty": _db.to_float(row["active_allocated_qty"]),
             "releasedAllocatedQty": _db.to_float(row["released_allocated_qty"]),
             "unit": row["unit"],
+        }
+        for row in rows
+    ]
+
+def fetch_shared_resource_allocation_summary(
+    organization_id: str | None = None,
+    resource_type: str | None = None,
+) -> list[dict[str, Any]]:
+    if not is_enabled():
+        return []
+
+    query = """
+        SELECT
+            sr.shared_resource_id,
+            sr.organization_id,
+            sr.resource_code,
+            sr.name,
+            sr.resource_type,
+            sr.status,
+            sr.capacity_value,
+            sr.capacity_unit,
+            COUNT(sra.allocation_id) AS allocation_count,
+            COUNT(*) FILTER (WHERE sra.status = 'active') AS active_allocation_count,
+            COALESCE(SUM(sra.allocated_capacity), 0) AS allocated_capacity_total,
+            COALESCE(SUM(sra.released_capacity), 0) AS released_capacity_total,
+            COALESCE(
+                SUM(
+                    CASE
+                        WHEN sra.status = 'active' THEN sra.allocated_capacity - sra.released_capacity
+                        ELSE 0
+                    END
+                ),
+                0
+            ) AS active_capacity_total,
+            CASE
+                WHEN sr.capacity_value IS NOT NULL AND sr.capacity_value > 0 THEN (
+                    COALESCE(
+                        SUM(
+                            CASE
+                                WHEN sra.status = 'active' THEN sra.allocated_capacity - sra.released_capacity
+                                ELSE 0
+                            END
+                        ),
+                        0
+                    ) / sr.capacity_value
+                ) * 100
+                ELSE NULL
+            END AS utilization_pct
+        FROM shared_resources sr
+        LEFT JOIN shared_resource_allocations sra ON sra.shared_resource_id = sr.shared_resource_id
+    """
+    filters: list[str] = []
+    params: dict[str, Any] = {}
+    if organization_id is not None:
+        filters.append("sr.organization_id = CAST(:organization_id AS uuid)")
+        params["organization_id"] = organization_id
+    if resource_type is not None:
+        filters.append("sr.resource_type = :resource_type")
+        params["resource_type"] = resource_type
+    if filters:
+        query += " WHERE " + " AND ".join(filters)
+    query += """
+        GROUP BY
+            sr.shared_resource_id,
+            sr.organization_id,
+            sr.resource_code,
+            sr.name,
+            sr.resource_type,
+            sr.status,
+            sr.capacity_value,
+            sr.capacity_unit
+        ORDER BY sr.resource_code
+    """
+
+    with SessionLocal() as session:
+        rows = session.execute(text(query), params).mappings().all()
+
+    return [
+        {
+            "sharedResourceId": str(row["shared_resource_id"]),
+            "organizationId": str(row["organization_id"]),
+            "resourceCode": row["resource_code"],
+            "name": row["name"],
+            "resourceType": row["resource_type"],
+            "status": row["status"],
+            "capacityValue": _db.to_float(row["capacity_value"]) if row["capacity_value"] is not None else None,
+            "capacityUnit": row["capacity_unit"],
+            "allocationCount": int(row["allocation_count"]),
+            "activeAllocationCount": int(row["active_allocation_count"]),
+            "allocatedCapacityTotal": _db.to_float(row["allocated_capacity_total"]),
+            "releasedCapacityTotal": _db.to_float(row["released_capacity_total"]),
+            "activeCapacityTotal": _db.to_float(row["active_capacity_total"]),
+            "utilizationPct": _db.to_float(row["utilization_pct"]) if row["utilization_pct"] is not None else None,
+        }
+        for row in rows
+    ]
+
+
+def fetch_project_impacted_actors_summary(project_scope_id: str | None = None) -> list[dict[str, Any]]:
+    if not is_enabled():
+        return []
+
+    query = """
+        SELECT
+            ps.project_scope_id,
+            ps.project_scope_code,
+            ps.name AS project_scope_name,
+            pce.actor_id,
+            COALESCE(pce.metadata_json ->> 'actorType', 'person') AS actor_type,
+            pce.role,
+            COUNT(*) AS contribution_count,
+            COUNT(*) FILTER (WHERE pce.status = 'confirmed') AS confirmed_contribution_count,
+            COUNT(*) FILTER (WHERE pce.status = 'proposed') AS proposed_contribution_count,
+            COUNT(*) FILTER (WHERE pce.status = 'rejected') AS rejected_contribution_count,
+            COALESCE(SUM(pce.quantity) FILTER (WHERE pce.status = 'confirmed'), 0) AS confirmed_quantity,
+            SUM(pce.estimated_value) FILTER (WHERE pce.status = 'confirmed') AS confirmed_estimated_value,
+            CASE
+                WHEN COUNT(DISTINCT pce.currency) FILTER (WHERE pce.status = 'confirmed' AND pce.estimated_value IS NOT NULL AND pce.currency IS NOT NULL) = 1
+                    THEN MAX(pce.currency) FILTER (WHERE pce.status = 'confirmed' AND pce.estimated_value IS NOT NULL)
+                ELSE NULL
+            END AS currency
+        FROM project_contribution_events pce
+        JOIN project_scopes ps ON ps.project_scope_id = pce.project_scope_id
+    """
+    params: dict[str, Any] = {}
+    if project_scope_id is not None:
+        query += " WHERE pce.project_scope_id = CAST(:project_scope_id AS uuid)"
+        params["project_scope_id"] = project_scope_id
+    query += """
+        GROUP BY
+            ps.project_scope_id,
+            ps.project_scope_code,
+            ps.name,
+            pce.actor_id,
+            COALESCE(pce.metadata_json ->> 'actorType', 'person'),
+            pce.role
+        ORDER BY ps.project_scope_code, pce.actor_id, pce.role
+    """
+
+    with SessionLocal() as session:
+        rows = session.execute(text(query), params).mappings().all()
+
+    return [
+        {
+            "projectScopeId": str(row["project_scope_id"]),
+            "projectScopeCode": row["project_scope_code"],
+            "projectScopeName": row["project_scope_name"],
+            "actorId": str(row["actor_id"]),
+            "actorType": row["actor_type"],
+            "role": row["role"],
+            "contributionCount": int(row["contribution_count"]),
+            "confirmedContributionCount": int(row["confirmed_contribution_count"]),
+            "proposedContributionCount": int(row["proposed_contribution_count"]),
+            "rejectedContributionCount": int(row["rejected_contribution_count"]),
+            "confirmedQuantity": _db.to_float(row["confirmed_quantity"]),
+            "confirmedEstimatedValue": _db.to_float(row["confirmed_estimated_value"]) if row["confirmed_estimated_value"] is not None else None,
+            "currency": row["currency"],
         }
         for row in rows
     ]

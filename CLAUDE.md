@@ -76,8 +76,8 @@ agos_app/
 ├── app/
 │   ├── main.py           # FastAPI entrypoint: CorrelationIdMiddleware, ErrorResponse handlers, router mount
 │   ├── api/
-│   │   ├── router.py     # Aggregates 9 route groups under /api/v1/
-│   │   └── routes/       # One file per domain (customers, organizations, orders, lots, farm, preorders, views, events, health)
+│   │   ├── router.py     # Aggregates the mounted API route groups plus /health
+│   │   └── routes/       # One file per domain (customers, organizations, project scopes, shared resources, orders, lots, farm, preorders, views, events, audit, health)
 │   ├── models/           # Pydantic v2 schemas (DTOs, not ORM models)
 │   │   ├── common.py     # Shared: Meta, ErrorResponse, DomainEvent, HealthResponse, DomainEventListResponse
 │   │   └── *.py          # Per-domain schemas
@@ -110,7 +110,7 @@ Phase 1 runtime stores the implemented core entities in PostgreSQL tables and st
 
 `Organization` is now implemented as a standalone canonical business aggregate for the legal-operating owner via ADR-012, with schema, CRUD/state routes, event emission, and additive `organization_id` propagation on farm-side canonical records plus the first commercial-side canonical records, current Phase 1 read-model surfaces, and the `external_mappings` baseline in place. The remaining intentional gap tracked in `docs/changelog/v1/divergence-ledger.md` entry `DL-20260415-01` is staged `organization_id` propagation into integration sync/adapters.
 
-Architecture docs now also include `ProjectScope` via ADR-013 as the additive soft value-stream scope under `Organization`. The runtime now includes the standalone `ProjectScope` schema/API slice, the first assignment lane for `plot`, `crop_cycle`, `lot`, `preorder`, and `order`, assignment-enriched farm/commercial detail reads, the contribution ledger baseline (`record/list/confirm/reject`), and the first economics pair (`CostRecord` from confirmed contributions and `RevenueRecord` from delivered assigned orders), while broader reporting, shared-resource, allocation, and backfill lanes remain deferred.
+Architecture docs now also include `ProjectScope` via ADR-013 as the additive soft value-stream scope under `Organization`. The runtime now includes the standalone `ProjectScope` schema/API slice, the first assignment lane for `plot`, `crop_cycle`, `lot`, `preorder`, and `order`, assignment-enriched farm/commercial detail reads, the contribution ledger baseline (`record/list/confirm/reject`), the first economics pair (`CostRecord` from confirmed contributions and `RevenueRecord` from delivered assigned orders), additive reporting boards (`project-contribution-summary`, `project-contribution-ledger`, `project-impacted-actors-summary`, `project-pnl-summary`, `project-order-allocation-summary`), and the first `SharedResource` catalog baseline (`create/list/get`), while shared-resource allocation/release semantics, broader shared-resource reporting, and backfill lanes remain deferred.
 
 Architecture docs use canonical aliases such as `CustomerProfile`, `Preorder`, `SalesOrder`, `SalesOrderLine`, `ProductSKU`, `LotBatch`, `Plot`, and `CropCycle` for cross-reference with business terms. They may also discuss future or broader entities such as `Farmer` and `CropTask`, but those are not yet implemented in the current Phase 1 runtime.
 
@@ -124,6 +124,7 @@ All endpoints are under `/api/v1/`. The route groups are:
 - `/customers` — customer CRUD and preferences
 - `/organizations` — standalone organization CRUD and state transitions
 - `/projects` — standalone project scope CRUD, state transitions, project assignments, and contribution ledger commands
+- `/shared-resources` — shared resource catalog create/list/get baseline
 - `/preorders` — pre-order management
 - `/orders` — full order lifecycle (create → confirm → allocate → adjust/release allocation → pack → ship → deliver / fail-delivery / cancel)
 - `/lots` — lot/batch management, evidence, and QC reviews
@@ -152,7 +153,7 @@ All endpoints are under `/api/v1/`. The route groups are:
 - **Phase 1 bypass stance** — the repo keeps the bypass mechanism in `Meta` and authz helpers, but no bypass lanes are enabled. Any bypass request must deny and audit instead of executing.
 - **Role vocabulary** — `qc_reviewer` is a top-level business role for the QC lane. Do not collapse it into `ops`, `farm_manager`, or delegated agent behavior.
 - **Shared read auth rollout** — protected read surfaces now flow through request-meta plus service-layer authz. This includes `/api/v1/events`, `/api/v1/views/*`, raw `/api/v1/farm/*`, `/api/v1/audit`, raw `/api/v1/customers*`, raw preorder reads, raw `/api/v1/orders*`, and raw `/api/v1/lots/{lot_id}` plus evidence/QC review readbacks.
-- **Write auth rollout** — preorder, order, lot/QC, and customer write paths now enforce role checks in the service layer before state transitions or event append. The remaining explicit divergence is the packed-or-later order cancel approval contract tracked in `docs/changelog/v1/divergence-ledger.md`.
+- **Write auth rollout** — preorder, order, lot/QC, customer, ProjectScope contribution/economics, and shared-resource write paths now enforce role checks in the service layer before state transitions or event append. The remaining explicit divergences are tracked in `docs/changelog/v1/divergence-ledger.md`.
 
 ## Design Documentation
 

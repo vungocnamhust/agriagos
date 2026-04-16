@@ -1154,6 +1154,349 @@ def test_project_contribution_summary_endpoint_reads_real_postgres_aggregation(
 
 
 @pytest.mark.postgres_integration
+def test_project_contribution_summary_endpoint_nulls_estimated_value_when_confirmed_rows_have_no_values(
+    postgres_db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _enable_view_store(monkeypatch, postgres_db_session)
+    monkeypatch.setattr(views_service.postgres_sync, "is_enabled", lambda: True)
+
+    code_suffix = uuid.uuid4().hex[:8]
+    organization_id = str(uuid.uuid4())
+    project_scope_id = str(uuid.uuid4())
+    assignment_id = str(uuid.uuid4())
+    subject_id = str(uuid.uuid4())
+
+    _insert_organization(postgres_db_session, organization_id, f"ORG-SUM-NULL-{code_suffix}", "Summary Null Org")
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO project_scopes (
+                project_scope_id,
+                organization_id,
+                project_scope_code,
+                name,
+                project_scope_type,
+                status,
+                season_year,
+                owner_actor_id,
+                metadata_json
+            ) VALUES (
+                CAST(:project_scope_id AS uuid),
+                CAST(:organization_id AS uuid),
+                :project_scope_code,
+                'Summary Null Scope',
+                'value_stream',
+                'active',
+                '2026',
+                'founder-1',
+                '{}'::jsonb
+            )
+            """
+        ),
+        {
+            "project_scope_id": project_scope_id,
+            "organization_id": organization_id,
+            "project_scope_code": f"PRJ-SUM-NULL-{code_suffix}",
+        },
+    )
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO project_assignments (
+                project_assignment_id,
+                project_scope_id,
+                target_type,
+                target_id,
+                is_primary,
+                attribution_weight,
+                metadata_json
+            ) VALUES (
+                CAST(:project_assignment_id AS uuid),
+                CAST(:project_scope_id AS uuid),
+                'lot',
+                CAST(:target_id AS uuid),
+                true,
+                1,
+                '{}'::jsonb
+            )
+            """
+        ),
+        {
+            "project_assignment_id": assignment_id,
+            "project_scope_id": project_scope_id,
+            "target_id": subject_id,
+        },
+    )
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO project_contribution_events (
+                project_contribution_event_id,
+                project_scope_id,
+                project_assignment_id,
+                organization_id,
+                actor_id,
+                subject_type,
+                subject_id,
+                contribution_type,
+                role,
+                quantity,
+                unit,
+                estimated_value,
+                currency,
+                status,
+                source,
+                created_at,
+                updated_at
+            ) VALUES (
+                CAST(:project_contribution_event_id AS uuid),
+                CAST(:project_scope_id AS uuid),
+                CAST(:project_assignment_id AS uuid),
+                CAST(:organization_id AS uuid),
+                CAST(:actor_id AS uuid),
+                'lot',
+                CAST(:subject_id AS uuid),
+                'labor_day',
+                'producer',
+                2,
+                'day',
+                NULL,
+                NULL,
+                'confirmed',
+                'manual',
+                CAST('2026-04-16T09:00:00+00:00' AS timestamptz),
+                CAST('2026-04-16T09:00:00+00:00' AS timestamptz)
+            )
+            """
+        ),
+        {
+            "project_contribution_event_id": str(uuid.uuid4()),
+            "project_scope_id": project_scope_id,
+            "project_assignment_id": assignment_id,
+            "organization_id": organization_id,
+            "actor_id": str(uuid.uuid4()),
+            "subject_id": subject_id,
+        },
+    )
+
+    response = client.get(
+        f"/api/v1/views/project-contribution-summary?projectScopeId={project_scope_id}",
+        headers=_auth_headers(actor_role="admin", actor_id="admin-1"),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["items"]
+    assert len(payload) == 1
+    assert payload[0]["confirmedCount"] == 1
+    assert payload[0]["confirmedQuantity"] == 2.0
+    assert payload[0]["confirmedEstimatedValue"] is None
+    assert payload[0]["currency"] is None
+
+
+@pytest.mark.postgres_integration
+def test_project_contribution_ledger_endpoint_reads_real_postgres_rows(
+    postgres_db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _enable_view_store(monkeypatch, postgres_db_session)
+    monkeypatch.setattr(views_service.postgres_sync, "is_enabled", lambda: True)
+
+    code_suffix = uuid.uuid4().hex[:8]
+    organization_id = str(uuid.uuid4())
+    project_scope_id = str(uuid.uuid4())
+    project_scope_code = f"PRJ-LEDGER-{code_suffix}"
+    assignment_id_1 = str(uuid.uuid4())
+    assignment_id_2 = str(uuid.uuid4())
+    target_id_1 = str(uuid.uuid4())
+    target_id_2 = str(uuid.uuid4())
+    event_id_1 = str(uuid.uuid4())
+    event_id_2 = str(uuid.uuid4())
+    actor_id_1 = str(uuid.uuid4())
+    actor_id_2 = str(uuid.uuid4())
+    confirmer_id = str(uuid.uuid4())
+
+    _insert_organization(postgres_db_session, organization_id, f"ORG-LEDGER-{code_suffix}", "Ledger Org")
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO project_scopes (
+                project_scope_id,
+                organization_id,
+                project_scope_code,
+                name,
+                project_scope_type,
+                status,
+                season_year,
+                owner_actor_id,
+                metadata_json
+            ) VALUES (
+                CAST(:project_scope_id AS uuid),
+                CAST(:organization_id AS uuid),
+                :project_scope_code,
+                'Ledger Scope',
+                'value_stream',
+                'active',
+                '2026',
+                'founder-1',
+                '{}'::jsonb
+            )
+            """
+        ),
+        {
+            "project_scope_id": project_scope_id,
+            "organization_id": organization_id,
+            "project_scope_code": project_scope_code,
+        },
+    )
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO project_assignments (
+                project_assignment_id,
+                project_scope_id,
+                target_type,
+                target_id,
+                is_primary,
+                attribution_weight,
+                metadata_json
+            ) VALUES
+            (
+                CAST(:assignment_id_1 AS uuid),
+                CAST(:project_scope_id AS uuid),
+                'order',
+                CAST(:target_id_1 AS uuid),
+                true,
+                1,
+                '{}'::jsonb
+            ),
+            (
+                CAST(:assignment_id_2 AS uuid),
+                CAST(:project_scope_id AS uuid),
+                'lot',
+                CAST(:target_id_2 AS uuid),
+                true,
+                0.5,
+                '{}'::jsonb
+            )
+            """
+        ),
+        {
+            "assignment_id_1": assignment_id_1,
+            "assignment_id_2": assignment_id_2,
+            "project_scope_id": project_scope_id,
+            "target_id_1": target_id_1,
+            "target_id_2": target_id_2,
+        },
+    )
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO project_contribution_events (
+                project_contribution_event_id,
+                project_scope_id,
+                project_assignment_id,
+                organization_id,
+                actor_id,
+                subject_type,
+                subject_id,
+                contribution_type,
+                role,
+                quantity,
+                unit,
+                estimated_value,
+                currency,
+                status,
+                confirmed_by,
+                confirmed_at,
+                source,
+                metadata_json,
+                created_at,
+                updated_at
+            ) VALUES
+            (
+                CAST(:event_id_1 AS uuid),
+                CAST(:project_scope_id AS uuid),
+                CAST(:assignment_id_1 AS uuid),
+                CAST(:organization_id AS uuid),
+                CAST(:actor_id_1 AS uuid),
+                'order',
+                CAST(:target_id_1 AS uuid),
+                'cash_support',
+                'supporter',
+                2,
+                'entry',
+                350000,
+                'VND',
+                'proposed',
+                NULL,
+                NULL,
+                'manual',
+                '{"actorType":"partner","verificationStatus":"system_detected","verificationSource":"field_log"}'::jsonb,
+                CAST('2026-04-16T11:00:00+00:00' AS timestamptz),
+                CAST('2026-04-16T11:00:00+00:00' AS timestamptz)
+            ),
+            (
+                CAST(:event_id_2 AS uuid),
+                CAST(:project_scope_id AS uuid),
+                CAST(:assignment_id_2 AS uuid),
+                CAST(:organization_id AS uuid),
+                CAST(:actor_id_2 AS uuid),
+                'lot',
+                CAST(:target_id_2 AS uuid),
+                'labor_day',
+                'producer',
+                1,
+                'day',
+                NULL,
+                NULL,
+                'confirmed',
+                CAST(:confirmer_id AS uuid),
+                CAST('2026-04-16T10:30:00+00:00' AS timestamptz),
+                'manual',
+                '{"actorType":"person","verificationStatus":"verified","verificationSource":"admin_confirmed"}'::jsonb,
+                CAST('2026-04-16T10:00:00+00:00' AS timestamptz),
+                CAST('2026-04-16T10:00:00+00:00' AS timestamptz)
+            )
+            """
+        ),
+        {
+            "event_id_1": event_id_1,
+            "event_id_2": event_id_2,
+            "project_scope_id": project_scope_id,
+            "assignment_id_1": assignment_id_1,
+            "assignment_id_2": assignment_id_2,
+            "organization_id": organization_id,
+            "actor_id_1": actor_id_1,
+            "actor_id_2": actor_id_2,
+            "target_id_1": target_id_1,
+            "target_id_2": target_id_2,
+            "confirmer_id": confirmer_id,
+        },
+    )
+
+    response = client.get(
+        f"/api/v1/views/project-contribution-ledger?projectScopeId={project_scope_id}",
+        headers=_auth_headers(actor_role="viewer", actor_id="viewer-1"),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["items"]
+    assert [row["projectContributionEventId"] for row in payload] == [event_id_2, event_id_1]
+    assert payload[0]["projectScopeCode"] == project_scope_code
+    assert payload[0]["assignmentTargetType"] == "lot"
+    assert payload[0]["assignmentTargetId"] == target_id_2
+    assert payload[0]["status"] == "confirmed"
+    assert payload[0]["confirmedBy"] == confirmer_id
+    assert payload[0]["verificationStatus"] == "verified"
+    assert payload[1]["assignmentTargetType"] == "order"
+    assert payload[1]["assignmentTargetId"] == target_id_1
+    assert payload[1]["actorType"] == "partner"
+    assert payload[1]["estimatedValue"] == 350000.0
+    assert payload[1]["currency"] == "VND"
+
+
+@pytest.mark.postgres_integration
 def test_project_pnl_summary_endpoint_reads_real_postgres_aggregation(
     monkeypatch: pytest.MonkeyPatch,
     postgres_db_session: Session,
@@ -1728,3 +2071,253 @@ def test_project_order_allocation_summary_endpoint_reads_real_postgres_aggregati
     assert payload[0]["activeAllocatedQty"] == 3.0
     assert payload[0]["releasedAllocatedQty"] == 2.0
     assert payload[0]["unit"] == "kg"
+
+
+@pytest.mark.postgres_integration
+def test_project_impacted_actors_summary_endpoint_reads_real_postgres_aggregation(
+    postgres_db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _enable_view_store(monkeypatch, postgres_db_session)
+    monkeypatch.setattr(views_service.postgres_sync, "is_enabled", lambda: True)
+
+    code_suffix = uuid.uuid4().hex[:8]
+    organization_id = str(uuid.uuid4())
+    project_scope_id = str(uuid.uuid4())
+    project_scope_code = f"PRJ-ACTOR-{code_suffix}"
+    assignment_id_1 = str(uuid.uuid4())
+    assignment_id_2 = str(uuid.uuid4())
+    assignment_id_3 = str(uuid.uuid4())
+    actor_id_1 = str(uuid.uuid4())
+    actor_id_2 = str(uuid.uuid4())
+
+    _insert_organization(postgres_db_session, organization_id, f"ORG-ACTOR-{code_suffix}", "Actor Summary Org")
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO project_scopes (
+                project_scope_id,
+                organization_id,
+                project_scope_code,
+                name,
+                project_scope_type,
+                status,
+                season_year,
+                owner_actor_id,
+                metadata_json
+            ) VALUES (
+                CAST(:project_scope_id AS uuid),
+                CAST(:organization_id AS uuid),
+                :project_scope_code,
+                'Actor Scope',
+                'value_stream',
+                'active',
+                '2026',
+                'founder-1',
+                '{}'::jsonb
+            )
+            """
+        ),
+        {
+            "project_scope_id": project_scope_id,
+            "organization_id": organization_id,
+            "project_scope_code": project_scope_code,
+        },
+    )
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO project_assignments (
+                project_assignment_id,
+                project_scope_id,
+                target_type,
+                target_id,
+                is_primary,
+                attribution_weight,
+                metadata_json
+            ) VALUES
+            (
+                CAST(:assignment_id_1 AS uuid),
+                CAST(:project_scope_id AS uuid),
+                'lot',
+                CAST(:target_id_1 AS uuid),
+                true,
+                1,
+                '{}'::jsonb
+            ),
+            (
+                CAST(:assignment_id_2 AS uuid),
+                CAST(:project_scope_id AS uuid),
+                'order',
+                CAST(:target_id_2 AS uuid),
+                true,
+                1,
+                '{}'::jsonb
+            ),
+            (
+                CAST(:assignment_id_3 AS uuid),
+                CAST(:project_scope_id AS uuid),
+                'lot',
+                CAST(:target_id_3 AS uuid),
+                true,
+                1,
+                '{}'::jsonb
+            )
+            """
+        ),
+        {
+            "assignment_id_1": assignment_id_1,
+            "assignment_id_2": assignment_id_2,
+            "assignment_id_3": assignment_id_3,
+            "project_scope_id": project_scope_id,
+            "target_id_1": str(uuid.uuid4()),
+            "target_id_2": str(uuid.uuid4()),
+            "target_id_3": str(uuid.uuid4()),
+        },
+    )
+
+    contribution_rows = [
+        {
+            "event_id": str(uuid.uuid4()),
+            "assignment_id": assignment_id_1,
+            "actor_id": actor_id_1,
+            "metadata_json": '{"actorType":"person"}',
+            "subject_type": "lot",
+            "subject_id": str(uuid.uuid4()),
+            "contribution_type": "labor_day",
+            "role": "producer",
+            "quantity": 2,
+            "unit": "day",
+            "estimated_value": 500000,
+            "currency": "VND",
+            "status": "confirmed",
+            "created_at": "2026-04-16T09:00:00+00:00",
+        },
+        {
+            "event_id": str(uuid.uuid4()),
+            "assignment_id": assignment_id_2,
+            "actor_id": actor_id_1,
+            "metadata_json": '{"actorType":"person"}',
+            "subject_type": "order",
+            "subject_id": str(uuid.uuid4()),
+            "contribution_type": "cash_support",
+            "role": "producer",
+            "quantity": 1,
+            "unit": "entry",
+            "estimated_value": None,
+            "currency": None,
+            "status": "proposed",
+            "created_at": "2026-04-16T10:00:00+00:00",
+        },
+        {
+            "event_id": str(uuid.uuid4()),
+            "assignment_id": assignment_id_3,
+            "actor_id": actor_id_2,
+            "metadata_json": '{"actorType":"partner"}',
+            "subject_type": "lot",
+            "subject_id": str(uuid.uuid4()),
+            "contribution_type": "labor_day",
+            "role": "supporter",
+            "quantity": 1,
+            "unit": "day",
+            "estimated_value": 100000,
+            "currency": "USD",
+            "status": "rejected",
+            "created_at": "2026-04-16T11:00:00+00:00",
+        },
+    ]
+    for row in contribution_rows:
+        postgres_db_session.execute(
+            text(
+                """
+                INSERT INTO project_contribution_events (
+                    project_contribution_event_id,
+                    project_scope_id,
+                    project_assignment_id,
+                    organization_id,
+                    actor_id,
+                    subject_type,
+                    subject_id,
+                    contribution_type,
+                    role,
+                    quantity,
+                    unit,
+                    estimated_value,
+                    currency,
+                    status,
+                    source,
+                    metadata_json,
+                    created_at,
+                    updated_at
+                ) VALUES (
+                    CAST(:project_contribution_event_id AS uuid),
+                    CAST(:project_scope_id AS uuid),
+                    CAST(:project_assignment_id AS uuid),
+                    CAST(:organization_id AS uuid),
+                    CAST(:actor_id AS uuid),
+                    :subject_type,
+                    CAST(:subject_id AS uuid),
+                    :contribution_type,
+                    :role,
+                    :quantity,
+                    :unit,
+                    :estimated_value,
+                    :currency,
+                    :status,
+                    'manual',
+                    CAST(:metadata_json AS jsonb),
+                    CAST(:created_at AS timestamptz),
+                    CAST(:created_at AS timestamptz)
+                )
+                """
+            ),
+            {
+                "project_contribution_event_id": row["event_id"],
+                "project_scope_id": project_scope_id,
+                "project_assignment_id": row["assignment_id"],
+                "organization_id": organization_id,
+                "actor_id": row["actor_id"],
+                "subject_type": row["subject_type"],
+                "subject_id": row["subject_id"],
+                "contribution_type": row["contribution_type"],
+                "role": row["role"],
+                "quantity": row["quantity"],
+                "unit": row["unit"],
+                "estimated_value": row["estimated_value"],
+                "currency": row["currency"],
+                "status": row["status"],
+                "metadata_json": row["metadata_json"],
+                "created_at": row["created_at"],
+            },
+        )
+
+    response = client.get(
+        f"/api/v1/views/project-impacted-actors-summary?projectScopeId={project_scope_id}",
+        headers=_auth_headers(actor_role="viewer", actor_id="viewer-1"),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["items"]
+    assert len(payload) == 2
+    assert payload[0]["projectScopeId"] == project_scope_id
+    assert payload[0]["projectScopeCode"] == project_scope_code
+    assert payload[0]["actorId"] == actor_id_1
+    assert payload[0]["actorType"] == "person"
+    assert payload[0]["role"] == "producer"
+    assert payload[0]["contributionCount"] == 2
+    assert payload[0]["confirmedContributionCount"] == 1
+    assert payload[0]["proposedContributionCount"] == 1
+    assert payload[0]["rejectedContributionCount"] == 0
+    assert payload[0]["confirmedQuantity"] == 2.0
+    assert payload[0]["confirmedEstimatedValue"] == 500000.0
+    assert payload[0]["currency"] == "VND"
+    assert payload[1]["actorId"] == actor_id_2
+    assert payload[1]["actorType"] == "partner"
+    assert payload[1]["role"] == "supporter"
+    assert payload[1]["contributionCount"] == 1
+    assert payload[1]["confirmedContributionCount"] == 0
+    assert payload[1]["proposedContributionCount"] == 0
+    assert payload[1]["rejectedContributionCount"] == 1
+    assert payload[1]["confirmedQuantity"] == 0.0
+    assert payload[1]["confirmedEstimatedValue"] is None
+    assert payload[1]["currency"] is None

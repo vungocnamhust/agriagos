@@ -8,7 +8,10 @@ from fastapi import APIRouter, Request
 from app.api.routes._meta import apply_request_correlation, request_meta
 from app.models.common import ErrorResponse
 from app.models.shared_resources import (
+    AllocateSharedResourceRequest,
     CreateSharedResourceRequest,
+    ReleaseSharedResourceAllocationRequest,
+    SharedResourceAllocationResponse,
     SharedResourceDetail,
     SharedResourceListResponse,
     SharedResourceResponse,
@@ -39,3 +42,35 @@ def list_shared_resources(request: Request) -> SharedResourceListResponse:
 @router.get("/{shared_resource_id}", response_model=SharedResourceDetail, responses=SHARED_RESOURCE_ERROR_RESPONSES)
 def get_shared_resource(shared_resource_id: UUID, request: Request) -> SharedResourceDetail:
     return svc.get_shared_resource_for_actor(str(shared_resource_id), meta=request_meta(request))
+
+
+@router.post(
+    "/{shared_resource_id}/allocations",
+    response_model=SharedResourceAllocationResponse,
+    status_code=201,
+    responses={**SHARED_RESOURCE_ERROR_RESPONSES, 409: {"model": ErrorResponse, "description": "Conflict"}},
+)
+def allocate_shared_resource(
+    shared_resource_id: UUID,
+    request: Request,
+    payload: AllocateSharedResourceRequest,
+) -> SharedResourceAllocationResponse:
+    return svc.allocate_shared_resource(str(shared_resource_id), apply_request_correlation(request, payload))
+
+
+@router.post(
+    "/{shared_resource_id}/allocations/{allocation_id}/release",
+    response_model=SharedResourceAllocationResponse,
+    responses={**SHARED_RESOURCE_ERROR_RESPONSES, 409: {"model": ErrorResponse, "description": "Conflict"}},
+)
+def release_shared_resource_allocation(
+    shared_resource_id: UUID,
+    allocation_id: UUID,
+    request: Request,
+    payload: ReleaseSharedResourceAllocationRequest,
+) -> SharedResourceAllocationResponse:
+    return svc.release_shared_resource_allocation(
+        str(shared_resource_id),
+        str(allocation_id),
+        apply_request_correlation(request, payload),
+    )

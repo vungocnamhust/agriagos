@@ -37,11 +37,17 @@ Trong kiến trúc chung của mình:
 - AI không chạm thẳng DB canonical
 - AI không bypass policy
 - AI không tự mở rộng quyền
+- AI không được suy quyền từ membership, contribution role, hoặc chat/channel binding
 
 Phase 1 clarification:
 - kiến trúc có thể chừa sẵn cơ chế biểu diễn bypass lane cho agent / automation
 - nhưng hiện tại không có bypass lane nào đang enable
 - mọi bypass request ở Phase 1 phải bị deny và audit thay vì được execute
+
+Rule cứng cho epic authority model:
+- `Actor Identity`, `Membership/Affiliation`, `Contribution Role`, và `Permission Grant` là các lớp khác nhau
+- agent chỉ được dùng lớp authority đang được runtime enforce; các lớp context chỉ để read, suggest, summarize, hoặc propose
+- nếu future `PermissionGrant` runtime lane được ship, decision đó phải được ghi bằng ADR riêng thay vì ngầm đổi semantics của membership hoặc contribution
 
 ---
 

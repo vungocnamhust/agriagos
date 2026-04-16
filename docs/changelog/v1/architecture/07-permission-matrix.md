@@ -58,6 +58,19 @@ Phase đầu cần hiểu rõ:
 - nhưng implementation mới không được đi ngược baseline này
 - nếu current code chưa enforce đủ, phần thiếu phải được coi là debt có chủ đích chứ không phải permission ngầm
 
+### 3.5A Authority model separation
+Trong baseline hiện tại phải tách rõ 4 lớp:
+- `Actor Identity`: ai là chủ thể được ghi nhận
+- `Membership/Affiliation`: actor đang gắn với organization hoặc `ProjectScope` nào
+- `Contribution Role`: actor đã đóng góp với vai trò gì ở một fact cụ thể
+- `Permission Grant`: authority runtime để xem, sửa, approve, hoặc gọi tool
+
+Rule cứng cho current repo:
+- membership hoặc stewardship không tự sinh permission
+- contribution role không tự sinh permission
+- `ProjectScope` vẫn là soft scope cho attribution và coordination, không tự thành hard permission boundary toàn cục
+- current runtime authority vẫn đi qua baseline roles và explicit service/read policy checks cho đến khi một permission-grant lane riêng được chốt
+
 ### 3.6 Organization baseline policy
 `Organization` là business owner aggregate mới trong baseline kiến trúc. Phase 1 hiện đã có standalone runtime auth surface cho Organization CRUD + activate/pause/close.
 
@@ -69,7 +82,7 @@ Policy baseline cho runtime hiện tại và các slice tiếp theo:
 - org-scoped RBAC/ABAC và membership theo organization là phase sau, không được ngầm giả định đã tồn tại
 
 ### 3.7 ProjectScope baseline policy
-`ProjectScope` là lớp soft scope dưới `Organization`. Runtime Phase 1 hiện đã cover aggregate `ProjectScope`, assignment / contribution lanes, cost-record lane đầu tiên, revenue-record lane đầu tiên, và read-model `project-contribution-summary` cùng `project-pnl-summary`; các policy lanes sâu hơn vẫn rollout dần theo slices sau.
+`ProjectScope` là lớp soft scope dưới `Organization`. Runtime Phase 1 hiện đã cover aggregate `ProjectScope`, assignment / contribution lanes, cost-record lane đầu tiên, revenue-record lane đầu tiên, và read-model `project-contribution-summary`, `project-contribution-ledger`, `project-impacted-actors-summary`, `project-pnl-summary`, cùng `project-order-allocation-summary`; các policy lanes sâu hơn vẫn rollout dần theo slices sau.
 
 Policy baseline:
 - Founder / Super Admin và Admin là nhóm chính được tạo, sửa, activate, pause, close, archive `ProjectScope`
@@ -78,6 +91,9 @@ Policy baseline:
 - assignment sang `ProjectScope` nên mở theo domain-owner lane: Farm Manager cho plot/crop/lot, Sales hoặc Admin cho preorder/order/customer source, Ops cho inventory movement, Accountant hoặc Admin cho financial allocations
 - confirmation của contribution hoặc financially eligible assignment là lane nhạy cảm; Founder / Super Admin / Admin là baseline approvers, có thể mở thêm approver role riêng ở phase sau
 - P&L theo `ProjectScope` là read surface nhạy cảm; Founder / Super Admin / Admin / Accountant là baseline readers, Viewer / Analyst chỉ nên vào qua read models được duyệt
+- contribution-ledger board theo `ProjectScope` là read surface chi tiết hơn contribution summary nhưng chưa phải finance lane; Founder / Super Admin / Admin / Accountant / Viewer là baseline readers, còn Sales / Ops / Farm Manager không mặc định có quyền đọc raw ledger này
+- impacted-actors board theo `ProjectScope` là read surface operational tổng hợp từ contribution facts; Founder / Super Admin / Admin / Accountant / Viewer là baseline readers, còn Sales / Ops / Farm Manager không mặc định có quyền đọc raw board này
+- current runtime vẫn giữ project contribution write lane hẹp ở `founder` / `super_admin` / `admin`; target domain-owner expansion ở bullet trên chưa ship hết, xem `DL-20260416-02`
 - project-scoped membership, per-scope ABAC, và delegated agent permissions là phase sau; docs này không ngầm khẳng định runtime đã enforce các lane đó
 
 ### 3.8 SharedResource baseline policy

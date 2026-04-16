@@ -14,6 +14,11 @@ Agri OS is a deterministic-core FastAPI repository for agricultural supply chain
 2. `CLAUDE.md` for repository architecture and operating model
 3. Nearest nested `CLAUDE.md` or `.claude/rules/*.md` file for local boundaries
 
+For task-to-agent routing, use `.github/agent-invocation-policy.md`.
+Use `.github/agent-selection-cheatsheet.md` for the quick chooser and `.github/global-agent-inventory.md` for keep/library/ignore inventory.
+Treat the `ignore` bucket in `.github/global-agent-inventory.md` as opt-in only.
+Use `.github/skills/skill-library/SKILL.md` as the router for library-only lanes.
+
 ## Runtime Facts
 
 - App root: `agos_app/`
