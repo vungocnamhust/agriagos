@@ -1,0 +1,371 @@
+openapi: 3.1.0
+info:
+  title: Agri OS Actor Authority Draft Contract
+  summary: Docs-first draft contract for future actor identity, affiliation, and permission grant lanes
+  version: 0.0.1-draft
+  description: |
+    This artifact started as the docs-first draft contract referenced by ADR-014.
+    `/api/v1/actors` and `/api/v1/affiliations` are now mounted in the Phase 1 app and live in the committed baseline OpenAPI.
+    This draft artifact remains the staging surface for future actor-authority expansion, especially `PermissionGrant`.
+x-agri-os-status: draft
+x-runtime-availability: partially-mounted
+paths:
+  /api/v1/actors:
+    post:
+      tags:
+      - ActorAuthorityDraft
+      summary: Draft Create Actor Identity
+      description: Future route shape for creating canonical actor identity records.
+      operationId: draft_create_actor_identity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateActorIdentityRequest'
+      responses:
+        '201':
+          description: Draft actor identity response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActorIdentityResponse'
+  /api/v1/actors/{actorId}:
+    get:
+      tags:
+      - ActorAuthorityDraft
+      summary: Draft Get Actor Identity
+      description: Future route shape for fetching one canonical actor identity.
+      operationId: draft_get_actor_identity
+      parameters:
+      - name: actorId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Draft actor identity response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActorIdentityResponse'
+  /api/v1/affiliations:
+    post:
+      tags:
+      - ActorAuthorityDraft
+      summary: Draft Create Actor Affiliation
+      description: Future route shape for recording actor affiliation facts.
+      operationId: draft_create_actor_affiliation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateActorAffiliationRequest'
+      responses:
+        '201':
+          description: Draft actor affiliation response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActorAffiliationResponse'
+  /api/v1/permission-grants:
+    post:
+      tags:
+      - ActorAuthorityDraft
+      summary: Draft Create Permission Grant
+      description: Future route shape for explicit authority grants if a grant engine is approved in a later ADR.
+      operationId: draft_create_permission_grant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePermissionGrantRequest'
+      responses:
+        '201':
+          description: Draft permission grant response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionGrantResponse'
+components:
+  schemas:
+    ActorIdentityDetail:
+      type: object
+      properties:
+        actorId:
+          type: string
+        actorCode:
+          type: string
+        actorType:
+          type: string
+          enum:
+          - person
+          - household
+          - organization_actor
+          - automation_principal
+        displayName:
+          type: string
+        status:
+          type: string
+          enum:
+          - active
+          - inactive
+        primaryPhone:
+          type:
+          - string
+          - 'null'
+        primaryEmail:
+          type:
+          - string
+          - 'null'
+        externalMappingsJson:
+          type: object
+          additionalProperties: true
+        metadata:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type:
+          - string
+          - 'null'
+        updatedAt:
+          type:
+          - string
+          - 'null'
+      required:
+      - actorId
+      - actorCode
+      - actorType
+      - displayName
+      - status
+    CreateActorIdentityRequest:
+      type: object
+      properties:
+        actorType:
+          type: string
+          enum:
+          - person
+          - household
+          - organization_actor
+          - automation_principal
+        displayName:
+          type: string
+        primaryPhone:
+          type:
+          - string
+          - 'null'
+        primaryEmail:
+          type:
+          - string
+          - 'null'
+        externalMappingsJson:
+          type: object
+          additionalProperties: true
+        metadata:
+          type: object
+          additionalProperties: true
+      required:
+      - actorType
+      - displayName
+    ActorIdentityResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/ActorIdentityDetail'
+      required:
+      - data
+    ActorAffiliationDetail:
+      type: object
+      properties:
+        actorAffiliationId:
+          type: string
+        actorId:
+          type: string
+        organizationId:
+          type:
+          - string
+          - 'null'
+        projectScopeId:
+          type:
+          - string
+          - 'null'
+        affiliationKind:
+          type: string
+          enum:
+          - membership
+          - stewardship
+          - contractor
+          - partner
+          - observer
+        status:
+          type: string
+          enum:
+          - active
+          - ended
+        effectiveAt:
+          type: string
+        endedAt:
+          type:
+          - string
+          - 'null'
+        confirmedBy:
+          type:
+          - string
+          - 'null'
+        confirmedAt:
+          type:
+          - string
+          - 'null'
+        metadata:
+          type: object
+          additionalProperties: true
+      required:
+      - actorAffiliationId
+      - actorId
+      - affiliationKind
+      - status
+      - effectiveAt
+      anyOf:
+      - required:
+        - organizationId
+      - required:
+        - projectScopeId
+    CreateActorAffiliationRequest:
+      type: object
+      properties:
+        actorId:
+          type: string
+        organizationId:
+          type:
+          - string
+          - 'null'
+        projectScopeId:
+          type:
+          - string
+          - 'null'
+        affiliationKind:
+          type: string
+          enum:
+          - membership
+          - stewardship
+          - contractor
+          - partner
+          - observer
+        effectiveAt:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+      required:
+      - actorId
+      - affiliationKind
+      - effectiveAt
+      anyOf:
+      - required:
+        - organizationId
+      - required:
+        - projectScopeId
+    ActorAffiliationResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/ActorAffiliationDetail'
+      required:
+      - data
+    PermissionGrantDetail:
+      type: object
+      properties:
+        permissionGrantId:
+          type: string
+        actorId:
+          type: string
+        organizationId:
+          type:
+          - string
+          - 'null'
+        projectScopeId:
+          type:
+          - string
+          - 'null'
+        resourceType:
+          type: string
+        action:
+          type: string
+        effect:
+          type: string
+          enum:
+          - allow
+          - deny
+        grantSource:
+          type: string
+        effectiveAt:
+          type: string
+        expiresAt:
+          type:
+          - string
+          - 'null'
+        revokedAt:
+          type:
+          - string
+          - 'null'
+        metadata:
+          type: object
+          additionalProperties: true
+      required:
+      - permissionGrantId
+      - actorId
+      - resourceType
+      - action
+      - effect
+      - grantSource
+      - effectiveAt
+    CreatePermissionGrantRequest:
+      type: object
+      properties:
+        actorId:
+          type: string
+        organizationId:
+          type:
+          - string
+          - 'null'
+        projectScopeId:
+          type:
+          - string
+          - 'null'
+        resourceType:
+          type: string
+        action:
+          type: string
+        effect:
+          type: string
+          enum:
+          - allow
+          - deny
+        grantSource:
+          type: string
+        effectiveAt:
+          type: string
+        expiresAt:
+          type:
+          - string
+          - 'null'
+        metadata:
+          type: object
+          additionalProperties: true
+      required:
+      - actorId
+      - resourceType
+      - action
+      - effect
+      - grantSource
+      - effectiveAt
+    PermissionGrantResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/PermissionGrantDetail'
+      required:
+      - data

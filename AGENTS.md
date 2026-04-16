@@ -29,7 +29,7 @@ Use `.github/skills/skill-library/SKILL.md` as the router for library-only lanes
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **agriagos** (2184 symbols, 4145 relationships, 186 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **agriagos** (4611 symbols, 13952 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

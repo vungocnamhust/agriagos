@@ -5,6 +5,9 @@ Bộ tài liệu này là **xương sống kiến trúc** cho project quản lý
 Authority map cho toàn bộ docs-first workflow nằm ở `docs/changelog/v1/architecture/00-source-of-truth-registry.md`.
 Central divergence register nằm ở `docs/changelog/v1/divergence-ledger.md`.
 
+Nếu cần bộ tài liệu tiếng Việt dễ đọc để onboarding nhanh, bắt đầu ở `docs/00-start-here/README.md`.
+Lưu ý: lớp docs dưới `docs/00-start-here`, `docs/01-glossary`, `docs/02-current-runtime`... là lớp giải thích và điều hướng; authority chính vẫn là bộ changelog docs này.
+
 Mục tiêu của bộ docs:
 - chốt phần **deterministic core** trước
 - để AI/Agent đứng ở lớp hỗ trợ và điều phối mềm

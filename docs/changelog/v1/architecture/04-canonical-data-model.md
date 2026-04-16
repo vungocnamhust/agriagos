@@ -255,6 +255,79 @@ Thứ tự rollout chi tiết xem ở `10-assumptions-and-migration-path.md`.
 ## 4.0D Shared Resource
 **Mục đích:** giữ canonical danh mục tài nguyên được nhiều `ProjectScope` cùng sử dụng.
 
+## 4.0DA Actor Identity
+**Mục đích:** giữ canonical identity cho actor được nhắc tới trong contribution, stewardship, affiliation, và future authority lanes mà không trộn với customer identity hoặc auth credential.
+
+**Source of truth:** Agri OS Core
+
+### Field tối thiểu
+- `actor_id`
+- `actor_code`
+- `actor_type`
+- `display_name`
+- `status`
+- `primary_phone`
+- `primary_email`
+- `external_mappings_json`
+- `created_at`
+- `updated_at`
+
+### Rule baseline
+- actor identity là context identity lane, không tự sinh permission
+- `actor_type` phải tách được person, household, organization_actor, và automation principal nếu phase sau cần
+- customer vẫn là commercial aggregate riêng; không collapse `CustomerProfile` vào `Actor Identity` trong baseline hiện tại
+- Phase 1 runtime hiện mount lane tối thiểu `create/get` cho actor identity; scope này chỉ ghi canonical context records và chưa kéo theo permission semantics
+
+## 4.0DB Actor Affiliation
+**Mục đích:** giữ fact actor đang gắn với `Organization` hoặc `ProjectScope` nào, theo affiliation kind nào, trong khoảng hiệu lực nào.
+
+**Source of truth:** Agri OS Core
+
+### Field tối thiểu
+- `actor_affiliation_id`
+- `actor_id`
+- `organization_id`
+- `project_scope_id`
+- `affiliation_kind`
+- `status`
+- `effective_at`
+- `ended_at`
+- `confirmed_by`
+- `confirmed_at`
+- `metadata_json`
+
+### Rule baseline
+- affiliation là fact/context lane; không tự sinh read/write/approve/tool permission
+- một affiliation có thể gắn ở org level, project level, hoặc cả hai nhưng phải explicit
+- stewardship, membership, contractor, partner, observer là ví dụ affiliation kinds; contribution role không thay affiliation
+- Phase 1 runtime hiện mount `create` cho actor affiliation; validation chỉ xác nhận actor tồn tại và có ít nhất một explicit scope anchor (`organization_id` hoặc `project_scope_id`)
+
+## 4.0DC Permission Grant
+**Mục đích:** giữ future authority contract cho runtime permission explicit nếu team chốt grant engine riêng sau ADR-014.
+
+**Source of truth:** Chưa active trong runtime hiện tại; draft contract trước được giữ ở docs-first artifact.
+
+### Field tối thiểu cho draft lane
+- `permission_grant_id`
+- `actor_id`
+- `organization_id`
+- `project_scope_id`
+- `resource_type`
+- `action`
+- `effect`
+- `grant_source`
+- `effective_at`
+- `expires_at`
+- `revoked_at`
+- `metadata_json`
+
+### Rule baseline
+- chỉ `PermissionGrant` mới được phép trở thành future authority source nếu team chốt ADR riêng cho runtime lane đó
+- membership, affiliation, contribution role, chat binding, hay `ProjectScope` soft scope không được serialize thành grant ngầm
+- `PermissionGrant` vẫn là future/not mounted lane dù `Actor Identity` và `Actor Affiliation` đã có runtime scope tối thiểu
+
+Committed live contract cho `Actor Identity` và `Actor Affiliation` giờ nằm trong `docs/changelog/v1/openapi/agros-api-v1.0.yaml`. Draft artifact `docs/changelog/v1/openapi/actor-authority-vnext-draft.yaml` tiếp tục giữ phần future expansion cho authority lane, đặc biệt là `PermissionGrant`.
+
 **Source of truth:** Agri OS Core
 
 ### Field tối thiểu
@@ -318,7 +391,7 @@ Thứ tự rollout chi tiết xem ở `10-assumptions-and-migration-path.md`.
 - nếu revenue phục vụ nhiều scope, phải đi qua `FinancialAllocation`
 
 ## 4.0G Financial Allocation
-**Mục đích:** chia một `CostRecord` hoặc `RevenueRecord` sang nhiều `ProjectScope` một cách minh bạch.
+**Mục đích:** gắn attribution tài chính từ một source record sang `ProjectScope` một cách minh bạch, bắt đầu bằng baseline hẹp trước khi mở weighted split đầy đủ.
 
 **Source of truth:** Agri OS Core
 
@@ -327,15 +400,17 @@ Thứ tự rollout chi tiết xem ở `10-assumptions-and-migration-path.md`.
 - `source_record_type`
 - `source_record_id`
 - `project_scope_id`
+- `organization_id`
 - `allocation_basis`
 - `allocation_weight`
 - `allocated_amount`
 - `currency`
-- `confidence_level`
-- `confirmed_by`
-- `confirmed_at`
+- `metadata_json`
+- `created_at`
 
 ### Rule baseline
+- runtime Phase 1 hiện ship baseline `cost_record -> ProjectScope` qua create/list nested dưới `/api/v1/projects/{project_scope_id}/financial-allocations`, gồm cả `manual_full` và `manual_weighted` cho split nhiều scope
+- revenue allocation, `confidence_level`, `confirmed_by`, và `confirmed_at` là rollout sau; không ngầm coi chúng đã có trong runtime Phase 1
 - không duplicate cost hoặc revenue facts để xử lý shared attribution
 - report tài chính phải chỉ dùng allocations đủ điều kiện financial
 - report impact có thể đọc thêm assignments hoặc allocations observational mà không làm bẩn P&L

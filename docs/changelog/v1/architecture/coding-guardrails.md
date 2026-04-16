@@ -47,7 +47,7 @@ Mọi write command quan trọng cũng phải ghi audit decision:
 - `escalated` khi command bị chặn để chờ human approval/override owner thay vì bị bác bỏ vĩnh viễn
 - `failed` khi flow đã được phép đi tiếp về business rule nhưng persistence/runtime step không hoàn tất
 
-Audit decision phải mang ít nhất `correlation_id`, `actor_id`, `actor_role`, và metadata đủ để lần lại event hoặc command đã gây ra decision đó. Với action nhạy cảm, snapshot trong audit nên được chuẩn hóa về operational fields thay vì dump toàn bộ payload nội bộ.
+Audit decision phải mang ít nhất `correlation_id`, `actor_id`, `actor_role`, và metadata đủ để lần lại event hoặc command đã gây ra decision đó. Với protected read/write decisions, metadata nên chuẩn hóa rõ authority context như `authorityBasis`, `effectiveActorRole`, delegated actor fields nếu có, và `bypassRequested` trước khi thêm các business fields của từng action. Với action nhạy cảm, snapshot trong audit nên được chuẩn hóa về operational fields thay vì dump toàn bộ payload nội bộ.
 
 Trên PostgreSQL path, canonical state write, domain event append, audit decision append, và idempotency snapshot phải đi trong cùng một transaction boundary.
 

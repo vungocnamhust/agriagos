@@ -99,10 +99,12 @@ Payload tối thiểu:
 
 ## 3.0A ProjectScope events
 
-> `ProjectScope` là docs-first baseline trong PR này. Runtime event emission sẽ đến theo rollout sau, nên nhóm event này đang là canonical contract trước implementation.
+> Runtime Phase 1 hiện đã emit dotted-lowercase events cho ProjectScope create/update/state-transition lanes. Group này không còn là docs-first-only baseline.
 
 ### `ProjectScopeCreated`
 Khi một project/value stream scope được tạo dưới một `Organization`.
+
+Runtime name hiện tại: `project_scope.created`.
 
 Payload tối thiểu:
 - project_scope_id
@@ -115,6 +117,8 @@ Payload tối thiểu:
 ### `ProjectScopeUpdated`
 Khi profile, metadata, parent-child grouping, hoặc owner context của scope thay đổi.
 
+Runtime name hiện tại: `project_scope.updated`.
+
 Payload tối thiểu:
 - project_scope_id
 - changed_fields
@@ -123,6 +127,8 @@ Payload tối thiểu:
 ### `ProjectScopeActivated`
 Khi scope chuyển từ `draft` hoặc `paused` sang `active`.
 
+Runtime name hiện tại: `project_scope.activated`.
+
 Payload tối thiểu:
 - project_scope_id
 - old_status
@@ -130,6 +136,8 @@ Payload tối thiểu:
 
 ### `ProjectScopePaused`
 Khi scope bị tạm dừng mà chưa đóng lifecycle.
+
+Runtime name hiện tại: `project_scope.paused`.
 
 Payload tối thiểu:
 - project_scope_id
@@ -140,6 +148,8 @@ Payload tối thiểu:
 ### `ProjectScopeClosed`
 Khi scope được kết thúc ở mức nghiệp vụ.
 
+Runtime name hiện tại: `project_scope.closed`.
+
 Payload tối thiểu:
 - project_scope_id
 - old_status
@@ -148,6 +158,8 @@ Payload tối thiểu:
 
 ### `ProjectScopeArchived`
 Khi scope được archive khỏi lane vận hành thường xuyên nhưng vẫn giữ để audit/report.
+
+Runtime name hiện tại: `project_scope.archived`.
 
 Payload tối thiểu:
 - project_scope_id
@@ -160,6 +172,8 @@ Payload tối thiểu:
 
 ### `ProjectAssignmentAdded`
 Khi một target được gắn vào một `ProjectScope`.
+
+Runtime name hiện tại: `project_assignment.created`.
 
 Payload tối thiểu:
 - project_assignment_id
@@ -193,6 +207,8 @@ Payload tối thiểu:
 ### `ProjectAssignmentRemoved`
 Khi assignment bị kết thúc hoặc revoke.
 
+Runtime name hiện tại: `project_assignment.ended`.
+
 Payload tối thiểu:
 - project_assignment_id
 - project_scope_id
@@ -202,6 +218,8 @@ Payload tối thiểu:
 
 ### `ProjectContributionRecorded`
 Khi một contribution fact được ghi vào contribution ledger.
+
+Runtime name hiện tại: `project_contribution.recorded`.
 
 Payload tối thiểu:
 - project_contribution_event_id
@@ -216,6 +234,8 @@ Payload tối thiểu:
 ### `ProjectContributionConfirmed`
 Khi contribution được xác nhận hợp lệ.
 
+Runtime name hiện tại: `project_contribution.confirmed`.
+
 Payload tối thiểu:
 - project_contribution_event_id
 - project_scope_id
@@ -224,6 +244,8 @@ Payload tối thiểu:
 
 ### `ProjectContributionRejected`
 Khi contribution bị từ chối.
+
+Runtime name hiện tại: `project_contribution.rejected`.
 
 Payload tối thiểu:
 - project_contribution_event_id
@@ -275,6 +297,8 @@ Payload tối thiểu:
 ### `FinancialAllocationRecorded`
 Khi một cost hoặc revenue được split sang nhiều `ProjectScope`.
 
+Runtime name hiện tại: `financial_allocation.recorded`.
+
 Payload tối thiểu:
 - financial_allocation_id
 - source_record_type
@@ -287,6 +311,8 @@ Payload tối thiểu:
 ### `SharedResourceCreated`
 Khi một shared resource catalog record được tạo lần đầu trong Core.
 
+Runtime name hiện tại: `shared_resource.created`.
+
 Payload tối thiểu:
 - shared_resource_id
 - organization_id
@@ -297,6 +323,8 @@ Payload tối thiểu:
 ### `SharedResourceAllocated`
 Khi một shared resource được allocate cho một `ProjectScope`.
 
+Runtime name hiện tại: `shared_resource.allocated`.
+
 Payload tối thiểu:
 - shared_resource_id
 - project_scope_id
@@ -306,6 +334,8 @@ Payload tối thiểu:
 
 ### `SharedResourceReleased`
 Khi một shared resource allocation kết thúc hoặc được trả lại.
+
+Runtime name hiện tại: `shared_resource.released`.
 
 Payload tối thiểu:
 - shared_resource_id

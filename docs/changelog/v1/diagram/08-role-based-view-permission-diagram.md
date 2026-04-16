@@ -13,6 +13,7 @@ Sơ đồ này thể hiện nguyên tắc **one truth, many views**: cùng một
 > | `GET /api/v1/views/farm` | Farm View — plots + active crop cycles |
 > | `GET /api/v1/views/farm-summary-board` | Farm Summary Board |
 > | `GET /api/v1/views/project-impacted-actors-summary` | Project Impacted Actors Summary |
+> | `GET /api/v1/views/shared-resource-allocation-summary` | Shared Resource Allocation Summary |
 > | `GET /api/v1/events` | Scoped Event Stream — short-term read lane cho operator / analyst use cases |
 > | `GET /api/v1/audit` | Audit Query Surface — operator/debug readback, không phải role-facing business view |
 > | `GET /api/v1/shared-resources` | Shared Resource Catalog View [Phase 1 ✅] |
@@ -171,5 +172,5 @@ flowchart LR
 - `agent / automation` vẫn advisory-first. Sơ đồ cho thấy nó có thể đọc hoặc tạo draft trong scope được cấp, nhưng không có bypass lane nào đang enable ở Phase 1.
 - `Organization Profile View [Phase 1 ✅]` và `Organization Management Commands [Phase 1 ✅]` hiện tương ứng với standalone `/api/v1/organizations` read/write lane. Association sang farm-side, commercial-side, và org-scoped RBAC vẫn là phase sau.
 - `Project Scope Directory [Phase 1 ✅]` hiện tương ứng với standalone `/api/v1/projects` read/write lane.
-- `Project Economics / Contribution Views [Phase 1 ✅ / Phase 2 🔜]` hiện đã có `/api/v1/views/project-contribution-summary`, `/api/v1/views/project-contribution-ledger`, `/api/v1/views/project-impacted-actors-summary`, `/api/v1/views/project-pnl-summary`, `/api/v1/views/project-order-allocation-summary`, cost-record lane đầu tiên dưới `/api/v1/projects/{project_scope_id}/cost-records`, và revenue-record lane đầu tiên dưới `/api/v1/projects/{project_scope_id}/revenue-records`; shared-resource reporting vẫn là phase sau, còn allocation reporting hiện mới dừng ở observational order-allocation board chứ chưa phải `FinancialAllocation` lane.
-- `Shared Resource Catalog View [Phase 1 ✅]` và `Shared Resource Catalog Commands [Phase 1 ✅]` hiện tương ứng với `/api/v1/shared-resources` create/list/get baseline; allocation hay release sang `ProjectScope` chưa ship ở runtime hiện tại.
+- `Project Economics / Contribution Views [Phase 1 ✅ / Phase 2 🔜]` hiện đã có `/api/v1/views/project-contribution-summary`, `/api/v1/views/project-contribution-ledger`, `/api/v1/views/project-impacted-actors-summary`, `/api/v1/views/project-pnl-summary`, `/api/v1/views/project-order-allocation-summary`, `/api/v1/views/shared-resource-allocation-summary`, cost-record lane đầu tiên dưới `/api/v1/projects/{project_scope_id}/cost-records`, và revenue-record lane đầu tiên dưới `/api/v1/projects/{project_scope_id}/revenue-records`; `FinancialAllocation` lane đã có write baseline riêng, còn customer source/repeat, impacted-households, và broader shared-resource reporting vẫn là phase sau.
+- `Shared Resource Catalog View [Phase 1 ✅]` và `Shared Resource Catalog Commands [Phase 1 ✅]` hiện tương ứng với `/api/v1/shared-resources` create/list/get baseline; allocation và release sang `ProjectScope` cũng đã ship ở runtime hiện tại qua nested allocation routes.

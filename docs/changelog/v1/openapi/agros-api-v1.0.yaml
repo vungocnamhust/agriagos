@@ -17,6 +17,118 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
+  /api/v1/actors:
+    post:
+      tags:
+      - ActorAuthority
+      summary: Create Actor Identity
+      operationId: create_actor_identity_api_v1_actors_post
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateActorIdentityRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActorIdentityResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/actors/{actor_id}:
+    get:
+      tags:
+      - ActorAuthority
+      summary: Get Actor Identity
+      operationId: get_actor_identity_api_v1_actors__actor_id__get
+      parameters:
+      - name: actor_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Actor Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActorIdentityDetail'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/affiliations:
+    post:
+      tags:
+      - ActorAuthority
+      summary: Create Actor Affiliation
+      operationId: create_actor_affiliation_api_v1_affiliations_post
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateActorAffiliationRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActorAffiliationResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/customers:
     post:
       tags:
@@ -832,6 +944,115 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/shared-resources/{shared_resource_id}/allocations:
+    post:
+      tags:
+      - SharedResources
+      summary: Allocate Shared Resource
+      operationId: allocate_shared_resource_api_v1_shared_resources__shared_resource_id__allocations_post
+      parameters:
+      - name: shared_resource_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Shared Resource Id
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AllocateSharedResourceRequest'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SharedResourceAllocationResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/shared-resources/{shared_resource_id}/allocations/{allocation_id}/release:
+    post:
+      tags:
+      - SharedResources
+      summary: Release Shared Resource Allocation
+      operationId: release_shared_resource_allocation_api_v1_shared_resources__shared_resource_id__allocations__allocation_id__release_post
+      parameters:
+      - name: shared_resource_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Shared Resource Id
+      - name: allocation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Allocation Id
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReleaseSharedResourceAllocationRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SharedResourceAllocationResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     patch:
       tags:
       - ProjectScopes
@@ -1488,6 +1709,95 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProjectRevenueRecordResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/projects/{project_scope_id}/financial-allocations:
+    post:
+      tags:
+      - ProjectScopes
+      summary: Create Financial Allocation
+      operationId: create_financial_allocation_api_v1_projects__project_scope_id__financial_allocations_post
+      parameters:
+      - name: project_scope_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Scope Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFinancialAllocationRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialAllocationResponse'
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags:
+      - ProjectScopes
+      summary: List Financial Allocations
+      operationId: list_financial_allocations_api_v1_projects__project_scope_id__financial_allocations_get
+      parameters:
+      - name: project_scope_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Scope Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialAllocationListResponse'
         '403':
           description: Forbidden
           content:
@@ -2954,6 +3264,48 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/views/shared-resource-allocation-summary:
+    get:
+      tags:
+      - Views
+      summary: Get Shared Resource Allocation Summary
+      operationId: get_shared_resource_allocation_summary_api_v1_views_shared_resource_allocation_summary_get
+      parameters:
+      - name: organizationId
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Organizationid
+      - name: resourceType
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Resourcetype
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SharedResourceAllocationSummaryResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/views/project-impacted-actors-summary:
     get:
       tags:
@@ -3231,6 +3583,156 @@ components:
           - type: 'null'
       type: object
       title: ActivateProjectScopeRequest
+    ActorAffiliationDetail:
+      properties:
+        actorAffiliationId:
+          type: string
+          title: Actoraffiliationid
+        actorId:
+          type: string
+          title: Actorid
+        organizationId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Organizationid
+        projectScopeId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Projectscopeid
+        affiliationKind:
+          type: string
+          enum:
+          - membership
+          - stewardship
+          - contractor
+          - partner
+          - observer
+          title: Affiliationkind
+        status:
+          type: string
+          enum:
+          - active
+          - ended
+          title: Status
+        effectiveAt:
+          type: string
+          title: Effectiveat
+        endedAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Endedat
+        confirmedBy:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Confirmedby
+        confirmedAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Confirmedat
+        metadata:
+          type: object
+          additionalProperties: true
+          title: Metadata
+        createdAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdat
+        updatedAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Updatedat
+      type: object
+      required:
+      - actorAffiliationId
+      - actorId
+      - affiliationKind
+      - status
+      - effectiveAt
+      title: ActorAffiliationDetail
+    ActorAffiliationResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/ActorAffiliationDetail'
+      type: object
+      required:
+      - data
+      title: ActorAffiliationResponse
+    ActorIdentityDetail:
+      properties:
+        actorId:
+          type: string
+          title: Actorid
+        actorCode:
+          type: string
+          title: Actorcode
+        actorType:
+          type: string
+          enum:
+          - person
+          - household
+          - organization_actor
+          - automation_principal
+          title: Actortype
+        displayName:
+          type: string
+          title: Displayname
+        status:
+          type: string
+          enum:
+          - active
+          - inactive
+          title: Status
+        primaryPhone:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Primaryphone
+        primaryEmail:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Primaryemail
+        externalMappingsJson:
+          type: object
+          additionalProperties: true
+          title: Externalmappingsjson
+        metadata:
+          type: object
+          additionalProperties: true
+          title: Metadata
+        createdAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdat
+        updatedAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Updatedat
+      type: object
+      required:
+      - actorId
+      - actorCode
+      - actorType
+      - displayName
+      - status
+      title: ActorIdentityDetail
+    ActorIdentityResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/ActorIdentityDetail'
+      type: object
+      required:
+      - data
+      title: ActorIdentityResponse
     AddLotEvidenceRequest:
       properties:
         evidenceType:
@@ -3573,6 +4075,7 @@ components:
           - type: 'null'
           title: Reason
         approvalRef:
+          description: Required when cancelling a packed-or-later order.
           anyOf:
           - type: string
           - type: 'null'
@@ -3703,6 +4206,87 @@ components:
       - fullName
       - phone
       title: CreateCustomerRequest
+    CreateActorAffiliationRequest:
+      properties:
+        actorId:
+          type: string
+          title: Actorid
+        organizationId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Organizationid
+        projectScopeId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Projectscopeid
+        affiliationKind:
+          type: string
+          enum:
+          - membership
+          - stewardship
+          - contractor
+          - partner
+          - observer
+          title: Affiliationkind
+        effectiveAt:
+          type: string
+          title: Effectiveat
+        metadata:
+          type: object
+          additionalProperties: true
+          title: Metadata
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - actorId
+      - affiliationKind
+      - effectiveAt
+      title: CreateActorAffiliationRequest
+    CreateActorIdentityRequest:
+      properties:
+        actorType:
+          type: string
+          enum:
+          - person
+          - household
+          - organization_actor
+          - automation_principal
+          title: Actortype
+        displayName:
+          type: string
+          title: Displayname
+        primaryPhone:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Primaryphone
+        primaryEmail:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Primaryemail
+        externalMappingsJson:
+          type: object
+          additionalProperties: true
+          title: Externalmappingsjson
+        metadata:
+          type: object
+          additionalProperties: true
+          title: Metadata
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - actorType
+      - displayName
+      title: CreateActorIdentityRequest
     CreateHarvestedLotRequest:
       properties:
         productSkuId:
@@ -5734,8 +6318,7 @@ components:
           type: string
           title: Actortype
         subjectType:
-          type: string
-          title: Subjecttype
+          $ref: '#/components/schemas/ProjectAssignmentTargetType'
         subjectId:
           type: string
           title: Subjectid
@@ -5746,12 +6329,10 @@ components:
           type: string
           title: Role
         verificationStatus:
-          type: string
-          title: Verificationstatus
+          $ref: '#/components/schemas/ProjectContributionVerificationStatus'
           default: self_reported
         verificationSource:
-          type: string
-          title: Verificationsource
+          $ref: '#/components/schemas/ProjectContributionVerificationSource'
           default: manual_submission
         verificationNote:
           anyOf:
@@ -5854,6 +6435,22 @@ components:
       - confirmed
       - rejected
       title: ProjectContributionStatus
+    ProjectContributionVerificationSource:
+      type: string
+      enum:
+      - manual_submission
+      - field_log
+      - admin_confirmed
+      - admin_rejected
+      title: ProjectContributionVerificationSource
+    ProjectContributionVerificationStatus:
+      type: string
+      enum:
+      - self_reported
+      - system_detected
+      - verified
+      - rejected
+      title: ProjectContributionVerificationStatus
     ProjectContributionSummaryItem:
       properties:
         projectScopeId:
@@ -6209,6 +6806,131 @@ components:
       required:
       - items
       title: ProjectImpactedActorSummaryResponse
+    FinancialAllocationDetail:
+      properties:
+        financialAllocationId:
+          type: string
+          title: Financialallocationid
+        projectScopeId:
+          type: string
+          title: Projectscopeid
+        organizationId:
+          type: string
+          title: Organizationid
+        sourceRecordType:
+          type: string
+          const: cost_record
+          title: Sourcerecordtype
+        sourceRecordId:
+          type: string
+          title: Sourcerecordid
+        allocationBasis:
+          type: string
+          enum:
+          - manual_full
+          - manual_weighted
+          title: Allocationbasis
+        allocationWeight:
+          type: number
+          title: Allocationweight
+        allocatedAmount:
+          type: number
+          title: Allocatedamount
+        currency:
+          type: string
+          title: Currency
+        metadata:
+          additionalProperties:
+            type: string
+          type: object
+          title: Metadata
+        createdAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdat
+      type: object
+      required:
+      - financialAllocationId
+      - projectScopeId
+      - organizationId
+      - sourceRecordType
+      - sourceRecordId
+      - allocationBasis
+      - allocationWeight
+      - allocatedAmount
+      - currency
+      title: FinancialAllocationDetail
+    FinancialAllocationListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/FinancialAllocationDetail'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: FinancialAllocationListResponse
+    FinancialAllocationResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/FinancialAllocationDetail'
+      type: object
+      required:
+      - data
+      title: FinancialAllocationResponse
+    CreateFinancialAllocationRequest:
+      oneOf:
+      - type: object
+        properties:
+          sourceRecordType:
+            type: string
+            const: cost_record
+            title: Sourcerecordtype
+          sourceRecordId:
+            type: string
+            title: Sourcerecordid
+          allocationBasis:
+            type: string
+            const: manual_full
+            title: Allocationbasis
+          meta:
+            anyOf:
+            - $ref: '#/components/schemas/Meta'
+            - type: 'null'
+        required:
+        - sourceRecordType
+        - sourceRecordId
+        - allocationBasis
+      - type: object
+        properties:
+          sourceRecordType:
+            type: string
+            const: cost_record
+            title: Sourcerecordtype
+          sourceRecordId:
+            type: string
+            title: Sourcerecordid
+          allocationBasis:
+            type: string
+            const: manual_weighted
+            title: Allocationbasis
+          allocationWeight:
+            type: number
+            exclusiveMinimum: 0.0
+            maximum: 1.0
+            title: Allocationweight
+          meta:
+            anyOf:
+            - $ref: '#/components/schemas/Meta'
+            - type: 'null'
+        required:
+        - sourceRecordType
+        - sourceRecordId
+        - allocationBasis
+        - allocationWeight
+      title: CreateFinancialAllocationRequest
     ProjectCostRecordDetail:
       properties:
         costRecordId:
@@ -6582,6 +7304,81 @@ components:
       required:
       - data
       title: SharedResourceResponse
+    SharedResourceAllocationSummaryItem:
+      properties:
+        sharedResourceId:
+          type: string
+          title: Sharedresourceid
+        organizationId:
+          type: string
+          title: Organizationid
+        resourceCode:
+          type: string
+          title: Resourcecode
+        name:
+          type: string
+          title: Name
+        resourceType:
+          type: string
+          title: Resourcetype
+        status:
+          type: string
+          title: Status
+        capacityValue:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Capacityvalue
+        capacityUnit:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Capacityunit
+        allocationCount:
+          type: integer
+          title: Allocationcount
+        activeAllocationCount:
+          type: integer
+          title: Activeallocationcount
+        allocatedCapacityTotal:
+          type: number
+          title: Allocatedcapacitytotal
+        releasedCapacityTotal:
+          type: number
+          title: Releasedcapacitytotal
+        activeCapacityTotal:
+          type: number
+          title: Activecapacitytotal
+        utilizationPct:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Utilizationpct
+      type: object
+      required:
+      - sharedResourceId
+      - organizationId
+      - resourceCode
+      - name
+      - resourceType
+      - status
+      - allocationCount
+      - activeAllocationCount
+      - allocatedCapacityTotal
+      - releasedCapacityTotal
+      - activeCapacityTotal
+      title: SharedResourceAllocationSummaryItem
+    SharedResourceAllocationSummaryResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/SharedResourceAllocationSummaryItem'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: SharedResourceAllocationSummaryResponse
     SharedResourceStatus:
       type: string
       enum:
@@ -6749,8 +7546,7 @@ components:
           title: Actortype
           default: person
         subjectType:
-          type: string
-          title: Subjecttype
+          $ref: '#/components/schemas/ProjectAssignmentTargetType'
         subjectId:
           type: string
           title: Subjectid
@@ -6761,12 +7557,10 @@ components:
           type: string
           title: Role
         verificationStatus:
-          type: string
-          title: Verificationstatus
+          $ref: '#/components/schemas/ProjectContributionVerificationStatus'
           default: self_reported
         verificationSource:
-          type: string
-          title: Verificationsource
+          $ref: '#/components/schemas/ProjectContributionVerificationSource'
           default: manual_submission
         verificationNote:
           anyOf:

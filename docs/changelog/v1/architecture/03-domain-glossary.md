@@ -136,6 +136,44 @@ Assignment có thể là:
 
 Ledger này không thay thế event log toàn hệ; nó là canonical fact lane cho contribution của dòng giá trị.
 
+## 3.6A Actor Identity
+
+**Định nghĩa:** canonical hồ sơ actor dùng để nhận diện chủ thể con người, tổ chức, hộ gia đình, hay automation principal được nhắc đến trong contribution, assignment, stewardship, và authority docs.
+
+Actor identity trả lời các câu hỏi như:
+- ai là chủ thể đang được ghi nhận
+- actor này là person, household, organization seat, hay automation principal
+- canonical actor code nào được dùng để map affiliation và future permission grants
+
+**Không nên nhầm với:**
+- Customer: người mua trong commercial domain
+- User account hay login subject: authn credential là lane khác
+- delegated actor trong request meta: đó là runtime context, không phải canonical actor record
+
+Runtime hiện đã mount lane tối thiểu cho `Actor Identity` (`POST /api/v1/actors`, `GET /api/v1/actors/{actor_id}`) và `Actor Affiliation` (`POST /api/v1/affiliations`). Draft contract tại `docs/changelog/v1/openapi/actor-authority-vnext-draft.yaml` vẫn được giữ riêng cho future expansion, đặc biệt là `PermissionGrant`.
+
+## 3.6B Actor Affiliation
+
+**Định nghĩa:** canonical fact ghi actor đang gắn với `Organization` hoặc `ProjectScope` nào theo kiểu affiliation nào và trong khoảng thời gian nào.
+
+Affiliation dùng để trả lời:
+- actor đang thuộc organization hoặc scope nào
+- affiliation này là membership, stewardship, contractor, partner, hay observer
+- affiliation còn hiệu lực hay đã kết thúc
+
+**Không nên nhầm với:**
+- permission runtime: affiliation không tự cấp quyền
+- contribution role: đóng góp ở một fact cụ thể không đồng nghĩa actor có affiliation bền vững
+
+## 3.6C Permission Grant
+
+**Định nghĩa:** future authority contract dùng để mô hình hóa explicit runtime grants cho read, write, approve, hoặc tool-use actions.
+
+Trong baseline hiện tại:
+- permission runtime vẫn đến từ baseline roles và explicit service checks
+- `PermissionGrant` mới là future lane, chưa phải canonical runtime source đang được enforce
+- mọi draft contract cho lane này phải giữ rõ separation giữa context facts và authority facts
+
 ## 3.7 Shared Resource
 
 **Định nghĩa:** tài nguyên được nhiều `ProjectScope` cùng sử dụng và cần theo dõi allocation.

@@ -13,31 +13,32 @@ ERD này mô tả các thực thể canonical mà Agri OS Core cần giữ để
 
 | Entity | Phase | Ghi chú |
 |---|---|---|
-| ORGANIZATION | Phase 2 🔜 | Architecture baseline locked in PR-1; runtime rollout starts after standalone schema/API slice |
-| PROJECT_SCOPE | Phase 2 🔜 | Soft value-stream scope dưới ORGANIZATION; rollout sau standalone Organization |
-| PROJECT_ASSIGNMENT | Phase 2 🔜 | Additive many-to-many assignment lane cho farm/commercial/economic records |
-| PROJECT_CONTRIBUTION_EVENT | Phase 2 🔜 | Append-only contribution ledger |
-| SHARED_RESOURCE | Phase 2 🔜 | Tài nguyên dùng chung giữa nhiều PROJECT_SCOPE |
-| COST_RECORD | Phase 2 🔜 | Operational cost truth cho project economics |
-| REVENUE_RECORD | Phase 2 🔜 | Operational revenue truth cho project economics |
-| FINANCIAL_ALLOCATION | Phase 2 🔜 | Split cost/revenue sang nhiều PROJECT_SCOPE |
+| ORGANIZATION | Phase 1 ✅ | Standalone aggregate/runtime slice đã active |
+| PROJECT_SCOPE | Phase 1 ✅ | Soft value-stream scope dưới ORGANIZATION |
+| PROJECT_ASSIGNMENT | Phase 1 ✅ | Additive many-to-many assignment lane cho farm/commercial/economic records |
+| PROJECT_CONTRIBUTION_EVENT | Phase 1 ✅ | Append-only contribution ledger baseline đã active |
+| SHARED_RESOURCE | Phase 1 ✅ | Catalog baseline, allocation, và release đã active |
+| SHARED_RESOURCE_ALLOCATION | Phase 1 ✅ | Allocation table riêng giữa shared resource và ProjectScope đã active |
+| COST_RECORD | Phase 1 ✅ | Operational cost truth baseline cho project economics |
+| REVENUE_RECORD | Phase 1 ✅ | Operational revenue truth baseline cho project economics |
+| FINANCIAL_ALLOCATION | Phase 1 ✅ | Baseline `cost_record -> ProjectScope` theo `manual_full` và `manual_weighted` đã active; revenue lane vẫn rollout sau |
 | CUSTOMER_PROFILE | Phase 1 ✅ | |
 | PREORDER | Phase 1 ✅ | Bị thiếu trong ERD cũ — đã thêm |
 | PRODUCT_SKU | Phase 1 ✅ | Bị thiếu trong ERD cũ — đã thêm |
 | SALES_ORDER | Phase 1 ✅ | |
 | SALES_ORDER_LINE | Phase 1 ✅ | |
 | ALLOCATION | Phase 1 ✅ | |
-| LOT_BATCH | Phase 1 ✅ | Field names đã fix theo code |
+| LOT_BATCH | Phase 1 ✅ | Field names khớp runtime lot detail/store hiện tại |
 | EXTERNAL_MAPPING_RECORD | Phase 1 ✅ | Đổi tên từ CHANNEL_IDENTITY (ExternalMappingRecord trong integrations.py) |
 | DOMAIN_EVENT | Phase 1 ✅ | |
-| FARMER_PROFILE | Phase 1 ✅ | (read-only in Phase 1) |
+| FARMER_PROFILE | Phase 2 🔜 | Farmer aggregate riêng chưa active trong runtime hiện tại |
 | PLOT | Phase 1 ✅ | (read-only in Phase 1) |
 | CROP_CYCLE | Phase 1 ✅ | (read-only in Phase 1) |
 | CROP_TASK | Phase 2 🔜 | Task management chưa active |
-| LOT_EVIDENCE | Phase 2 🔜 | Evidence flow chưa implement |
-| QC_REVIEW | Phase 2 🔜 | QC workflow chưa implement |
+| LOT_EVIDENCE | Phase 1 ✅ | Evidence routes và persistence baseline đã active |
+| QC_REVIEW | Phase 1 ✅ | QC review baseline đã active |
 | TRACEABILITY_BUNDLE | Phase 2 🔜 | Public QR traceability |
-| AUDIT_LOG | Phase 2 🔜 | Sẽ replace/extend DOMAIN_EVENT |
+| AUDIT_LOG | Phase 1 ✅ | Audit decision log baseline đã active; có thể tiếp tục mở rộng sau |
 | IDENTITY | Phase 2 🔜 | Unified identity layer — Phase 1 dùng customer_id/farmer_id trực tiếp |
 
 ## Mermaid
@@ -46,9 +47,8 @@ ERD này mô tả các thực thể canonical mà Agri OS Core cần giữ để
 erDiagram
     %% ── Phase 1 entities ────────────────────────────────────────────────────
 
-    %% Organization là docs-first baseline ở PR-1.
-    %% Runtime chưa implement trong Phase 1 code hiện tại, nhưng rollout order đã được khóa:
-    %% Organization -> Plot/CropCycle/Lot -> Preorder/SalesOrder.
+    %% Organization và ProjectScope baselines đã active trong runtime Phase 1.
+    %% Rollout order được giữ additive: Organization -> Plot/CropCycle/Lot -> Preorder/SalesOrder.
     %% Customer-organization affinity, nếu cần, là read-model lane được duyệt riêng và
     %% không xuất hiện như canonical ownership edge trong ERD baseline này.
 
@@ -58,7 +58,8 @@ erDiagram
     PROJECT_SCOPE ||--o{ COST_RECORD : incurs
     PROJECT_SCOPE ||--o{ REVENUE_RECORD : realizes
     PROJECT_SCOPE ||--o{ FINANCIAL_ALLOCATION : receives
-    PROJECT_SCOPE ||--o{ SHARED_RESOURCE : uses
+    PROJECT_SCOPE ||--o{ SHARED_RESOURCE_ALLOCATION : receives
+    SHARED_RESOURCE ||--o{ SHARED_RESOURCE_ALLOCATION : allocated_as
 
     ORGANIZATION ||--o{ PLOT : operates
     ORGANIZATION ||--o{ CROP_CYCLE : scopes
@@ -95,10 +96,11 @@ erDiagram
         string project_scope_id FK
         string target_type
         string target_id
-        string assignment_role
+        boolean is_primary
         decimal attribution_weight
-        string attribution_kind
-        string confidence_level
+        datetime created_at
+        datetime ended_at
+        string ended_reason
     }
 
     PROJECT_CONTRIBUTION_EVENT {
@@ -121,6 +123,18 @@ erDiagram
         string status
     }
 
+    SHARED_RESOURCE_ALLOCATION {
+        string allocation_id PK
+        string shared_resource_id FK
+        string project_scope_id FK
+        string allocation_basis
+        decimal allocated_capacity
+        decimal released_capacity
+        string status
+        datetime effective_at
+        datetime released_at
+    }
+
     COST_RECORD {
         string cost_record_id PK
         string organization_id FK
@@ -128,6 +142,7 @@ erDiagram
         string cost_type
         decimal amount
         string currency
+        datetime recognized_at
         string source_object_type
         string source_object_id
     }
@@ -140,6 +155,7 @@ erDiagram
         decimal gross_amount
         decimal net_amount
         string currency
+        datetime recognized_at
         string source_object_type
         string source_object_id
     }
@@ -179,7 +195,6 @@ erDiagram
     PRODUCT_SKU ||--o{ SALES_ORDER_LINE : ordered_as
     PRODUCT_SKU ||--o{ PREORDER : committed_for
 
-    FARMER_PROFILE ||--o{ PLOT : owns
     PLOT ||--o{ CROP_CYCLE : contains
     CROP_CYCLE ||--o{ LOT_BATCH : produces
 
@@ -205,18 +220,11 @@ erDiagram
         string segment
     }
 
-    FARMER_PROFILE {
-        string farmer_id PK
-        string farmer_code
-        string full_name
-        string phone
-        string status
-    }
-
     PLOT {
         string plot_id PK
-        string farmer_id FK
+        string organization_id FK
         string plot_code
+        string name
         string location_text
         decimal area_value
         string area_unit
@@ -244,9 +252,8 @@ erDiagram
     LOT_BATCH {
         string lot_id PK
         string lot_code
+        string organization_id FK
         string product_sku_id FK
-        string crop_cycle_id FK
-        string lot_type
         string source_type
         string source_ref_id
         decimal actual_qty
@@ -259,10 +266,11 @@ erDiagram
     }
 
     LOT_EVIDENCE {
-        string evidence_id PK
+        string lot_evidence_id PK
         string lot_id FK
         string evidence_type
-        string object_key
+        string object_storage_key
+        string text_value
         datetime captured_at
         string status
     }

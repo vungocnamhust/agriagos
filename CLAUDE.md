@@ -77,17 +77,18 @@ agos_app/
 │   ├── main.py           # FastAPI entrypoint: CorrelationIdMiddleware, ErrorResponse handlers, router mount
 │   ├── api/
 │   │   ├── router.py     # Aggregates the mounted API route groups plus /health
-│   │   └── routes/       # One file per domain (customers, organizations, project scopes, shared resources, orders, lots, farm, preorders, views, events, audit, health)
+│   │   └── routes/       # One file per domain (actor authority, affiliations, customers, organizations, project scopes, shared resources, orders, lots, farm, preorders, views, events, audit, health)
 │   ├── models/           # Pydantic v2 schemas (DTOs, not ORM models)
 │   │   ├── common.py     # Shared: Meta, ErrorResponse, DomainEvent, HealthResponse, DomainEventListResponse
 │   │   └── *.py          # Per-domain schemas
 │   ├── core/
-│   │   ├── codegen.py    # Centralized human-readable code generation (KH-, DT-, ORD-, LOT- formats)
+│   │   ├── codegen.py    # Centralized human-readable code generation (ACT-, KH-, DT-, ORD-, LOT- formats)
 │   │   ├── gateway.py    # Command Gateway: idempotency, state machine transitions
 │   │   └── events.py     # Domain event factory (dotted-lowercase eventName + PascalCase eventType)
 │   ├── services/         # Application services — one file per domain; audit.py centralizes audit reason registries and snapshot shaping
 │   ├── store/
 │   │   ├── _db.py        # DB connection + is_enabled() flag
+│   │   ├── actor_authority.py # Actor identity + affiliation store operations
 │   │   ├── audit.py      # Audit log append/query against PostgreSQL
 │   │   ├── customers.py  # Customer store operations
 │   │   ├── events.py     # Domain event append/query against PostgreSQL
@@ -106,11 +107,13 @@ agos_app/
 
 ### Domain Entities
 
-Phase 1 runtime stores the implemented core entities in PostgreSQL tables and store records such as `organizations`, `customers`, `preorders`, `sales_orders`, `sales_order_lines`, `product_skus`, `lots`, `plots`, and `crop_cycles`.
+Phase 1 runtime stores the implemented core entities in PostgreSQL tables and store records such as `actor_identities`, `actor_affiliations`, `organizations`, `customers`, `preorders`, `sales_orders`, `sales_order_lines`, `product_skus`, `lots`, `plots`, and `crop_cycles`.
 
 `Organization` is now implemented as a standalone canonical business aggregate for the legal-operating owner via ADR-012, with schema, CRUD/state routes, event emission, and additive `organization_id` propagation on farm-side canonical records plus the first commercial-side canonical records, current Phase 1 read-model surfaces, and the `external_mappings` baseline in place. The remaining intentional gap tracked in `docs/changelog/v1/divergence-ledger.md` entry `DL-20260415-01` is staged `organization_id` propagation into integration sync/adapters.
 
-Architecture docs now also include `ProjectScope` via ADR-013 as the additive soft value-stream scope under `Organization`. The runtime now includes the standalone `ProjectScope` schema/API slice, the first assignment lane for `plot`, `crop_cycle`, `lot`, `preorder`, and `order`, assignment-enriched farm/commercial detail reads, the contribution ledger baseline (`record/list/confirm/reject`), the first economics pair (`CostRecord` from confirmed contributions and `RevenueRecord` from delivered assigned orders), additive reporting boards (`project-contribution-summary`, `project-contribution-ledger`, `project-impacted-actors-summary`, `project-pnl-summary`, `project-order-allocation-summary`), and the first `SharedResource` catalog baseline (`create/list/get`), while shared-resource allocation/release semantics, broader shared-resource reporting, and backfill lanes remain deferred.
+Architecture docs now also include `ProjectScope` via ADR-013 as the additive soft value-stream scope under `Organization`. The runtime now includes the standalone `ProjectScope` schema/API slice, the first assignment lane for `plot`, `crop_cycle`, `lot`, `preorder`, and `order`, assignment-enriched farm/commercial detail reads, the contribution ledger baseline (`record/list/confirm/reject`), the first economics pair (`CostRecord` from confirmed contributions and `RevenueRecord` from delivered assigned orders), additive reporting boards (`project-contribution-summary`, `project-contribution-ledger`, `project-impacted-actors-summary`, `project-pnl-summary`, `project-order-allocation-summary`, `shared-resource-allocation-summary`), and the `SharedResource` runtime lane (`create/list/get`, allocation, release). Customer source/repeat reporting, impacted-household reporting, and backfill/review lanes remain deferred.
+
+The authority-model rollout now also includes the first mounted context lanes for `Actor Identity` and `Actor Affiliation`: `POST /api/v1/actors`, `GET /api/v1/actors/{actor_id}`, and `POST /api/v1/affiliations`. These lanes record canonical identity and affiliation facts only; they do not derive runtime permissions, and `PermissionGrant` remains a future draft-only lane.
 
 Architecture docs use canonical aliases such as `CustomerProfile`, `Preorder`, `SalesOrder`, `SalesOrderLine`, `ProductSKU`, `LotBatch`, `Plot`, and `CropCycle` for cross-reference with business terms. They may also discuss future or broader entities such as `Farmer` and `CropTask`, but those are not yet implemented in the current Phase 1 runtime.
 
@@ -121,6 +124,8 @@ Vietnamese architecture docs sometimes use shorter business names such as `Custo
 All endpoints are under `/api/v1/`. The route groups are:
 
 - `/health` — liveness check
+- `/actors` — actor identity create/get baseline
+- `/affiliations` — actor affiliation create baseline
 - `/customers` — customer CRUD and preferences
 - `/organizations` — standalone organization CRUD and state transitions
 - `/projects` — standalone project scope CRUD, state transitions, project assignments, and contribution ledger commands
@@ -215,8 +220,10 @@ All diagrams use `[Phase 1 ✅]` / `[Phase 2 🔜]` labels to distinguish implem
 
 **Key Phase 1 audit facts**:
 - `app/services/audit.py` is the shared audit normalization layer: reason-code registries live there, sensitive snapshots are projected there, and services should go through `append_domain_audit_decision()` instead of appending raw audit entries directly
+- `app/services/_audit_metadata.py` is the shared authority-context helper for protected write/read audit metadata; sensitive deny paths should standardize `authorityBasis`, `effectiveActorRole`, delegated actor fields, and `bypassRequested` there instead of rebuilding that shape per service
 - shared route/service authz denials now append audit decisions across protected raw read and write surfaces; prefer the shared request-meta seam plus service-owned deny/audit behavior over route-local branching
 - `lot.release` is the first owner-backed non-terminal audit lane: missing `approvalRef` on sensitive release writes `decision=escalated` with `reason_code=approval_required`; PostgreSQL persistence failure writes `decision=failed` with `reason_code=persistence_failed`
+- `order.cancel` now mirrors the approval-evidence pattern for packed-or-later orders: missing `approvalRef` writes `decision=escalated` with `reason_code=approval_required` before returning `403`
 
 When repo-root docs and `docs/changelog/v1/architecture/` overlap, treat the `docs/changelog/v1/architecture/` set as the working baseline for current deterministic-core decisions.
 
@@ -238,3 +245,105 @@ After completing a phase or significant task, classify new learnings before stop
 - Benefits from arguments, allowed-tools, or isolated subagent execution
 
 **Otherwise** — keep it only in the phase PR, ADR, or issue. Do not store it.
+
+<!-- gitnexus:start -->
+# GitNexus — Code Intelligence
+
+This project is indexed by GitNexus as **agriagos** (4611 symbols, 13952 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+
+> If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
+
+## Always Do
+
+- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `gitnexus_impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
+- **MUST run `gitnexus_detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows.
+- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
+- When exploring unfamiliar code, use `gitnexus_query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
+- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `gitnexus_context({name: "symbolName"})`.
+
+## When Debugging
+
+1. `gitnexus_query({query: "<error or symptom>"})` — find execution flows related to the issue
+2. `gitnexus_context({name: "<suspect function>"})` — see all callers, callees, and process participation
+3. `READ gitnexus://repo/agriagos/process/{processName}` — trace the full execution flow step by step
+4. For regressions: `gitnexus_detect_changes({scope: "compare", base_ref: "main"})` — see what your branch changed
+
+## When Refactoring
+
+- **Renaming**: MUST use `gitnexus_rename({symbol_name: "old", new_name: "new", dry_run: true})` first. Review the preview — graph edits are safe, text_search edits need manual review. Then run with `dry_run: false`.
+- **Extracting/Splitting**: MUST run `gitnexus_context({name: "target"})` to see all incoming/outgoing refs, then `gitnexus_impact({target: "target", direction: "upstream"})` to find all external callers before moving code.
+- After any refactor: run `gitnexus_detect_changes({scope: "all"})` to verify only expected files changed.
+
+## Never Do
+
+- NEVER edit a function, class, or method without first running `gitnexus_impact` on it.
+- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
+- NEVER rename symbols with find-and-replace — use `gitnexus_rename` which understands the call graph.
+- NEVER commit changes without running `gitnexus_detect_changes()` to check affected scope.
+
+## Tools Quick Reference
+
+| Tool | When to use | Command |
+|------|-------------|---------|
+| `query` | Find code by concept | `gitnexus_query({query: "auth validation"})` |
+| `context` | 360-degree view of one symbol | `gitnexus_context({name: "validateUser"})` |
+| `impact` | Blast radius before editing | `gitnexus_impact({target: "X", direction: "upstream"})` |
+| `detect_changes` | Pre-commit scope check | `gitnexus_detect_changes({scope: "staged"})` |
+| `rename` | Safe multi-file rename | `gitnexus_rename({symbol_name: "old", new_name: "new", dry_run: true})` |
+| `cypher` | Custom graph queries | `gitnexus_cypher({query: "MATCH ..."})` |
+
+## Impact Risk Levels
+
+| Depth | Meaning | Action |
+|-------|---------|--------|
+| d=1 | WILL BREAK — direct callers/importers | MUST update these |
+| d=2 | LIKELY AFFECTED — indirect deps | Should test |
+| d=3 | MAY NEED TESTING — transitive | Test if critical path |
+
+## Resources
+
+| Resource | Use for |
+|----------|---------|
+| `gitnexus://repo/agriagos/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/agriagos/clusters` | All functional areas |
+| `gitnexus://repo/agriagos/processes` | All execution flows |
+| `gitnexus://repo/agriagos/process/{name}` | Step-by-step execution trace |
+
+## Self-Check Before Finishing
+
+Before completing any code modification task, verify:
+1. `gitnexus_impact` was run for all modified symbols
+2. No HIGH/CRITICAL risk warnings were ignored
+3. `gitnexus_detect_changes()` confirms changes match expected scope
+4. All d=1 (WILL BREAK) dependents were updated
+
+## Keeping the Index Fresh
+
+After committing code changes, the GitNexus index becomes stale. Re-run analyze to update it:
+
+```bash
+npx gitnexus analyze
+```
+
+If the index previously included embeddings, preserve them by adding `--embeddings`:
+
+```bash
+npx gitnexus analyze --embeddings
+```
+
+To check whether embeddings exist, inspect `.gitnexus/meta.json` — the `stats.embeddings` field shows the count (0 means no embeddings). **Running analyze without `--embeddings` will delete any previously generated embeddings.**
+
+> Claude Code users: A PostToolUse hook handles this automatically after `git commit` and `git merge`.
+
+## CLI
+
+| Task | Read this skill file |
+|------|---------------------|
+| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
+| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
+| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
+| Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
+| Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
+| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
+
+<!-- gitnexus:end -->

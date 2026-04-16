@@ -84,6 +84,8 @@ Policy baseline cho runtime hiện tại và các slice tiếp theo:
 ### 3.7 ProjectScope baseline policy
 `ProjectScope` là lớp soft scope dưới `Organization`. Runtime Phase 1 hiện đã cover aggregate `ProjectScope`, assignment / contribution lanes, cost-record lane đầu tiên, revenue-record lane đầu tiên, và read-model `project-contribution-summary`, `project-contribution-ledger`, `project-impacted-actors-summary`, `project-pnl-summary`, cùng `project-order-allocation-summary`; các policy lanes sâu hơn vẫn rollout dần theo slices sau.
 
+Runtime Phase 1 hiện cũng đã có `FinancialAllocation` baseline đầu tiên qua nested create/list dưới `ProjectScope` cho `cost_record`, gồm `manual_full` và `manual_weighted`; write và detailed read của lane này hiện giữ hẹp ở Founder / Super Admin / Admin / Accountant.
+
 Policy baseline:
 - Founder / Super Admin và Admin là nhóm chính được tạo, sửa, activate, pause, close, archive `ProjectScope`
 - Farm Manager, Ops, Sales có thể là owner nghiệp vụ của records nằm trong một scope, nhưng không mặc định có quyền mutate `ProjectScope` aggregate
@@ -97,12 +99,14 @@ Policy baseline:
 - project-scoped membership, per-scope ABAC, và delegated agent permissions là phase sau; docs này không ngầm khẳng định runtime đã enforce các lane đó
 
 ### 3.8 SharedResource baseline policy
-`SharedResource` hiện mới mở catalog baseline trong runtime qua `/api/v1/shared-resources` với create/list/get. Allocation hay release sang `ProjectScope` vẫn là phase sau.
+`SharedResource` runtime hiện đã mở catalog baseline qua `/api/v1/shared-resources` với create/list/get, đồng thời đã ship allocation và release surface qua `/{shared_resource_id}/allocations` và `/{shared_resource_id}/allocations/{allocation_id}/release`.
 
 Policy baseline:
 - Founder / Super Admin và Admin là nhóm chính được tạo shared resource catalog record
 - raw read lane cho shared resource catalog hiện cũng chỉ mở cho Founder / Super Admin / Admin
-- SharedResource catalog không tự cấp quyền allocate, split cost, hay mutate `ProjectScope`
+- Founder / Super Admin và Admin hiện cũng là baseline writers cho allocation và release lane
+- shared-resource allocation summary board hiện mở cho Founder / Super Admin / Admin / Accountant / Ops / Farm Manager / Viewer
+- SharedResource catalog không tự cấp quyền split cost hay mutate `ProjectScope` ngoài allocation/release write path đã mount
 
 ---
 
@@ -377,7 +381,7 @@ Phase 1 implementation note:
 - raw `/api/v1/orders*` reads and write commands now enforce the matrix directly in the service layer; Viewer remains denied on raw order access and agent lanes stay proposal-only
 - raw `/api/v1/lots/{lot_id}` reads plus `/evidence` and `/qc-reviews` readbacks now enforce operational-only access in the service layer; current readers are Founder / Super Admin, Admin, Ops, Farm Manager, và QC Reviewer
 - lot create commands (`POST /api/v1/lots`, `POST /api/v1/lots/processed`) now require Founder / Super Admin / Admin / Ops / Farm Manager; lot adjust/release/block/unblock uses the same write lane, while evidence add and QC review also admit `qc_reviewer`
-- packed-or-later order cancel vẫn còn một divergence implementation: service hiện chỉ gate theo role và chưa enforce `approvalRef`; theo dõi tại `DL-20260412-02` trong divergence ledger
+- packed-or-later order cancel giờ enforce `approvalRef`; khi thiếu approval evidence, service ghi audit decision `escalated` với `reason_code=approval_required` và metadata tối thiểu như `requiredApprovalRef`, `requiredApproverRoles`, `escalationOwner` trước khi trả `403`
 - route `ReleaseLot` hiện chỉ mang `approvalRef` như approval evidence cho case đặc biệt; identity của người approve vẫn thuộc audit/workflow ngoài request schema và chưa được enforce như field riêng ở public API
 - khi thiếu `approvalRef` cho lot release nhạy cảm, service hiện ghi audit decision `escalated` với `reason_code=approval_required` và metadata tối thiểu như `requiredApprovalRef`, `requiredApproverRoles`, `escalationOwner` trước khi trả `403`
 
