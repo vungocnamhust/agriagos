@@ -9,6 +9,8 @@ from app.models.views import (
     FarmSummaryBoardResponse,
     PendingFulfillmentListResponse,
     ProjectContributionSummaryResponse,
+    ProjectOrderAllocationSummaryResponse,
+    ProjectPnlSummaryResponse,
 )
 from app.services import views as svc
 
@@ -51,3 +53,24 @@ def get_farm_summary_board(request: Request) -> FarmSummaryBoardResponse:
 )
 def get_project_contribution_summary(request: Request, projectScopeId: str | None = None) -> ProjectContributionSummaryResponse:
     return svc.get_project_contribution_summary_for_actor(projectScopeId, request_meta(request))
+
+
+@router.get(
+    "/project-pnl-summary",
+    response_model=ProjectPnlSummaryResponse,
+    responses={403: {"model": ErrorResponse, "description": "Forbidden"}},
+)
+def get_project_pnl_summary(request: Request, projectScopeId: str | None = None) -> ProjectPnlSummaryResponse:
+    return svc.get_project_pnl_summary_for_actor(projectScopeId, request_meta(request))
+
+
+@router.get(
+    "/project-order-allocation-summary",
+    response_model=ProjectOrderAllocationSummaryResponse,
+    responses={403: {"model": ErrorResponse, "description": "Forbidden"}},
+)
+def get_project_order_allocation_summary(
+    request: Request,
+    projectScopeId: str | None = None,
+) -> ProjectOrderAllocationSummaryResponse:
+    return svc.get_project_order_allocation_summary_for_actor(projectScopeId, request_meta(request))

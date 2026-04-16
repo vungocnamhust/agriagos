@@ -1151,3 +1151,580 @@ def test_project_contribution_summary_endpoint_reads_real_postgres_aggregation(
     assert scoped_rows[0]["confirmedQuantity"] == 5.0
     assert scoped_rows[0]["confirmedEstimatedValue"] == 1500000.0
     assert scoped_rows[0]["currency"] == "VND"
+
+
+@pytest.mark.postgres_integration
+def test_project_pnl_summary_endpoint_reads_real_postgres_aggregation(
+    monkeypatch: pytest.MonkeyPatch,
+    postgres_db_session: Session,
+) -> None:
+    _enable_view_store(monkeypatch, postgres_db_session)
+    monkeypatch.setattr(views_service.postgres_sync, "is_enabled", lambda: True)
+
+    organization_id = str(uuid.uuid4())
+    project_scope_id = str(uuid.uuid4())
+    project_scope_code = "PRJ-PNL-001"
+    customer_id = str(uuid.uuid4())
+
+    _insert_organization(postgres_db_session, organization_id, "ORG-PNL-001", "PnL Org")
+    _insert_customer(postgres_db_session, customer_id, "KH-PNL-001", "PnL Customer")
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO project_scopes (
+                project_scope_id,
+                organization_id,
+                project_scope_code,
+                name,
+                project_scope_type,
+                status
+            ) VALUES (
+                CAST(:project_scope_id AS uuid),
+                CAST(:organization_id AS uuid),
+                :project_scope_code,
+                'PnL Scope',
+                'value_stream',
+                'active'
+            )
+            """
+        ),
+        {
+            "project_scope_id": project_scope_id,
+            "organization_id": organization_id,
+            "project_scope_code": project_scope_code,
+        },
+    )
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO project_cost_records (
+                cost_record_id,
+                project_scope_id,
+                organization_id,
+                cost_type,
+                amount,
+                currency,
+                recognized_at,
+                source_object_type,
+                source_object_id,
+                attribution_policy,
+                metadata_json,
+                created_at
+            ) VALUES (
+                CAST(:cost_record_id AS uuid),
+                CAST(:project_scope_id AS uuid),
+                CAST(:organization_id AS uuid),
+                'labor_payout',
+                :amount,
+                'VND',
+                CAST(:recognized_at AS timestamptz),
+                'project_contribution_event',
+                CAST(:source_object_id AS uuid),
+                'direct_source_link',
+                '{}'::jsonb,
+                CAST(:created_at AS timestamptz)
+            )
+            """
+        ),
+        {
+            "cost_record_id": str(uuid.uuid4()),
+            "project_scope_id": project_scope_id,
+            "organization_id": organization_id,
+            "amount": 400000,
+            "recognized_at": "2026-04-16T09:00:00+00:00",
+            "source_object_id": str(uuid.uuid4()),
+            "created_at": "2026-04-16T09:00:00+00:00",
+        },
+    )
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO project_cost_records (
+                cost_record_id,
+                project_scope_id,
+                organization_id,
+                cost_type,
+                amount,
+                currency,
+                recognized_at,
+                source_object_type,
+                source_object_id,
+                attribution_policy,
+                metadata_json,
+                created_at
+            ) VALUES (
+                CAST(:cost_record_id AS uuid),
+                CAST(:project_scope_id AS uuid),
+                CAST(:organization_id AS uuid),
+                'labor_payout',
+                :amount,
+                'VND',
+                CAST(:recognized_at AS timestamptz),
+                'project_contribution_event',
+                CAST(:source_object_id AS uuid),
+                'direct_source_link',
+                '{}'::jsonb,
+                CAST(:created_at AS timestamptz)
+            )
+            """
+        ),
+        {
+            "cost_record_id": str(uuid.uuid4()),
+            "project_scope_id": project_scope_id,
+            "organization_id": organization_id,
+            "amount": 150000,
+            "recognized_at": "2026-04-16T10:00:00+00:00",
+            "source_object_id": str(uuid.uuid4()),
+            "created_at": "2026-04-16T10:00:00+00:00",
+        },
+    )
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO project_revenue_records (
+                revenue_record_id,
+                project_scope_id,
+                organization_id,
+                customer_id,
+                revenue_type,
+                gross_amount,
+                net_amount,
+                currency,
+                recognized_at,
+                source_object_type,
+                source_object_id,
+                metadata_json,
+                created_at
+            ) VALUES (
+                CAST(:revenue_record_id AS uuid),
+                CAST(:project_scope_id AS uuid),
+                CAST(:organization_id AS uuid),
+                CAST(:customer_id AS uuid),
+                'delivered_order_sale',
+                :gross_amount,
+                :net_amount,
+                'VND',
+                CAST(:recognized_at AS timestamptz),
+                'order',
+                CAST(:source_object_id AS uuid),
+                '{}'::jsonb,
+                CAST(:created_at AS timestamptz)
+            )
+            """
+        ),
+        {
+            "revenue_record_id": str(uuid.uuid4()),
+            "project_scope_id": project_scope_id,
+            "organization_id": organization_id,
+            "customer_id": customer_id,
+            "gross_amount": 900000,
+            "net_amount": 850000,
+            "recognized_at": "2026-04-16T11:00:00+00:00",
+            "source_object_id": str(uuid.uuid4()),
+            "created_at": "2026-04-16T11:00:00+00:00",
+        },
+    )
+
+    response = client.get(
+        f"/api/v1/views/project-pnl-summary?projectScopeId={project_scope_id}",
+        headers=_auth_headers(actor_role="accountant", actor_id="acct-1"),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["items"]
+    scoped_rows = [row for row in payload if row["projectScopeId"] == project_scope_id]
+    assert len(scoped_rows) == 1
+    assert scoped_rows[0]["projectScopeCode"] == project_scope_code
+    assert scoped_rows[0]["projectScopeName"] == "PnL Scope"
+    assert scoped_rows[0]["costRecordCount"] == 2
+    assert scoped_rows[0]["revenueRecordCount"] == 1
+    assert scoped_rows[0]["recognizedCostAmount"] == 550000.0
+    assert scoped_rows[0]["recognizedRevenueNetAmount"] == 850000.0
+    assert scoped_rows[0]["marginAmount"] == 300000.0
+    assert scoped_rows[0]["currency"] == "VND"
+
+
+@pytest.mark.postgres_integration
+def test_project_pnl_summary_endpoint_nulls_currency_for_mixed_financial_currencies(
+    monkeypatch: pytest.MonkeyPatch,
+    postgres_db_session: Session,
+) -> None:
+    _enable_view_store(monkeypatch, postgres_db_session)
+    monkeypatch.setattr(views_service.postgres_sync, "is_enabled", lambda: True)
+
+    organization_id = str(uuid.uuid4())
+    project_scope_id = str(uuid.uuid4())
+    customer_id = str(uuid.uuid4())
+
+    _insert_organization(postgres_db_session, organization_id, "ORG-PNL-MIXED", "PnL Mixed Org")
+    _insert_customer(postgres_db_session, customer_id, "KH-PNL-MIXED", "Mixed Currency Customer")
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO project_scopes (
+                project_scope_id,
+                organization_id,
+                project_scope_code,
+                name,
+                project_scope_type,
+                status
+            ) VALUES (
+                CAST(:project_scope_id AS uuid),
+                CAST(:organization_id AS uuid),
+                'PRJ-PNL-MIXED',
+                'PnL Mixed Scope',
+                'value_stream',
+                'active'
+            )
+            """
+        ),
+        {
+            "project_scope_id": project_scope_id,
+            "organization_id": organization_id,
+        },
+    )
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO project_cost_records (
+                cost_record_id,
+                project_scope_id,
+                organization_id,
+                cost_type,
+                amount,
+                currency,
+                recognized_at,
+                source_object_type,
+                source_object_id,
+                attribution_policy,
+                metadata_json,
+                created_at
+            ) VALUES (
+                CAST(:cost_record_id AS uuid),
+                CAST(:project_scope_id AS uuid),
+                CAST(:organization_id AS uuid),
+                'labor_payout',
+                100000,
+                'VND',
+                CAST('2026-04-16T09:00:00+00:00' AS timestamptz),
+                'project_contribution_event',
+                CAST(:source_object_id AS uuid),
+                'direct_source_link',
+                '{}'::jsonb,
+                CAST('2026-04-16T09:00:00+00:00' AS timestamptz)
+            )
+            """
+        ),
+        {
+            "cost_record_id": str(uuid.uuid4()),
+            "project_scope_id": project_scope_id,
+            "organization_id": organization_id,
+            "source_object_id": str(uuid.uuid4()),
+        },
+    )
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO project_revenue_records (
+                revenue_record_id,
+                project_scope_id,
+                organization_id,
+                customer_id,
+                revenue_type,
+                gross_amount,
+                net_amount,
+                currency,
+                recognized_at,
+                source_object_type,
+                source_object_id,
+                metadata_json,
+                created_at
+            ) VALUES (
+                CAST(:revenue_record_id AS uuid),
+                CAST(:project_scope_id AS uuid),
+                CAST(:organization_id AS uuid),
+                CAST(:customer_id AS uuid),
+                'delivered_order_sale',
+                75,
+                50,
+                'USD',
+                CAST('2026-04-16T10:00:00+00:00' AS timestamptz),
+                'order',
+                CAST(:source_object_id AS uuid),
+                '{}'::jsonb,
+                CAST('2026-04-16T10:00:00+00:00' AS timestamptz)
+            )
+            """
+        ),
+        {
+            "revenue_record_id": str(uuid.uuid4()),
+            "project_scope_id": project_scope_id,
+            "organization_id": organization_id,
+            "customer_id": customer_id,
+            "source_object_id": str(uuid.uuid4()),
+        },
+    )
+
+    response = client.get(
+        f"/api/v1/views/project-pnl-summary?projectScopeId={project_scope_id}",
+        headers=_auth_headers(actor_role="accountant", actor_id="acct-1"),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["items"]
+    assert len(payload) == 1
+    assert payload[0]["projectScopeId"] == project_scope_id
+    assert payload[0]["recognizedCostAmount"] == 100000.0
+    assert payload[0]["recognizedRevenueNetAmount"] == 50.0
+    assert payload[0]["marginAmount"] == -99950.0
+    assert payload[0]["currency"] is None
+
+
+@pytest.mark.postgres_integration
+def test_project_order_allocation_summary_endpoint_reads_real_postgres_aggregation(
+    monkeypatch: pytest.MonkeyPatch,
+    postgres_db_session: Session,
+) -> None:
+    _enable_view_store(monkeypatch, postgres_db_session)
+    monkeypatch.setattr(views_service.postgres_sync, "is_enabled", lambda: True)
+
+    organization_id = str(uuid.uuid4())
+    project_scope_id = str(uuid.uuid4())
+    customer_id = str(uuid.uuid4())
+    order_id = str(uuid.uuid4())
+    order_line_id = str(uuid.uuid4())
+    sku_id = str(uuid.uuid4())
+    lot_id_1 = str(uuid.uuid4())
+    lot_id_2 = str(uuid.uuid4())
+
+    _insert_organization(postgres_db_session, organization_id, "ORG-ALLOC-SUM", "Allocation Summary Org")
+    _insert_customer(postgres_db_session, customer_id, "KH-ALLOC-SUM", "Allocation Customer")
+    _insert_product_sku(postgres_db_session, sku_id, "SKU-ALLOC-SUM", "Allocation Summary SKU")
+
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO project_scopes (
+                project_scope_id,
+                organization_id,
+                project_scope_code,
+                name,
+                project_scope_type,
+                status
+            ) VALUES (
+                CAST(:project_scope_id AS uuid),
+                CAST(:organization_id AS uuid),
+                'PRJ-ALLOC-SUM',
+                'Allocation Summary Scope',
+                'value_stream',
+                'active'
+            )
+            """
+        ),
+        {
+            "project_scope_id": project_scope_id,
+            "organization_id": organization_id,
+        },
+    )
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO project_assignments (
+                project_assignment_id,
+                project_scope_id,
+                target_type,
+                target_id,
+                is_primary,
+                attribution_weight,
+                metadata_json
+            ) VALUES (
+                CAST(:project_assignment_id AS uuid),
+                CAST(:project_scope_id AS uuid),
+                'order',
+                CAST(:target_id AS uuid),
+                true,
+                1,
+                '{}'::jsonb
+            )
+            """
+        ),
+        {
+            "project_assignment_id": str(uuid.uuid4()),
+            "project_scope_id": project_scope_id,
+            "target_id": order_id,
+        },
+    )
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO sales_orders (
+                order_id,
+                order_code,
+                organization_id,
+                customer_id,
+                channel,
+                shipping_address,
+                status,
+                payment_status
+            ) VALUES (
+                CAST(:order_id AS uuid),
+                'ORD-ALLOC-SUM',
+                CAST(:organization_id AS uuid),
+                CAST(:customer_id AS uuid),
+                'phone',
+                'Da Lat',
+                'allocated',
+                'unpaid'
+            )
+            """
+        ),
+        {
+            "order_id": order_id,
+            "organization_id": organization_id,
+            "customer_id": customer_id,
+        },
+    )
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO sales_order_lines (
+                order_line_id,
+                order_id,
+                product_sku_id,
+                ordered_qty,
+                allocated_qty,
+                packed_qty,
+                delivered_qty,
+                unit,
+                status
+            ) VALUES (
+                CAST(:order_line_id AS uuid),
+                CAST(:order_id AS uuid),
+                CAST(:product_sku_id AS uuid),
+                5,
+                5,
+                0,
+                0,
+                'kg',
+                'allocated'
+            )
+            """
+        ),
+        {
+            "order_line_id": order_line_id,
+            "order_id": order_id,
+            "product_sku_id": sku_id,
+        },
+    )
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO lots (
+                lot_id,
+                lot_code,
+                organization_id,
+                product_sku_id,
+                source_type,
+                source_ref_id,
+                harvest_or_production_date,
+                actual_qty,
+                available_qty,
+                reserved_qty,
+                released_qty,
+                status
+            ) VALUES
+            (
+                CAST(:lot_id_1 AS uuid),
+                'LOT-ALLOC-SUM-1',
+                CAST(:organization_id AS uuid),
+                CAST(:product_sku_id AS uuid),
+                'crop_cycle',
+                'cycle-alloc-1',
+                CAST('2026-04-14T00:00:00+00:00' AS timestamptz),
+                5,
+                3,
+                0,
+                3,
+                'released'
+            ),
+            (
+                CAST(:lot_id_2 AS uuid),
+                'LOT-ALLOC-SUM-2',
+                CAST(:organization_id AS uuid),
+                CAST(:product_sku_id AS uuid),
+                'crop_cycle',
+                'cycle-alloc-2',
+                CAST('2026-04-15T00:00:00+00:00' AS timestamptz),
+                5,
+                2,
+                0,
+                2,
+                'released'
+            )
+            """
+        ),
+        {
+            "lot_id_1": lot_id_1,
+            "lot_id_2": lot_id_2,
+            "organization_id": organization_id,
+            "product_sku_id": sku_id,
+        },
+    )
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO allocations (
+                allocation_id,
+                order_line_id,
+                lot_id,
+                allocated_qty,
+                status,
+                allocated_at
+            ) VALUES
+            (
+                CAST(:allocation_id_1 AS uuid),
+                CAST(:order_line_id AS uuid),
+                CAST(:lot_id_1 AS uuid),
+                3,
+                'active',
+                now()
+            ),
+            (
+                CAST(:allocation_id_2 AS uuid),
+                CAST(:order_line_id AS uuid),
+                CAST(:lot_id_2 AS uuid),
+                2,
+                'released',
+                now()
+            )
+            """
+        ),
+        {
+            "allocation_id_1": str(uuid.uuid4()),
+            "allocation_id_2": str(uuid.uuid4()),
+            "order_line_id": order_line_id,
+            "lot_id_1": lot_id_1,
+            "lot_id_2": lot_id_2,
+        },
+    )
+
+    response = client.get(
+        f"/api/v1/views/project-order-allocation-summary?projectScopeId={project_scope_id}",
+        headers=_auth_headers(actor_role="ops", actor_id="ops-1"),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["items"]
+    assert len(payload) == 1
+    assert payload[0]["projectScopeId"] == project_scope_id
+    assert payload[0]["projectScopeCode"] == "PRJ-ALLOC-SUM"
+    assert payload[0]["projectScopeName"] == "Allocation Summary Scope"
+    assert payload[0]["assignedOrderCount"] == 1
+    assert payload[0]["allocatedOrderCount"] == 1
+    assert payload[0]["allocationCount"] == 2
+    assert payload[0]["activeAllocationCount"] == 1
+    assert payload[0]["releasedAllocationCount"] == 1
+    assert payload[0]["allocatedQty"] == 5.0
+    assert payload[0]["activeAllocatedQty"] == 3.0
+    assert payload[0]["releasedAllocatedQty"] == 2.0
+    assert payload[0]["unit"] == "kg"

@@ -2780,6 +2780,74 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/views/project-pnl-summary:
+    get:
+      tags:
+      - Views
+      summary: Get Project Pnl Summary
+      operationId: get_project_pnl_summary_api_v1_views_project_pnl_summary_get
+      parameters:
+      - name: projectScopeId
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Projectscopeid
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectPnlSummaryResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/views/project-order-allocation-summary:
+    get:
+      tags:
+      - Views
+      summary: Get Project Order Allocation Summary
+      operationId: get_project_order_allocation_summary_api_v1_views_project_order_allocation_summary_get
+      parameters:
+      - name: projectScopeId
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Projectscopeid
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectOrderAllocationSummaryResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/events:
     get:
       tags:
@@ -3398,6 +3466,16 @@ components:
       title: ConfirmPreorderRequest
     ConfirmProjectContributionRequest:
       properties:
+        verificationNote:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Verificationnote
+        verificationEvidenceRef:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Verificationevidenceref
         meta:
           anyOf:
           - $ref: '#/components/schemas/Meta'
@@ -5478,6 +5556,9 @@ components:
         actorId:
           type: string
           title: Actorid
+        actorType:
+          type: string
+          title: Actortype
         subjectType:
           type: string
           title: Subjecttype
@@ -5490,6 +5571,24 @@ components:
         role:
           type: string
           title: Role
+        verificationStatus:
+          type: string
+          title: Verificationstatus
+          default: self_reported
+        verificationSource:
+          type: string
+          title: Verificationsource
+          default: manual_submission
+        verificationNote:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Verificationnote
+        verificationEvidenceRef:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Verificationevidenceref
         quantity:
           type: number
           title: Quantity
@@ -5544,10 +5643,13 @@ components:
       - projectAssignmentId
       - organizationId
       - actorId
+      - actorType
       - subjectType
       - subjectId
       - contributionType
       - role
+      - verificationStatus
+      - verificationSource
       - quantity
       - unit
       - status
@@ -5632,6 +5734,124 @@ components:
       required:
       - items
       title: ProjectContributionSummaryResponse
+    ProjectPnlSummaryItem:
+      properties:
+        projectScopeId:
+          type: string
+          title: Projectscopeid
+        projectScopeCode:
+          type: string
+          title: Projectscopecode
+        projectScopeName:
+          type: string
+          title: Projectscopename
+        costRecordCount:
+          type: integer
+          title: Costrecordcount
+        revenueRecordCount:
+          type: integer
+          title: Revenuerecordcount
+        recognizedCostAmount:
+          type: number
+          title: Recognizedcostamount
+        recognizedRevenueNetAmount:
+          type: number
+          title: Recognizedrevenuenetamount
+        marginAmount:
+          type: number
+          title: Marginamount
+        currency:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Currency
+      type: object
+      required:
+      - projectScopeId
+      - projectScopeCode
+      - projectScopeName
+      - costRecordCount
+      - revenueRecordCount
+      - recognizedCostAmount
+      - recognizedRevenueNetAmount
+      - marginAmount
+      title: ProjectPnlSummaryItem
+    ProjectPnlSummaryResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ProjectPnlSummaryItem'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: ProjectPnlSummaryResponse
+    ProjectOrderAllocationSummaryItem:
+      properties:
+        projectScopeId:
+          type: string
+          title: Projectscopeid
+        projectScopeCode:
+          type: string
+          title: Projectscopecode
+        projectScopeName:
+          type: string
+          title: Projectscopename
+        assignedOrderCount:
+          type: integer
+          title: Assignedordercount
+        allocatedOrderCount:
+          type: integer
+          title: Allocatedordercount
+        allocationCount:
+          type: integer
+          title: Allocationcount
+        activeAllocationCount:
+          type: integer
+          title: Activeallocationcount
+        releasedAllocationCount:
+          type: integer
+          title: Releasedallocationcount
+        allocatedQty:
+          type: number
+          title: Allocatedqty
+        activeAllocatedQty:
+          type: number
+          title: Activeallocatedqty
+        releasedAllocatedQty:
+          type: number
+          title: Releasedallocatedqty
+        unit:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Unit
+      type: object
+      required:
+      - projectScopeId
+      - projectScopeCode
+      - projectScopeName
+      - assignedOrderCount
+      - allocatedOrderCount
+      - allocationCount
+      - activeAllocationCount
+      - releasedAllocationCount
+      - allocatedQty
+      - activeAllocatedQty
+      - releasedAllocatedQty
+      title: ProjectOrderAllocationSummaryItem
+    ProjectOrderAllocationSummaryResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ProjectOrderAllocationSummaryItem'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: ProjectOrderAllocationSummaryResponse
     ProjectCostRecordDetail:
       properties:
         costRecordId:
@@ -5999,6 +6219,10 @@ components:
         actorId:
           type: string
           title: Actorid
+        actorType:
+          type: string
+          title: Actortype
+          default: person
         subjectType:
           type: string
           title: Subjecttype
@@ -6011,6 +6235,24 @@ components:
         role:
           type: string
           title: Role
+        verificationStatus:
+          type: string
+          title: Verificationstatus
+          default: self_reported
+        verificationSource:
+          type: string
+          title: Verificationsource
+          default: manual_submission
+        verificationNote:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Verificationnote
+        verificationEvidenceRef:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Verificationevidenceref
         quantity:
           type: number
           title: Quantity
@@ -6033,8 +6275,7 @@ components:
           default: manual
         metadata:
           anyOf:
-          - additionalProperties:
-              type: string
+          - additionalProperties: true
             type: object
           - type: 'null'
           title: Metadata

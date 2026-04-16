@@ -18,6 +18,10 @@ from app.models.views import (
     PendingFulfillmentView,
     ProjectContributionSummaryItem,
     ProjectContributionSummaryResponse,
+    ProjectOrderAllocationSummaryItem,
+    ProjectOrderAllocationSummaryResponse,
+    ProjectPnlSummaryItem,
+    ProjectPnlSummaryResponse,
 )
 from app.services.read_authz import authorize_read_surface
 from app.services import customers as cust_svc
@@ -86,6 +90,15 @@ def _string_value(value: object) -> str | None:
 
 def _float_value(value: object) -> float | None:
     return float(value) if isinstance(value, int | float) else None
+
+
+def _validate_optional_project_scope_id(project_scope_id: str | None) -> None:
+    if project_scope_id is None:
+        return
+    try:
+        UUID(project_scope_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="projectScopeId must be a valid UUID.") from exc
 
 
 def get_customer_360(customer_id: str) -> Customer360View:
@@ -252,6 +265,7 @@ def get_farm_summary_board() -> FarmSummaryBoardResponse:
 
 
 def get_project_contribution_summary(project_scope_id: str | None = None) -> ProjectContributionSummaryResponse:
+    _validate_optional_project_scope_id(project_scope_id)
     if postgres_sync.is_enabled():
         items = [ProjectContributionSummaryItem(**row) for row in view_store.fetch_project_contribution_summary(project_scope_id)]
         return ProjectContributionSummaryResponse(items=items)
@@ -295,6 +309,152 @@ def get_project_contribution_summary(project_scope_id: str | None = None) -> Pro
 
     items = [ProjectContributionSummaryItem(**item) for item in sorted(summary_by_scope.values(), key=lambda item: str(item["projectScopeCode"]))]
     return ProjectContributionSummaryResponse(items=items)
+
+
+def get_project_pnl_summary(project_scope_id: str | None = None) -> ProjectPnlSummaryResponse:
+    _validate_optional_project_scope_id(project_scope_id)
+    if postgres_sync.is_enabled():
+        items = [ProjectPnlSummaryItem(**row) for row in view_store.fetch_project_pnl_summary(project_scope_id)]
+        return ProjectPnlSummaryResponse(items=items)
+
+    scope_records = memory_store.list_project_scopes()
+    scope_map = {record["projectScopeId"]: record for record in scope_records}
+    cost_records = memory_store.list_project_cost_records(project_scope_id)
+    revenue_records = memory_store.list_project_revenue_records(project_scope_id)
+    summary_by_scope: dict[str, dict[str, object]] = {}
+
+    def _get_or_create_summary(scope_id: str) -> dict[str, object] | None:
+        scope = scope_map.get(scope_id)
+        if scope is None:
+            return None
+        return summary_by_scope.setdefault(
+            scope_id,
+            {
+                "projectScopeId": scope_id,
+                "projectScopeCode": scope["projectScopeCode"],
+                "projectScopeName": scope["name"],
+                "costRecordCount": 0,
+                "revenueRecordCount": 0,
+                "recognizedCostAmount": 0.0,
+                "recognizedRevenueNetAmount": 0.0,
+                "marginAmount": 0.0,
+                "currency": None,
+            },
+        )
+
+    def _merge_currency(summary: dict[str, object], currency: str | None) -> None:
+        if currency is None:
+            return
+        existing = summary.get("currency")
+        if existing is None:
+            summary["currency"] = currency
+            return
+        if existing != currency:
+            summary["currency"] = None
+
+    for cost_record in cost_records:
+        summary = _get_or_create_summary(cost_record["projectScopeId"])
+        if summary is None:
+            continue
+        summary["costRecordCount"] = int(summary["costRecordCount"]) + 1
+        summary["recognizedCostAmount"] = float(summary["recognizedCostAmount"]) + float(cost_record["amount"])
+        _merge_currency(summary, cost_record.get("currency"))
+
+    for revenue_record in revenue_records:
+        summary = _get_or_create_summary(revenue_record["projectScopeId"])
+        if summary is None:
+            continue
+        summary["revenueRecordCount"] = int(summary["revenueRecordCount"]) + 1
+        summary["recognizedRevenueNetAmount"] = float(summary["recognizedRevenueNetAmount"]) + float(revenue_record["netAmount"])
+        _merge_currency(summary, revenue_record.get("currency"))
+
+    items: list[ProjectPnlSummaryItem] = []
+    for item in sorted(summary_by_scope.values(), key=lambda item: str(item["projectScopeCode"])):
+        item["marginAmount"] = float(item["recognizedRevenueNetAmount"]) - float(item["recognizedCostAmount"])
+        items.append(ProjectPnlSummaryItem(**item))
+    return ProjectPnlSummaryResponse(items=items)
+
+
+def get_project_order_allocation_summary(
+    project_scope_id: str | None = None,
+) -> ProjectOrderAllocationSummaryResponse:
+    _validate_optional_project_scope_id(project_scope_id)
+    if postgres_sync.is_enabled():
+        items = [
+            ProjectOrderAllocationSummaryItem(**row)
+            for row in view_store.fetch_project_order_allocation_summary(project_scope_id)
+        ]
+        return ProjectOrderAllocationSummaryResponse(items=items)
+
+    scope_records = memory_store.list_project_scopes()
+    scope_map = {record["projectScopeId"]: record for record in scope_records}
+    assignment_records = memory_store.list_project_assignments(project_scope_id)
+    order_assignments_by_scope: dict[str, set[str]] = {}
+
+    for assignment in assignment_records:
+        if assignment.get("targetType") != "order" or assignment.get("endedAt") is not None:
+            continue
+        scope_id = assignment["projectScopeId"]
+        if scope_id not in scope_map:
+            continue
+        order_assignments_by_scope.setdefault(scope_id, set()).add(assignment["targetId"])
+
+    items: list[ProjectOrderAllocationSummaryItem] = []
+    for scope_id in sorted(order_assignments_by_scope, key=lambda item: str(scope_map[item]["projectScopeCode"])):
+        scope = scope_map[scope_id]
+        assigned_order_ids = order_assignments_by_scope[scope_id]
+        allocated_order_ids: set[str] = set()
+        allocation_count = 0
+        active_allocation_count = 0
+        released_allocation_count = 0
+        allocated_qty = 0.0
+        active_allocated_qty = 0.0
+        released_allocated_qty = 0.0
+        units: set[str] = set()
+
+        for order_id in assigned_order_ids:
+            order = memory_store.get_order(order_id)
+            line_unit_by_id = {
+                str(line.get("orderLineId")): str(line.get("unit"))
+                for line in (order or {}).get("lines", [])
+                if line.get("orderLineId") is not None and line.get("unit") is not None
+            }
+            allocations = memory_store.get_allocations(order_id)
+            if allocations:
+                allocated_order_ids.add(order_id)
+            for allocation in allocations:
+                allocation_count += 1
+                quantity = float(allocation["allocatedQty"])
+                allocated_qty += quantity
+                unit = line_unit_by_id.get(str(allocation.get("orderLineId")))
+                if unit is not None:
+                    units.add(unit)
+                status = allocation.get("status")
+                if status == "active":
+                    active_allocation_count += 1
+                    active_allocated_qty += quantity
+                elif status == "released":
+                    released_allocation_count += 1
+                    released_allocated_qty += quantity
+
+        items.append(
+            ProjectOrderAllocationSummaryItem(
+                projectScopeId=scope_id,
+                projectScopeCode=scope["projectScopeCode"],
+                projectScopeName=scope["name"],
+                assignedOrderCount=len(assigned_order_ids),
+                allocatedOrderCount=len(allocated_order_ids),
+                allocationCount=allocation_count,
+                activeAllocationCount=active_allocation_count,
+                releasedAllocationCount=released_allocation_count,
+                allocatedQty=allocated_qty,
+                activeAllocatedQty=active_allocated_qty,
+                releasedAllocatedQty=released_allocated_qty,
+                unit=next(iter(units)) if len(units) == 1 else None,
+            )
+        )
+
+    return ProjectOrderAllocationSummaryResponse(items=items)
 
 
 def get_customer_360_for_actor(customer_id: str, meta: Meta | None) -> Customer360View:
@@ -376,3 +536,35 @@ def get_project_contribution_summary_for_actor(
         detail="Actor is not allowed to read project contribution summary boards.",
     )
     return get_project_contribution_summary(project_scope_id)
+
+
+def get_project_pnl_summary_for_actor(
+    project_scope_id: str | None,
+    meta: Meta | None,
+) -> ProjectPnlSummaryResponse:
+    authorize_read_surface(
+        meta=meta,
+        action_name="view.project_pnl_summary",
+        target_type="ProjectPnlSummaryBoard",
+        target_id=project_scope_id or "all",
+        allowed_roles={"founder", "super_admin", "admin", "accountant"},
+        reason_code="forbidden_project_pnl_summary_view",
+        detail="Actor is not allowed to read project P&L summary boards.",
+    )
+    return get_project_pnl_summary(project_scope_id)
+
+
+def get_project_order_allocation_summary_for_actor(
+    project_scope_id: str | None,
+    meta: Meta | None,
+) -> ProjectOrderAllocationSummaryResponse:
+    authorize_read_surface(
+        meta=meta,
+        action_name="view.project_order_allocation_summary",
+        target_type="ProjectOrderAllocationSummaryBoard",
+        target_id=project_scope_id or "all",
+        allowed_roles={"founder", "super_admin", "admin", "accountant", "sales", "ops", "viewer"},
+        reason_code="forbidden_project_order_allocation_summary_view",
+        detail="Actor is not allowed to read project order allocation summary boards.",
+    )
+    return get_project_order_allocation_summary(project_scope_id)

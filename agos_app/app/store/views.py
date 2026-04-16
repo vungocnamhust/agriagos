@@ -12,7 +12,9 @@ __all__ = [
     "fetch_available_lots_board",
     "fetch_customer_360",
     "fetch_farm_summary_board",
+    "fetch_project_order_allocation_summary",
     "fetch_project_contribution_summary",
+    "fetch_project_pnl_summary",
     "fetch_pending_fulfillment_board",
     "is_enabled",
     "SessionLocal",
@@ -246,6 +248,145 @@ def fetch_project_contribution_summary(project_scope_id: str | None = None) -> l
             "confirmedQuantity": _db.to_float(row["confirmed_quantity"]),
             "confirmedEstimatedValue": _db.to_float(row["confirmed_estimated_value"]) if row["confirmed_estimated_value"] is not None else None,
             "currency": row["currency"],
+        }
+        for row in rows
+    ]
+
+
+def fetch_project_pnl_summary(project_scope_id: str | None = None) -> list[dict[str, Any]]:
+    if not is_enabled():
+        return []
+
+    query = """
+        SELECT
+            ps.project_scope_id,
+            ps.project_scope_code,
+            ps.name AS project_scope_name,
+            COALESCE(costs.cost_record_count, 0) AS cost_record_count,
+            COALESCE(revenues.revenue_record_count, 0) AS revenue_record_count,
+            COALESCE(costs.recognized_cost_amount, 0) AS recognized_cost_amount,
+            COALESCE(revenues.recognized_revenue_net_amount, 0) AS recognized_revenue_net_amount,
+            COALESCE(revenues.recognized_revenue_net_amount, 0) - COALESCE(costs.recognized_cost_amount, 0) AS margin_amount,
+            CASE
+                WHEN costs.currency IS NOT NULL AND revenues.currency IS NOT NULL AND costs.currency <> revenues.currency THEN NULL
+                ELSE COALESCE(revenues.currency, costs.currency)
+            END AS currency
+        FROM project_scopes ps
+        LEFT JOIN (
+            SELECT
+                project_scope_id,
+                COUNT(*) AS cost_record_count,
+                SUM(amount) AS recognized_cost_amount,
+                CASE
+                    WHEN COUNT(DISTINCT currency) FILTER (WHERE currency IS NOT NULL) = 1 THEN MAX(currency)
+                    ELSE NULL
+                END AS currency
+            FROM project_cost_records
+            GROUP BY project_scope_id
+        ) costs ON costs.project_scope_id = ps.project_scope_id
+        LEFT JOIN (
+            SELECT
+                project_scope_id,
+                COUNT(*) AS revenue_record_count,
+                SUM(net_amount) AS recognized_revenue_net_amount,
+                CASE
+                    WHEN COUNT(DISTINCT currency) FILTER (WHERE currency IS NOT NULL) = 1 THEN MAX(currency)
+                    ELSE NULL
+                END AS currency
+            FROM project_revenue_records
+            GROUP BY project_scope_id
+        ) revenues ON revenues.project_scope_id = ps.project_scope_id
+    """
+    params: dict[str, Any] = {}
+    if project_scope_id is not None:
+        query += " WHERE ps.project_scope_id = CAST(:project_scope_id AS uuid)"
+        params["project_scope_id"] = project_scope_id
+    query += """
+        ORDER BY ps.project_scope_code
+    """
+
+    with SessionLocal() as session:
+        rows = session.execute(text(query), params).mappings().all()
+
+    return [
+        {
+            "projectScopeId": str(row["project_scope_id"]),
+            "projectScopeCode": row["project_scope_code"],
+            "projectScopeName": row["project_scope_name"],
+            "costRecordCount": int(row["cost_record_count"]),
+            "revenueRecordCount": int(row["revenue_record_count"]),
+            "recognizedCostAmount": _db.to_float(row["recognized_cost_amount"]),
+            "recognizedRevenueNetAmount": _db.to_float(row["recognized_revenue_net_amount"]),
+            "marginAmount": _db.to_float(row["margin_amount"]),
+            "currency": row["currency"],
+        }
+        for row in rows
+        if int(row["cost_record_count"] or 0) > 0 or int(row["revenue_record_count"] or 0) > 0
+    ]
+
+
+def fetch_project_order_allocation_summary(project_scope_id: str | None = None) -> list[dict[str, Any]]:
+    if not is_enabled():
+        return []
+
+    query = """
+        WITH assigned_orders AS (
+            SELECT DISTINCT
+                pa.project_scope_id,
+                pa.target_id AS order_id
+            FROM project_assignments pa
+            WHERE pa.target_type = 'order'
+              AND pa.ended_at IS NULL
+    """
+    params: dict[str, Any] = {}
+    if project_scope_id is not None:
+        query += " AND pa.project_scope_id = CAST(:project_scope_id AS uuid)"
+        params["project_scope_id"] = project_scope_id
+    query += """
+        )
+        SELECT
+            ps.project_scope_id,
+            ps.project_scope_code,
+            ps.name AS project_scope_name,
+            COUNT(DISTINCT ao.order_id) AS assigned_order_count,
+            COUNT(DISTINCT ao.order_id) FILTER (WHERE a.allocation_id IS NOT NULL) AS allocated_order_count,
+            COUNT(a.allocation_id) AS allocation_count,
+            COUNT(a.allocation_id) FILTER (WHERE a.status = 'active') AS active_allocation_count,
+            COUNT(a.allocation_id) FILTER (WHERE a.status = 'released') AS released_allocation_count,
+            COALESCE(SUM(a.allocated_qty), 0) AS allocated_qty,
+            COALESCE(SUM(a.allocated_qty) FILTER (WHERE a.status = 'active'), 0) AS active_allocated_qty,
+            COALESCE(SUM(a.allocated_qty) FILTER (WHERE a.status = 'released'), 0) AS released_allocated_qty,
+            CASE
+                WHEN COUNT(DISTINCT l.unit) FILTER (WHERE a.allocation_id IS NOT NULL AND l.unit IS NOT NULL) = 1
+                    THEN MAX(l.unit) FILTER (WHERE a.allocation_id IS NOT NULL)
+                ELSE NULL
+            END AS unit
+        FROM assigned_orders ao
+        JOIN project_scopes ps ON ps.project_scope_id = ao.project_scope_id
+        LEFT JOIN sales_orders o ON o.order_id = ao.order_id
+        LEFT JOIN sales_order_lines l ON l.order_id = o.order_id
+        LEFT JOIN allocations a ON a.order_line_id = l.order_line_id
+        GROUP BY ps.project_scope_id, ps.project_scope_code, ps.name
+        ORDER BY ps.project_scope_code
+    """
+
+    with SessionLocal() as session:
+        rows = session.execute(text(query), params).mappings().all()
+
+    return [
+        {
+            "projectScopeId": str(row["project_scope_id"]),
+            "projectScopeCode": row["project_scope_code"],
+            "projectScopeName": row["project_scope_name"],
+            "assignedOrderCount": int(row["assigned_order_count"]),
+            "allocatedOrderCount": int(row["allocated_order_count"]),
+            "allocationCount": int(row["allocation_count"]),
+            "activeAllocationCount": int(row["active_allocation_count"]),
+            "releasedAllocationCount": int(row["released_allocation_count"]),
+            "allocatedQty": _db.to_float(row["allocated_qty"]),
+            "activeAllocatedQty": _db.to_float(row["active_allocated_qty"]),
+            "releasedAllocatedQty": _db.to_float(row["released_allocated_qty"]),
+            "unit": row["unit"],
         }
         for row in rows
     ]

@@ -85,3 +85,38 @@ class ProjectContributionSummaryItem(BaseModel):
 
 class ProjectContributionSummaryResponse(BaseModel):
     items: list[ProjectContributionSummaryItem]
+
+
+class ProjectPnlSummaryItem(BaseModel):
+    projectScopeId: str
+    projectScopeCode: str
+    projectScopeName: str
+    costRecordCount: int
+    revenueRecordCount: int
+    recognizedCostAmount: float
+    recognizedRevenueNetAmount: float
+    marginAmount: float
+    currency: str | None = None
+
+
+class ProjectPnlSummaryResponse(BaseModel):
+    items: list[ProjectPnlSummaryItem]
+
+
+class ProjectOrderAllocationSummaryItem(BaseModel):
+    projectScopeId: str
+    projectScopeCode: str
+    projectScopeName: str
+    assignedOrderCount: int
+    allocatedOrderCount: int
+    allocationCount: int
+    activeAllocationCount: int
+    releasedAllocationCount: int
+    allocatedQty: float
+    activeAllocatedQty: float
+    releasedAllocatedQty: float
+    unit: str | None = None
+
+
+class ProjectOrderAllocationSummaryResponse(BaseModel):
+    items: list[ProjectOrderAllocationSummaryItem]

@@ -144,6 +144,54 @@ def test_project_revenue_record_routes_record_and_list_revenues() -> None:
     assert listed.json()["items"][0]["revenueRecordId"] == payload["revenueRecordId"]
 
 
+def test_project_revenue_record_list_denies_non_finance_roles() -> None:
+    project_scope_id = "00000000-0000-0000-0000-00000000d412"
+    _seed_project_scope(project_scope_id)
+
+    response = client.get(
+        f"/api/v1/projects/{project_scope_id}/revenue-records",
+        headers=_auth_headers(actor_role="sales", actor_id="sales-1"),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "FORBIDDEN"
+    assert response.json()["message"] == "Actor is not allowed to read project revenue records."
+    assert memory.list_audit_logs()[-1]["actionName"] == "project_revenue_record.list"
+    assert memory.list_audit_logs()[-1]["reasonCode"] == "forbidden_project_revenue_record_read"
+
+
+def test_project_revenue_record_create_replays_idempotent_response() -> None:
+    project_scope_id = "00000000-0000-0000-0000-00000000d413"
+    order_id = "00000000-0000-0000-0000-00000000d414"
+    _seed_project_scope(project_scope_id)
+    _seed_order(order_id=order_id, status="delivered", delivered_at="2026-04-16T10:00:00Z")
+    _seed_project_assignment(project_scope_id, order_id)
+
+    payload = {
+        "revenueType": "delivered_order_sale",
+        "grossAmount": 900000,
+        "netAmount": 850000,
+        "currency": "VND",
+        "sourceObjectType": "order",
+        "sourceObjectId": order_id,
+        "meta": {
+            "correlationId": "corr-project-revenue-idem",
+            "idempotencyKey": "idem-project-revenue-idem",
+            "actorId": "admin-1",
+            "actorRole": "admin",
+        },
+    }
+
+    first = client.post(f"/api/v1/projects/{project_scope_id}/revenue-records", json=payload)
+    second = client.post(f"/api/v1/projects/{project_scope_id}/revenue-records", json=payload)
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert second.json() == first.json()
+    assert len(memory.list_project_revenue_records(project_scope_id)) == 1
+    assert [event["eventName"] for event in memory.list_events()] == ["project_revenue_record.recorded"]
+
+
 def test_project_revenue_record_routes_reject_missing_undelivered_or_unassigned_orders() -> None:
     project_scope_id = "00000000-0000-0000-0000-00000000d403"
     missing_order_id = "00000000-0000-0000-0000-00000000d499"
