@@ -132,6 +132,7 @@ def test_order_routes_create_get_and_confirm_preserve_line_level_linkage() -> No
     assert detail_body["sourcePreorderFlag"] is True
     assert detail_body["lines"][0]["sourcePreorderId"] == preorder_id
     assert detail_body["lines"][1]["sourcePreorderId"] is None
+    assert detail_body["assignments"] == []
 
     confirmed = client.post(
         f"/api/v1/orders/{created_body['orderId']}/confirm",
@@ -146,6 +147,48 @@ def test_order_routes_create_get_and_confirm_preserve_line_level_linkage() -> No
 
     confirmed_event = next(event for event in memory.list_events() if event["eventName"] == "order.confirmed")
     assert confirmed_event["payload"]["linkedPreorderIds"] == [preorder_id]
+
+
+def test_order_detail_route_includes_project_assignments() -> None:
+    customer_id = _create_customer()
+
+    created = client.post(
+        "/api/v1/orders",
+        headers=_auth_headers(),
+        json={
+            "customerId": customer_id,
+            "channel": "direct",
+            "lines": [{"productSkuId": "sku-1", "orderedQty": 1, "unit": "kg"}],
+            "meta": {
+                "correlationId": "corr-api-order-assignment-create",
+                "idempotencyKey": "idem-api-order-assignment-create",
+            },
+        },
+    )
+    assert created.status_code == 201
+    order_id = created.json()["data"]["orderId"]
+
+    memory.save_project_assignment(
+        "assignment-order-1",
+        {
+            "projectAssignmentId": "assignment-order-1",
+            "projectScopeId": "00000000-0000-0000-0000-00000000a301",
+            "targetType": "order",
+            "targetId": order_id,
+            "isPrimary": True,
+            "attributionWeight": 1.0,
+            "createdAt": memory.now_iso(),
+            "endedAt": None,
+            "endedReason": None,
+            "metadata": {"lane": "commercial"},
+        },
+    )
+
+    detail = client.get(f"/api/v1/orders/{order_id}", headers=_auth_headers())
+
+    assert detail.status_code == 200
+    assert detail.json()["assignments"][0]["targetType"] == "order"
+    assert detail.json()["assignments"][0]["projectScopeId"] == "00000000-0000-0000-0000-00000000a301"
 
 
 def test_order_create_route_rejects_missing_source_preorder() -> None:

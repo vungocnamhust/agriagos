@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from app.models.common import CommandMetaRequest, Meta
 from app.models.enums import AllocationStatus, OrderLineStatus, OrderStatus, PaymentStatus
+from app.models.project_assignments import ProjectAssignmentSummary
 
 class OrderLine(BaseModel):
     orderLineId: str
@@ -35,6 +36,7 @@ class OrderDetail(BaseModel):
     sourcePreorderFlag: bool = False
     version: int = 1
     lines: list[OrderLine]
+    assignments: list[ProjectAssignmentSummary] = []
 
 class CreateOrderLineRequest(BaseModel):
     productSkuId: str

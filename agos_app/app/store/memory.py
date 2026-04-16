@@ -21,6 +21,9 @@ _customer_duplicate_candidates: dict[str, dict[str, Any]] = {}
 _organizations: dict[str, dict[str, Any]] = {}
 _project_scopes: dict[str, dict[str, Any]] = {}
 _project_assignments: dict[str, dict[str, Any]] = {}
+_project_contributions: dict[str, dict[str, Any]] = {}
+_project_cost_records: dict[str, dict[str, Any]] = {}
+_project_revenue_records: dict[str, dict[str, Any]] = {}
 
 _preorders: dict[str, dict[str, Any]] = {}
 _orders: dict[str, dict[str, Any]] = {}
@@ -65,6 +68,35 @@ def list_project_scopes() -> list[dict[str, Any]]:
 
 def list_project_assignments(project_scope_id: str | None = None) -> list[dict[str, Any]]:
     items = list(_project_assignments.values())
+    if project_scope_id is not None:
+        items = [item for item in items if item.get("projectScopeId") == project_scope_id]
+    return items
+
+
+def list_project_assignments_for_target(target_type: str, target_id: str) -> list[dict[str, Any]]:
+    return [
+        item
+        for item in _project_assignments.values()
+        if item.get("targetType") == target_type and item.get("targetId") == target_id
+    ]
+
+
+def list_project_contributions(project_scope_id: str | None = None) -> list[dict[str, Any]]:
+    items = list(_project_contributions.values())
+    if project_scope_id is not None:
+        items = [item for item in items if item.get("projectScopeId") == project_scope_id]
+    return items
+
+
+def list_project_cost_records(project_scope_id: str | None = None) -> list[dict[str, Any]]:
+    items = list(_project_cost_records.values())
+    if project_scope_id is not None:
+        items = [item for item in items if item.get("projectScopeId") == project_scope_id]
+    return items
+
+
+def list_project_revenue_records(project_scope_id: str | None = None) -> list[dict[str, Any]]:
+    items = list(_project_revenue_records.values())
     if project_scope_id is not None:
         items = [item for item in items if item.get("projectScopeId") == project_scope_id]
     return items
@@ -122,6 +154,29 @@ def get_project_assignment(project_assignment_id: str) -> dict[str, Any] | None:
     return _project_assignments.get(project_assignment_id)
 
 
+def get_project_contribution(project_contribution_event_id: str) -> dict[str, Any] | None:
+    return _project_contributions.get(project_contribution_event_id)
+
+
+def get_project_cost_record(cost_record_id: str) -> dict[str, Any] | None:
+    return _project_cost_records.get(cost_record_id)
+
+
+def get_project_revenue_record(revenue_record_id: str) -> dict[str, Any] | None:
+    return _project_revenue_records.get(revenue_record_id)
+
+
+def find_project_revenue_record_by_source(project_scope_id: str, source_object_type: str, source_object_id: str) -> dict[str, Any] | None:
+    for record in _project_revenue_records.values():
+        if (
+            record.get("projectScopeId") == project_scope_id
+            and record.get("sourceObjectType") == source_object_type
+            and record.get("sourceObjectId") == source_object_id
+        ):
+            return record
+    return None
+
+
 def save_customer(customer_id: str, record: dict[str, Any]) -> None:
     _customers[customer_id] = record
 
@@ -136,6 +191,18 @@ def save_project_scope(project_scope_id: str, record: dict[str, Any]) -> None:
 
 def save_project_assignment(project_assignment_id: str, record: dict[str, Any]) -> None:
     _project_assignments[project_assignment_id] = record
+
+
+def save_project_contribution(project_contribution_event_id: str, record: dict[str, Any]) -> None:
+    _project_contributions[project_contribution_event_id] = record
+
+
+def save_project_cost_record(cost_record_id: str, record: dict[str, Any]) -> None:
+    _project_cost_records[cost_record_id] = record
+
+
+def save_project_revenue_record(revenue_record_id: str, record: dict[str, Any]) -> None:
+    _project_revenue_records[revenue_record_id] = record
 
 
 def customer_phone_exists(phone: str) -> bool:
@@ -384,6 +451,9 @@ def reset_state() -> None:
     _organizations.clear()
     _project_scopes.clear()
     _project_assignments.clear()
+    _project_contributions.clear()
+    _project_cost_records.clear()
+    _project_revenue_records.clear()
     _preorders.clear()
     _orders.clear()
     _allocations.clear()

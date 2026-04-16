@@ -65,6 +65,7 @@ def test_lot_routes_create_detail_and_adjust() -> None:
     assert detail_response.json()["lotId"] == created["lotId"]
     assert detail_response.json()["sourceRefId"] == "cycle-api-1"
     assert detail_response.json()["organizationId"] == "org-lot-api-1"
+    assert detail_response.json()["assignments"] == []
 
     adjust_response = client.post(
         f"/api/v1/lots/{created['lotId']}/adjust",
@@ -169,6 +170,46 @@ def test_raw_lot_detail_route_denies_viewer() -> None:
 
     assert response.status_code == 403
     assert response.json()["message"] == "Actor is not allowed to read raw lot details."
+
+
+def test_lot_detail_route_includes_project_assignments() -> None:
+    memory.save_lot(
+        "lot-api-assignment",
+        {
+            "lotId": "lot-api-assignment",
+            "tenantId": "default",
+            "lotCode": "LOT-API-ASG-001",
+            "productSkuId": "sku-1",
+            "sourceType": "crop_cycle",
+            "sourceRefId": "cycle-assignment",
+            "harvestOrProductionDate": "2026-04-11",
+            "actualQty": 10.0,
+            "availableQty": 10.0,
+            "reservedQty": 0.0,
+            "releasedQty": 10.0,
+            "status": "released",
+        },
+    )
+    memory.save_project_assignment(
+        "assignment-lot-1",
+        {
+            "projectAssignmentId": "assignment-lot-1",
+            "projectScopeId": "00000000-0000-0000-0000-00000000a303",
+            "targetType": "lot",
+            "targetId": "lot-api-assignment",
+            "isPrimary": True,
+            "attributionWeight": 1.0,
+            "createdAt": memory.now_iso(),
+            "endedAt": None,
+            "endedReason": None,
+            "metadata": {"lane": "farm"},
+        },
+    )
+
+    response = client.get("/api/v1/lots/lot-api-assignment", headers=_auth_headers())
+
+    assert response.status_code == 200
+    assert response.json()["assignments"][0]["targetType"] == "lot"
 
 
 def test_raw_lot_detail_route_denies_delegated_agent() -> None:

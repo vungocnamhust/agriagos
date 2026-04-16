@@ -99,6 +99,36 @@ def list_project_assignments(project_scope_id: str) -> list[dict[str, Any]]:
     return [_map_project_assignment_row(row) for row in rows]
 
 
+def list_project_assignments_for_target(target_type: str, target_id: str) -> list[dict[str, Any]]:
+    if not _db.is_enabled():
+        return []
+
+    with _db.read_session() as session:
+        rows = session.execute(
+            text(
+                """
+                SELECT
+                    project_assignment_id,
+                    project_scope_id,
+                    target_type,
+                    target_id,
+                    is_primary,
+                    attribution_weight,
+                    created_at,
+                    ended_at,
+                    ended_reason,
+                    metadata_json
+                FROM project_assignments
+                WHERE target_type = :target_type AND target_id = :target_id
+                ORDER BY created_at, project_assignment_id
+                """
+            ),
+            {"target_type": target_type, "target_id": target_id},
+        ).mappings().all()
+
+    return [_map_project_assignment_row(row) for row in rows]
+
+
 def fetch_project_assignment(project_assignment_id: str) -> dict[str, Any] | None:
     if not _db.is_enabled():
         return None
@@ -130,7 +160,7 @@ def fetch_project_assignment(project_assignment_id: str) -> dict[str, Any] | Non
     return _map_project_assignment_row(row)
 
 
-def _map_project_assignment_row(row: Mapping[str, Any]) -> dict[str, Any]:
+def _map_project_assignment_row(row: Mapping[Any, Any]) -> dict[str, Any]:
     return {
         "projectAssignmentId": str(row["project_assignment_id"]),
         "projectScopeId": str(row["project_scope_id"]),

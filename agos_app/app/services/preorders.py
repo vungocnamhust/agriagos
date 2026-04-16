@@ -24,10 +24,12 @@ from app.models.preorders import (
     PreorderDetail,
     PreorderResponse,
 )
+from app.models.project_assignments import ProjectAssignmentSummary
 from app.services import audit as audit_service
 from app.store import postgres_sync
 from app.store import memory as store
 from app.store import organizations as organization_store
+from app.store import project_assignments as project_assignment_store
 from app.store._db import transaction as postgres_transaction
 
 
@@ -67,6 +69,7 @@ def _build_adjustment_history(record: dict[str, Any]) -> list[PreorderAdjustment
 
 def _build_preorder_detail(record: dict[str, Any]) -> PreorderDetail:
     normalized = _normalized_preorder_record(record)
+    assignments = _list_assignment_summaries("preorder", normalized["preorderId"])
     return PreorderDetail(
         preorderId=normalized["preorderId"],
         preorderCode=normalized["preorderCode"],
@@ -81,7 +84,17 @@ def _build_preorder_detail(record: dict[str, Any]) -> PreorderDetail:
         status=normalized["status"],
         startDate=normalized.get("startDate"),
         adjustmentHistory=_build_adjustment_history(normalized),
+        assignments=assignments,
     )
+
+
+def _list_assignment_summaries(target_type: str, target_id: str) -> list[ProjectAssignmentSummary]:
+    records = (
+        project_assignment_store.list_project_assignments_for_target(target_type, target_id)
+        if postgres_sync.is_enabled()
+        else store.list_project_assignments_for_target(target_type, target_id)
+    )
+    return [ProjectAssignmentSummary(**record) for record in records]
 
 
 def _emit_preorder_event(

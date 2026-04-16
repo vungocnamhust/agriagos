@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from app.models.common import Meta
 from app.models.enums import PreorderStatus
+from app.models.project_assignments import ProjectAssignmentSummary
 
 
 class PreorderAdjustmentEntry(BaseModel):
@@ -25,6 +26,7 @@ class PreorderDetail(BaseModel):
     startDate: str | None = None
     version: int = 1
     adjustmentHistory: list[PreorderAdjustmentEntry] = Field(default_factory=list)
+    assignments: list[ProjectAssignmentSummary] = Field(default_factory=list)
 
 class CreatePreorderRequest(BaseModel):
     organizationId: str | None = None

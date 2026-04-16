@@ -59,8 +59,8 @@ flowchart LR
         V4["Farm View / Farm Summary Board"]
         V5["Scoped Event Stream"]
         V6["Audit Query Surface"]
-        V7["Project Scope Directory [Phase 2 🔜]"]
-        V8["Project Economics / Contribution Views [Phase 2 🔜]"]
+        V7["Project Scope Directory [Phase 1 ✅]"]
+        V8["Project Economics / Contribution Views [Phase 1 ✅ / Phase 2 🔜]"]
     end
 
     subgraph Commands["Allowed Commands"]
@@ -70,8 +70,8 @@ flowchart LR
         CMD3["Order Commands"]
         CMD4["Customer / Preference / Follow-up Commands"]
         CMD5["Admin / Override Commands"]
-        CMD6["Project Scope Management Commands [Phase 2 🔜]"]
-        CMD7["Project Assignment / Contribution / Economics Commands [Phase 2 🔜]"]
+        CMD6["Project Scope Management Commands [Phase 1 ✅]"]
+        CMD7["Project Assignment / Contribution / Economics Commands [Phase 1 ✅ / Phase 2 🔜]"]
     end
 
     C1 --> V1
@@ -161,4 +161,5 @@ flowchart LR
 - `viewer / analyst` short-term đi qua `/api/v1/views/*` và scoped `/api/v1/events`; không dùng raw operational reads theo mặc định.
 - `agent / automation` vẫn advisory-first. Sơ đồ cho thấy nó có thể đọc hoặc tạo draft trong scope được cấp, nhưng không có bypass lane nào đang enable ở Phase 1.
 - `Organization Profile View [Phase 1 ✅]` và `Organization Management Commands [Phase 1 ✅]` hiện tương ứng với standalone `/api/v1/organizations` read/write lane. Association sang farm-side, commercial-side, và org-scoped RBAC vẫn là phase sau.
-- `Project Scope Directory [Phase 2 🔜]`, `Project Economics / Contribution Views [Phase 2 🔜]`, và các command nodes liên quan chỉ là docs-first baseline cho epic ProjectScope. Chúng chưa khẳng định runtime route hoặc authz đã tồn tại ở Phase 1.
+- `Project Scope Directory [Phase 1 ✅]` hiện tương ứng với standalone `/api/v1/projects` read/write lane.
+- `Project Economics / Contribution Views [Phase 1 ✅ / Phase 2 🔜]` hiện đã có `/api/v1/views/project-contribution-summary` và cost-record lane đầu tiên dưới `/api/v1/projects/{project_scope_id}/cost-records`; shared-resource, revenue, và allocation reporting vẫn là phase sau.

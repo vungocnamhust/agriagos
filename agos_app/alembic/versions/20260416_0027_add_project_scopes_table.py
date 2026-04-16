@@ -1,8 +1,8 @@
 # pyright: reportAttributeAccessIssue=false
 """Add project scopes table.
 
-Revision ID: 20260416_0026
-Revises: 20260416_0025
+Revision ID: 20260416_0027
+Revises: 20260416_0026
 Create Date: 2026-04-16 16:30:00
 """
 from __future__ import annotations
@@ -14,8 +14,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 
-revision = "20260416_0026"
-down_revision = "20260416_0025"
+revision = "20260416_0027"
+down_revision = "20260416_0026"
 branch_labels = None
 depends_on = None
 

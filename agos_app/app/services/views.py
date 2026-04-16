@@ -16,12 +16,15 @@ from app.models.views import (
     FarmSummaryBoardResponse,
     PendingFulfillmentListResponse,
     PendingFulfillmentView,
+    ProjectContributionSummaryItem,
+    ProjectContributionSummaryResponse,
 )
 from app.services.read_authz import authorize_read_surface
 from app.services import customers as cust_svc
 from app.services import farm as farm_svc
 from app.store import postgres_sync
 from app.store import views as view_store
+from app.store import memory as memory_store
 from app.store.memory import (
     list_crop_cycles,
     list_customer_preferences,
@@ -248,6 +251,52 @@ def get_farm_summary_board() -> FarmSummaryBoardResponse:
     return FarmSummaryBoardResponse(items=items)
 
 
+def get_project_contribution_summary(project_scope_id: str | None = None) -> ProjectContributionSummaryResponse:
+    if postgres_sync.is_enabled():
+        items = [ProjectContributionSummaryItem(**row) for row in view_store.fetch_project_contribution_summary(project_scope_id)]
+        return ProjectContributionSummaryResponse(items=items)
+
+    scope_records = memory_store.list_project_scopes()
+    contribution_records = memory_store.list_project_contributions(project_scope_id)
+    scope_map = {record["projectScopeId"]: record for record in scope_records}
+    summary_by_scope: dict[str, dict[str, object]] = {}
+
+    for contribution in contribution_records:
+        scope_id = contribution["projectScopeId"]
+        scope = scope_map.get(scope_id)
+        if scope is None:
+            continue
+        summary = summary_by_scope.setdefault(
+            scope_id,
+            {
+                "projectScopeId": scope_id,
+                "projectScopeCode": scope["projectScopeCode"],
+                "projectScopeName": scope["name"],
+                "proposedCount": 0,
+                "confirmedCount": 0,
+                "rejectedCount": 0,
+                "confirmedQuantity": 0.0,
+                "confirmedEstimatedValue": 0.0,
+                "currency": None,
+            },
+        )
+        status = contribution["status"]
+        if status == "proposed":
+            summary["proposedCount"] = int(summary["proposedCount"]) + 1
+        elif status == "confirmed":
+            summary["confirmedCount"] = int(summary["confirmedCount"]) + 1
+            summary["confirmedQuantity"] = float(summary["confirmedQuantity"]) + float(contribution["quantity"])
+            if contribution.get("estimatedValue") is not None:
+                summary["confirmedEstimatedValue"] = float(summary["confirmedEstimatedValue"]) + float(contribution["estimatedValue"])
+            if summary["currency"] is None:
+                summary["currency"] = contribution.get("currency")
+        elif status == "rejected":
+            summary["rejectedCount"] = int(summary["rejectedCount"]) + 1
+
+    items = [ProjectContributionSummaryItem(**item) for item in sorted(summary_by_scope.values(), key=lambda item: str(item["projectScopeCode"]))]
+    return ProjectContributionSummaryResponse(items=items)
+
+
 def get_customer_360_for_actor(customer_id: str, meta: Meta | None) -> Customer360View:
     authorize_read_surface(
         meta=meta,
@@ -311,3 +360,19 @@ def get_farm_summary_board_for_actor(meta: Meta | None) -> FarmSummaryBoardRespo
         detail="Actor is not allowed to read farm summary boards.",
     )
     return get_farm_summary_board()
+
+
+def get_project_contribution_summary_for_actor(
+    project_scope_id: str | None,
+    meta: Meta | None,
+) -> ProjectContributionSummaryResponse:
+    authorize_read_surface(
+        meta=meta,
+        action_name="view.project_contribution_summary",
+        target_type="ProjectContributionSummaryBoard",
+        target_id=project_scope_id or "all",
+        allowed_roles={"founder", "super_admin", "admin", "accountant", "viewer"},
+        reason_code="forbidden_project_contribution_summary_view",
+        detail="Actor is not allowed to read project contribution summary boards.",
+    )
+    return get_project_contribution_summary(project_scope_id)

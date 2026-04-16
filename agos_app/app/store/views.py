@@ -12,6 +12,7 @@ __all__ = [
     "fetch_available_lots_board",
     "fetch_customer_360",
     "fetch_farm_summary_board",
+    "fetch_project_contribution_summary",
     "fetch_pending_fulfillment_board",
     "is_enabled",
     "SessionLocal",
@@ -195,6 +196,56 @@ def fetch_pending_fulfillment_board() -> list[dict[str, Any]]:
             "customerName": row["customer_name"],
             "status": row["status"],
             "shippingDeadline": _iso(row["shipping_deadline"]),
+        }
+        for row in rows
+    ]
+
+
+def fetch_project_contribution_summary(project_scope_id: str | None = None) -> list[dict[str, Any]]:
+    if not is_enabled():
+        return []
+
+    query = """
+        SELECT
+            ps.project_scope_id,
+            ps.project_scope_code,
+            ps.name AS project_scope_name,
+            COUNT(*) FILTER (WHERE pce.status = 'proposed') AS proposed_count,
+            COUNT(*) FILTER (WHERE pce.status = 'confirmed') AS confirmed_count,
+            COUNT(*) FILTER (WHERE pce.status = 'rejected') AS rejected_count,
+            COALESCE(SUM(pce.quantity) FILTER (WHERE pce.status = 'confirmed'), 0) AS confirmed_quantity,
+            SUM(pce.estimated_value) FILTER (WHERE pce.status = 'confirmed') AS confirmed_estimated_value,
+            CASE
+                WHEN COUNT(DISTINCT pce.currency) FILTER (WHERE pce.status = 'confirmed' AND pce.currency IS NOT NULL) = 1
+                    THEN MAX(pce.currency) FILTER (WHERE pce.status = 'confirmed')
+                ELSE NULL
+            END AS currency
+        FROM project_scopes ps
+        JOIN project_contribution_events pce ON pce.project_scope_id = ps.project_scope_id
+    """
+    params: dict[str, Any] = {}
+    if project_scope_id is not None:
+        query += " WHERE ps.project_scope_id = CAST(:project_scope_id AS uuid)"
+        params["project_scope_id"] = project_scope_id
+    query += """
+        GROUP BY ps.project_scope_id, ps.project_scope_code, ps.name
+        ORDER BY ps.project_scope_code
+    """
+
+    with SessionLocal() as session:
+        rows = session.execute(text(query), params).mappings().all()
+
+    return [
+        {
+            "projectScopeId": str(row["project_scope_id"]),
+            "projectScopeCode": row["project_scope_code"],
+            "projectScopeName": row["project_scope_name"],
+            "proposedCount": int(row["proposed_count"]),
+            "confirmedCount": int(row["confirmed_count"]),
+            "rejectedCount": int(row["rejected_count"]),
+            "confirmedQuantity": _db.to_float(row["confirmed_quantity"]),
+            "confirmedEstimatedValue": _db.to_float(row["confirmed_estimated_value"]) if row["confirmed_estimated_value"] is not None else None,
+            "currency": row["currency"],
         }
         for row in rows
     ]

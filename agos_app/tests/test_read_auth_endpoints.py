@@ -155,6 +155,7 @@ def test_raw_farm_plots_allow_ops_and_return_organization_id() -> None:
     assert len(response.json()) == 1
     assert response.json()[0]["plotId"] == "plot-1"
     assert response.json()[0]["organizationId"] == "org-1"
+    assert response.json()[0]["assignments"] == []
 
 
 def test_raw_farm_crop_cycles_allow_ops() -> None:
@@ -191,3 +192,71 @@ def test_raw_farm_crop_cycles_allow_ops() -> None:
     assert len(response.json()) == 1
     assert response.json()[0]["cropCycleId"] == "cycle-1"
     assert response.json()[0]["organizationId"] == "org-1"
+    assert response.json()[0]["assignments"] == []
+
+
+def test_raw_farm_surfaces_include_project_assignments() -> None:
+    memory.save_plot(
+        "plot-asg-1",
+        {
+            "plotId": "plot-asg-1",
+            "plotCode": "PLOT-ASG-001",
+            "organizationId": "org-1",
+            "name": "Garden B",
+            "locationText": "Da Lat",
+            "areaValue": 3.0,
+            "areaUnit": "ha",
+            "status": "active",
+        },
+    )
+    memory.save_crop_cycle(
+        "cycle-asg-1",
+        {
+            "cropCycleId": "cycle-asg-1",
+            "plotId": "plot-asg-1",
+            "organizationId": "org-1",
+            "cropName": "Coffee",
+            "growthStage": "growing",
+            "status": "active",
+            "expectedHarvestFrom": "2026-06-01",
+            "expectedHarvestTo": "2026-06-10",
+        },
+    )
+    memory.save_project_assignment(
+        "assignment-plot-1",
+        {
+            "projectAssignmentId": "assignment-plot-1",
+            "projectScopeId": "00000000-0000-0000-0000-00000000a304",
+            "targetType": "plot",
+            "targetId": "plot-asg-1",
+            "isPrimary": True,
+            "attributionWeight": 1.0,
+            "createdAt": memory.now_iso(),
+            "endedAt": None,
+            "endedReason": None,
+            "metadata": {},
+        },
+    )
+    memory.save_project_assignment(
+        "assignment-cycle-1",
+        {
+            "projectAssignmentId": "assignment-cycle-1",
+            "projectScopeId": "00000000-0000-0000-0000-00000000a305",
+            "targetType": "crop_cycle",
+            "targetId": "cycle-asg-1",
+            "isPrimary": True,
+            "attributionWeight": 1.0,
+            "createdAt": memory.now_iso(),
+            "endedAt": None,
+            "endedReason": None,
+            "metadata": {},
+        },
+    )
+
+    plots_response = client.get("/api/v1/farm/plots", headers=_auth_headers(actor_role="ops", actor_id="ops-1"))
+    crop_cycles_response = client.get("/api/v1/farm/crop-cycles", headers=_auth_headers(actor_role="ops", actor_id="ops-1"))
+
+    assert plots_response.status_code == 200
+    assert plots_response.json()[0]["assignments"][0]["targetType"] == "plot"
+    assert crop_cycles_response.status_code == 200
+    assert crop_cycles_response.json()[0]["assignments"][0]["targetType"] == "crop_cycle"

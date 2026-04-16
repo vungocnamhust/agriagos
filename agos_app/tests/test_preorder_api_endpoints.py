@@ -87,6 +87,7 @@ def test_preorder_routes_support_draft_lifecycle_adjust_and_cancel() -> None:
     assert detail.status_code == 200
     assert detail.json()["adjustmentHistory"][0]["oldCommittedQty"] == 12.0
     assert detail.json()["adjustmentHistory"][0]["newCommittedQty"] == 10.0
+    assert detail.json()["assignments"] == []
 
     cancelled = client.post(
         f"/api/v1/preorders/{preorder['preorderId']}/cancel",
@@ -166,3 +167,57 @@ def test_preorder_route_rejects_viewer_create() -> None:
     assert response.status_code == 403
     assert response.json()["code"] == "FORBIDDEN"
     assert response.json()["message"] == "Actor is not allowed to create preorders."
+
+
+def test_preorder_detail_route_includes_project_assignments() -> None:
+    customer = client.post(
+        "/api/v1/customers",
+        json={
+            "fullName": "Preorder Assignment User",
+            "phone": "0900000410",
+            "meta": {
+                "correlationId": "corr-preorder-assignment-customer",
+                "idempotencyKey": "idem-preorder-assignment-customer",
+                "actorId": "sales-1",
+                "actorRole": "sales",
+            },
+        },
+    )
+    customer_id = customer.json()["data"]["customerId"]
+
+    created = client.post(
+        "/api/v1/preorders",
+        json={
+            "customerId": customer_id,
+            "productSkuId": "sku-1",
+            "committedQty": 8,
+            "meta": {"correlationId": "corr-preorder-assignment-create", "idempotencyKey": "idem-preorder-assignment-create"},
+        },
+        headers=_auth_headers(actor_role="sales", actor_id="sales-1"),
+    )
+    assert created.status_code == 201
+    preorder_id = created.json()["data"]["preorderId"]
+
+    memory.save_project_assignment(
+        "assignment-preorder-1",
+        {
+            "projectAssignmentId": "assignment-preorder-1",
+            "projectScopeId": "00000000-0000-0000-0000-00000000a302",
+            "targetType": "preorder",
+            "targetId": preorder_id,
+            "isPrimary": True,
+            "attributionWeight": 1.0,
+            "createdAt": memory.now_iso(),
+            "endedAt": None,
+            "endedReason": None,
+            "metadata": {"lane": "commercial"},
+        },
+    )
+
+    detail = client.get(
+        f"/api/v1/preorders/{preorder_id}",
+        headers=_auth_headers(actor_role="sales", actor_id="sales-1"),
+    )
+
+    assert detail.status_code == 200
+    assert detail.json()["assignments"][0]["targetType"] == "preorder"

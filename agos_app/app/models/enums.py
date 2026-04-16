@@ -53,6 +53,12 @@ class ProjectAssignmentTargetType(str, Enum):
     order = "order"
 
 
+class ProjectContributionStatus(str, Enum):
+    proposed = "proposed"
+    confirmed = "confirmed"
+    rejected = "rejected"
+
+
 class PreorderStatus(str, Enum):
     draft = "draft"
     confirmed = "confirmed"

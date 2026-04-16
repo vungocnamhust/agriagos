@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from app.models.enums import CropCycleStatus, GrowthStage
+from app.models.project_assignments import ProjectAssignmentSummary
 
 class PlotSummary(BaseModel):
     plotId: str
@@ -10,6 +11,7 @@ class PlotSummary(BaseModel):
     areaValue: float
     areaUnit: str
     status: str = "active"  # plot status not in state-transitions.md yet — plain str for now
+    assignments: list[ProjectAssignmentSummary] = []
 
 class CropCycleSummary(BaseModel):
     cropCycleId: str
@@ -20,6 +22,7 @@ class CropCycleSummary(BaseModel):
     status: CropCycleStatus  # (06-state-transitions.md)
     expectedHarvestFrom: str | None = None
     expectedHarvestTo: str | None = None
+    assignments: list[ProjectAssignmentSummary] = []
 
 class FarmView(BaseModel):
     plots: list[PlotSummary]

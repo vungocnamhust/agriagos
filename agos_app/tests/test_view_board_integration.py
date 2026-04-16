@@ -964,3 +964,190 @@ def test_farm_summary_board_endpoint_reads_real_postgres_projection(
     assert scoped_rows[0]["growthStage"] == "maturing"
     assert scoped_rows[0]["cropCycleStatus"] == "near_harvest"
     assert scoped_rows[0]["estimatedYieldQty"] == 88.0
+
+
+@pytest.mark.postgres_integration
+def test_project_contribution_summary_endpoint_reads_real_postgres_aggregation(
+    postgres_db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _enable_view_store(monkeypatch, postgres_db_session)
+    monkeypatch.setattr(views_service.postgres_sync, "is_enabled", lambda: True)
+
+    code_suffix = uuid.uuid4().hex[:8]
+    organization_id = str(uuid.uuid4())
+    project_scope_id = str(uuid.uuid4())
+    project_scope_code = f"PRJ-SUM-{code_suffix}"
+
+    _insert_organization(postgres_db_session, organization_id, f"ORG-SUM-{code_suffix}", "Summary Org")
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO project_scopes (
+                project_scope_id,
+                organization_id,
+                project_scope_code,
+                name,
+                project_scope_type,
+                status,
+                season_year,
+                owner_actor_id,
+                metadata_json
+            ) VALUES (
+                CAST(:project_scope_id AS uuid),
+                CAST(:organization_id AS uuid),
+                :project_scope_code,
+                'Summary Scope',
+                'value_stream',
+                'active',
+                '2026',
+                'founder-1',
+                '{}'::jsonb
+            )
+            """
+        ),
+        {
+            "project_scope_id": project_scope_id,
+            "organization_id": organization_id,
+            "project_scope_code": project_scope_code,
+        },
+    )
+
+    assignment_ids = [str(uuid.uuid4()), str(uuid.uuid4()), str(uuid.uuid4())]
+    target_ids = [str(uuid.uuid4()), str(uuid.uuid4()), str(uuid.uuid4())]
+    for assignment_id, target_id in zip(assignment_ids, target_ids, strict=True):
+        postgres_db_session.execute(
+            text(
+                """
+                INSERT INTO project_assignments (
+                    project_assignment_id,
+                    project_scope_id,
+                    target_type,
+                    target_id,
+                    is_primary,
+                    attribution_weight,
+                    metadata_json
+                ) VALUES (
+                    CAST(:project_assignment_id AS uuid),
+                    CAST(:project_scope_id AS uuid),
+                    'lot',
+                    CAST(:target_id AS uuid),
+                    true,
+                    1,
+                    '{}'::jsonb
+                )
+                """
+            ),
+            {
+                "project_assignment_id": assignment_id,
+                "project_scope_id": project_scope_id,
+                "target_id": target_id,
+            },
+        )
+
+    contribution_rows = [
+        {
+            "event_id": str(uuid.uuid4()),
+            "assignment_id": assignment_ids[0],
+            "actor_id": str(uuid.uuid4()),
+            "target_id": target_ids[0],
+            "status": "confirmed",
+            "quantity": 3,
+            "estimated_value": 900000,
+            "created_at": "2026-04-16T09:00:00+00:00",
+        },
+        {
+            "event_id": str(uuid.uuid4()),
+            "assignment_id": assignment_ids[1],
+            "actor_id": str(uuid.uuid4()),
+            "target_id": target_ids[1],
+            "status": "confirmed",
+            "quantity": 2,
+            "estimated_value": 600000,
+            "created_at": "2026-04-16T10:00:00+00:00",
+        },
+        {
+            "event_id": str(uuid.uuid4()),
+            "assignment_id": assignment_ids[2],
+            "actor_id": str(uuid.uuid4()),
+            "target_id": target_ids[2],
+            "status": "rejected",
+            "quantity": 1,
+            "estimated_value": 200000,
+            "created_at": "2026-04-16T11:00:00+00:00",
+        },
+    ]
+    for row in contribution_rows:
+        postgres_db_session.execute(
+            text(
+                """
+                INSERT INTO project_contribution_events (
+                    project_contribution_event_id,
+                    project_scope_id,
+                    project_assignment_id,
+                    organization_id,
+                    actor_id,
+                    subject_type,
+                    subject_id,
+                    contribution_type,
+                    role,
+                    quantity,
+                    unit,
+                    estimated_value,
+                    currency,
+                    status,
+                    source,
+                    created_at,
+                    updated_at
+                ) VALUES (
+                    CAST(:project_contribution_event_id AS uuid),
+                    CAST(:project_scope_id AS uuid),
+                    CAST(:project_assignment_id AS uuid),
+                    CAST(:organization_id AS uuid),
+                    CAST(:actor_id AS uuid),
+                    'lot',
+                    CAST(:subject_id AS uuid),
+                    'labor_day',
+                    'producer',
+                    :quantity,
+                    'day',
+                    :estimated_value,
+                    'VND',
+                    :status,
+                    'manual',
+                    CAST(:created_at AS timestamptz),
+                    CAST(:created_at AS timestamptz)
+                )
+                """
+            ),
+            {
+                "project_contribution_event_id": row["event_id"],
+                "project_scope_id": project_scope_id,
+                "project_assignment_id": row["assignment_id"],
+                "organization_id": organization_id,
+                "actor_id": row["actor_id"],
+                "subject_id": row["target_id"],
+                "quantity": row["quantity"],
+                "estimated_value": row["estimated_value"],
+                "status": row["status"],
+                "created_at": row["created_at"],
+            },
+        )
+
+    response = client.get(
+        f"/api/v1/views/project-contribution-summary?projectScopeId={project_scope_id}",
+        headers=_auth_headers(actor_role="admin", actor_id="admin-1"),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["items"]
+    scoped_rows = [row for row in payload if row["projectScopeId"] == project_scope_id]
+    assert len(scoped_rows) == 1
+    assert scoped_rows[0]["projectScopeCode"] == project_scope_code
+    assert scoped_rows[0]["projectScopeName"] == "Summary Scope"
+    assert scoped_rows[0]["proposedCount"] == 0
+    assert scoped_rows[0]["confirmedCount"] == 2
+    assert scoped_rows[0]["rejectedCount"] == 1
+    assert scoped_rows[0]["confirmedQuantity"] == 5.0
+    assert scoped_rows[0]["confirmedEstimatedValue"] == 1500000.0
+    assert scoped_rows[0]["currency"] == "VND"

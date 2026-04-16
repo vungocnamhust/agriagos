@@ -1,7 +1,7 @@
 """Repair external_mappings organization_id type and foreign key.
 
 Revision ID: 20260416_0030
-Revises: 20260416_0028
+Revises: 20260416_0029
 Create Date: 2026-04-16 18:45:00
 """
 from __future__ import annotations
@@ -11,7 +11,7 @@ from typing import Any
 
 
 revision = "20260416_0030"
-down_revision = "20260416_0028"
+down_revision = "20260416_0029"
 branch_labels = None
 depends_on = None
 

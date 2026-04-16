@@ -4,6 +4,7 @@ from pydantic import BaseModel, StringConstraints, model_validator
 
 from app.models.common import Meta
 from app.models.enums import LotStatus
+from app.models.project_assignments import ProjectAssignmentSummary
 
 
 LotSourceType = Literal["crop_cycle", "processing_batch"]
@@ -25,6 +26,7 @@ class LotDetail(BaseModel):
     unit: Literal["kg"] = "kg"  # (04-canonical-data-model.md — unit via inventory movement context)
     status: LotStatus  # (06-state-transitions.md)
     version: int = 1
+    assignments: list[ProjectAssignmentSummary] = []
 
 class LotResponse(BaseModel):
     data: LotDetail

@@ -245,6 +245,13 @@ Baseline cho aggregate `ProjectScope` và các lanes liên quan đi theo thứ t
 5. thêm reporting views cho P&L, impacted households/actors, shared resources, customer source/repeat, và contribution ledger
 6. backfill selected records theo confidence-driven rules; giữ `unassigned` hợp lệ khi chưa có deterministic attribution
 
+Runtime Phase 1 hiện đã đi được phần đầu của bước 4 và 5:
+- contribution ledger đã có record/list/confirm/reject trên memory và PostgreSQL path
+- economics lane đã có `CostRecord` baseline từ confirmed contribution qua `direct_source_link`
+- economics lane hiện cũng đã có `RevenueRecord` baseline từ delivered `Order` đã có active `ProjectAssignment` vào cùng scope
+- reporting lane đã có `/api/v1/views/project-contribution-summary` cho aggregate contribution activity theo `ProjectScope`
+- rollback note: migration `20260416_0032_align_project_contribution_actor_columns` là repair migration cho môi trường lệch lịch sử tạo actor columns dưới dạng UUID; trên migration chain chuẩn hiện tại nó là no-op vì `actor_id` và `confirmed_by` đã là text. Dù vậy, downgrade chỉ an toàn khi các giá trị text đó vẫn cast được về UUID; nếu runtime đã ghi text id không phải UUID thì phải clean/remap trước khi rollback
+
 Rule baseline:
 - không ép mọi canonical table phải có `project_scope_id` trong một migration duy nhất
 - không tạo một `default_project` giả để nuốt toàn bộ legacy data chưa rõ attribution

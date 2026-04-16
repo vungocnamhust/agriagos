@@ -8,6 +8,7 @@ from app.models.views import (
     Customer360View,
     FarmSummaryBoardResponse,
     PendingFulfillmentListResponse,
+    ProjectContributionSummaryResponse,
 )
 from app.services import views as svc
 
@@ -41,3 +42,12 @@ def get_farm_view(request: Request) -> FarmView:
 @router.get("/farm-summary-board", response_model=FarmSummaryBoardResponse, responses={403: {"model": ErrorResponse, "description": "Forbidden"}})
 def get_farm_summary_board(request: Request) -> FarmSummaryBoardResponse:
     return svc.get_farm_summary_board_for_actor(request_meta(request))
+
+
+@router.get(
+    "/project-contribution-summary",
+    response_model=ProjectContributionSummaryResponse,
+    responses={403: {"model": ErrorResponse, "description": "Forbidden"}},
+)
+def get_project_contribution_summary(request: Request, projectScopeId: str | None = None) -> ProjectContributionSummaryResponse:
+    return svc.get_project_contribution_summary_for_actor(projectScopeId, request_meta(request))

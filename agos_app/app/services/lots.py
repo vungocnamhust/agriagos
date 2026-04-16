@@ -30,6 +30,7 @@ from app.models.lots import (
     ReleaseLotRequest,
     UnblockLotRequest,
 )
+from app.models.project_assignments import ProjectAssignmentSummary
 from app.services import audit as audit_service
 from app.services.read_authz import authorize_read_surface
 from app.store import farm as farm_store
@@ -43,6 +44,7 @@ from app.store.lots import (
 )
 from app.store import postgres_sync
 from app.store import memory as store
+from app.store import project_assignments as project_assignment_store
 from app.store._db import transaction as postgres_transaction
 
 
@@ -108,6 +110,7 @@ def _new_lot_code(product_sku_id: str) -> str:
 
 
 def _build_lot_detail(record: dict[str, Any]) -> LotDetail:
+    assignments = _list_assignment_summaries("lot", record["lotId"])
     return LotDetail(
         lotId=record["lotId"],
         lotCode=record["lotCode"],
@@ -122,7 +125,17 @@ def _build_lot_detail(record: dict[str, Any]) -> LotDetail:
         releasedQty=record["releasedQty"],
         unit=record.get("unit", STANDARD_LOT_UNIT),
         status=record["status"],
+        assignments=assignments,
     )
+
+
+def _list_assignment_summaries(target_type: str, target_id: str) -> list[ProjectAssignmentSummary]:
+    records = (
+        project_assignment_store.list_project_assignments_for_target(target_type, target_id)
+        if postgres_sync.is_enabled()
+        else store.list_project_assignments_for_target(target_type, target_id)
+    )
+    return [ProjectAssignmentSummary(**record) for record in records]
 
 
 def _normalize_unit(unit: str | None) -> str:

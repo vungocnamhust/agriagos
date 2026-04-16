@@ -23,13 +23,6 @@ paths:
       - Customers
       summary: Create Customer
       operationId: create_customer_api_v1_customers_post
-      parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/ExternalRefHeader'
-      - $ref: '#/components/parameters/DelegatedActorIdHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       requestBody:
         required: true
         content:
@@ -67,12 +60,6 @@ paths:
       summary: List Customers
       operationId: list_customers_api_v1_customers_get
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/ExternalRefHeader'
-      - $ref: '#/components/parameters/DelegatedActorIdHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: phone
         in: query
         required: false
@@ -123,13 +110,6 @@ paths:
       - Customers
       summary: List Duplicate Candidates
       operationId: list_duplicate_candidates_api_v1_customers_duplicate_candidates_get
-      parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/ExternalRefHeader'
-      - $ref: '#/components/parameters/DelegatedActorIdHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       responses:
         '200':
           description: Successful Response
@@ -150,12 +130,6 @@ paths:
       summary: Get Customer
       operationId: get_customer_api_v1_customers__customer_id__get
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/ExternalRefHeader'
-      - $ref: '#/components/parameters/DelegatedActorIdHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: customer_id
         in: path
         required: true
@@ -194,12 +168,6 @@ paths:
       summary: Update Customer
       operationId: update_customer_api_v1_customers__customer_id__patch
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/ExternalRefHeader'
-      - $ref: '#/components/parameters/DelegatedActorIdHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: customer_id
         in: path
         required: true
@@ -245,12 +213,6 @@ paths:
       summary: Upsert Customer Preference
       operationId: upsert_customer_preference_api_v1_customers__customer_id__preferences_post
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/ExternalRefHeader'
-      - $ref: '#/components/parameters/DelegatedActorIdHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: customer_id
         in: path
         required: true
@@ -296,12 +258,6 @@ paths:
       summary: List Customer Duplicate Candidates
       operationId: list_customer_duplicate_candidates_api_v1_customers__customer_id__duplicate_candidates_get
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/ExternalRefHeader'
-      - $ref: '#/components/parameters/DelegatedActorIdHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: customer_id
         in: path
         required: true
@@ -341,10 +297,6 @@ paths:
       summary: Review Duplicate Candidate
       operationId: review_duplicate_candidate_api_v1_customers_duplicate_candidates__candidate_id__review_post
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: candidate_id
         in: path
         required: true
@@ -384,61 +336,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/v1/organizations:
-    post:
-      tags:
-      - Organizations
-      summary: Create Organization
-      operationId: create_organization_api_v1_organizations_post
-      parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/ExternalRefHeader'
-      - $ref: '#/components/parameters/DelegatedActorIdHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateOrganizationRequest'
-      responses:
-        '201':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OrganizationResponse'
-        '403':
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: Aggregate not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '422':
-          description: Validation error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
     get:
       tags:
       - Organizations
       summary: List Organizations
       operationId: list_organizations_api_v1_organizations_get
-      parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/ExternalRefHeader'
-      - $ref: '#/components/parameters/DelegatedActorIdHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       responses:
         '200':
           description: Successful Response
@@ -464,6 +366,42 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags:
+      - Organizations
+      summary: Create Organization
+      operationId: create_organization_api_v1_organizations_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrganizationRequest'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/organizations/{organization_id}:
     get:
       tags:
@@ -471,12 +409,6 @@ paths:
       summary: Get Organization
       operationId: get_organization_api_v1_organizations__organization_id__get
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/ExternalRefHeader'
-      - $ref: '#/components/parameters/DelegatedActorIdHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: organization_id
         in: path
         required: true
@@ -515,12 +447,6 @@ paths:
       summary: Update Organization
       operationId: update_organization_api_v1_organizations__organization_id__patch
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/ExternalRefHeader'
-      - $ref: '#/components/parameters/DelegatedActorIdHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: organization_id
         in: path
         required: true
@@ -566,12 +492,6 @@ paths:
       summary: Activate Organization
       operationId: activate_organization_api_v1_organizations__organization_id__activate_post
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/ExternalRefHeader'
-      - $ref: '#/components/parameters/DelegatedActorIdHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: organization_id
         in: path
         required: true
@@ -617,12 +537,6 @@ paths:
       summary: Pause Organization
       operationId: pause_organization_api_v1_organizations__organization_id__pause_post
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/ExternalRefHeader'
-      - $ref: '#/components/parameters/DelegatedActorIdHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: organization_id
         in: path
         required: true
@@ -668,12 +582,6 @@ paths:
       summary: Close Organization
       operationId: close_organization_api_v1_organizations__organization_id__close_post
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/ExternalRefHeader'
-      - $ref: '#/components/parameters/DelegatedActorIdHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: organization_id
         in: path
         required: true
@@ -713,61 +621,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/v1/projects:
-    post:
-      tags:
-      - ProjectScopes
-      summary: Create Project Scope
-      operationId: create_project_scope_api_v1_projects_post
-      parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/ExternalRefHeader'
-      - $ref: '#/components/parameters/DelegatedActorIdHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateProjectScopeRequest'
-      responses:
-        '201':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProjectScopeResponse'
-        '403':
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: Aggregate not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '422':
-          description: Validation error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
     get:
       tags:
       - ProjectScopes
       summary: List Project Scopes
       operationId: list_project_scopes_api_v1_projects_get
-      parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/ExternalRefHeader'
-      - $ref: '#/components/parameters/DelegatedActorIdHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       responses:
         '200':
           description: Successful Response
@@ -793,6 +651,42 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags:
+      - ProjectScopes
+      summary: Create Project Scope
+      operationId: create_project_scope_api_v1_projects_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectScopeRequest'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectScopeResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/projects/{project_scope_id}:
     get:
       tags:
@@ -800,12 +694,6 @@ paths:
       summary: Get Project Scope
       operationId: get_project_scope_api_v1_projects__project_scope_id__get
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/ExternalRefHeader'
-      - $ref: '#/components/parameters/DelegatedActorIdHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: project_scope_id
         in: path
         required: true
@@ -844,12 +732,6 @@ paths:
       summary: Update Project Scope
       operationId: update_project_scope_api_v1_projects__project_scope_id__patch
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/ExternalRefHeader'
-      - $ref: '#/components/parameters/DelegatedActorIdHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: project_scope_id
         in: path
         required: true
@@ -895,12 +777,6 @@ paths:
       summary: Activate Project Scope
       operationId: activate_project_scope_api_v1_projects__project_scope_id__activate_post
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/ExternalRefHeader'
-      - $ref: '#/components/parameters/DelegatedActorIdHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: project_scope_id
         in: path
         required: true
@@ -946,12 +822,6 @@ paths:
       summary: Pause Project Scope
       operationId: pause_project_scope_api_v1_projects__project_scope_id__pause_post
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/ExternalRefHeader'
-      - $ref: '#/components/parameters/DelegatedActorIdHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: project_scope_id
         in: path
         required: true
@@ -997,12 +867,6 @@ paths:
       summary: Close Project Scope
       operationId: close_project_scope_api_v1_projects__project_scope_id__close_post
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/ExternalRefHeader'
-      - $ref: '#/components/parameters/DelegatedActorIdHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: project_scope_id
         in: path
         required: true
@@ -1048,12 +912,6 @@ paths:
       summary: Archive Project Scope
       operationId: archive_project_scope_api_v1_projects__project_scope_id__archive_post
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/ExternalRefHeader'
-      - $ref: '#/components/parameters/DelegatedActorIdHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: project_scope_id
         in: path
         required: true
@@ -1099,12 +957,6 @@ paths:
       summary: Create Project Assignment
       operationId: create_project_assignment_api_v1_projects__project_scope_id__assignments_post
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/ExternalRefHeader'
-      - $ref: '#/components/parameters/DelegatedActorIdHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: project_scope_id
         in: path
         required: true
@@ -1149,12 +1001,6 @@ paths:
       summary: List Project Assignments
       operationId: list_project_assignments_api_v1_projects__project_scope_id__assignments_get
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/ExternalRefHeader'
-      - $ref: '#/components/parameters/DelegatedActorIdHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: project_scope_id
         in: path
         required: true
@@ -1194,12 +1040,6 @@ paths:
       summary: End Project Assignment
       operationId: end_project_assignment_api_v1_projects__project_scope_id__assignments__project_assignment_id__end_post
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/ExternalRefHeader'
-      - $ref: '#/components/parameters/DelegatedActorIdHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: project_scope_id
         in: path
         required: true
@@ -1245,17 +1085,365 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/projects/{project_scope_id}/contributions:
+    post:
+      tags:
+      - ProjectScopes
+      summary: Record Project Contribution
+      operationId: record_project_contribution_api_v1_projects__project_scope_id__contributions_post
+      parameters:
+      - name: project_scope_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Scope Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordProjectContributionRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectContributionResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags:
+      - ProjectScopes
+      summary: List Project Contributions
+      operationId: list_project_contributions_api_v1_projects__project_scope_id__contributions_get
+      parameters:
+      - name: project_scope_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Scope Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectContributionListResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/projects/{project_scope_id}/contributions/{project_contribution_event_id}/confirm:
+    post:
+      tags:
+      - ProjectScopes
+      summary: Confirm Project Contribution
+      operationId: confirm_project_contribution_api_v1_projects__project_scope_id__contributions__project_contribution_event_id__confirm_post
+      parameters:
+      - name: project_scope_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Scope Id
+      - name: project_contribution_event_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Contribution Event Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmProjectContributionRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectContributionResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/projects/{project_scope_id}/contributions/{project_contribution_event_id}/reject:
+    post:
+      tags:
+      - ProjectScopes
+      summary: Reject Project Contribution
+      operationId: reject_project_contribution_api_v1_projects__project_scope_id__contributions__project_contribution_event_id__reject_post
+      parameters:
+      - name: project_scope_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Scope Id
+      - name: project_contribution_event_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Contribution Event Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectProjectContributionRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectContributionResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/projects/{project_scope_id}/cost-records:
+    post:
+      tags:
+      - ProjectScopes
+      summary: Create Project Cost Record
+      operationId: create_project_cost_record_api_v1_projects__project_scope_id__cost_records_post
+      parameters:
+      - name: project_scope_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Scope Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectCostRecordRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectCostRecordResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags:
+      - ProjectScopes
+      summary: List Project Cost Records
+      operationId: list_project_cost_records_api_v1_projects__project_scope_id__cost_records_get
+      parameters:
+      - name: project_scope_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Scope Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectCostRecordListResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/projects/{project_scope_id}/revenue-records:
+    post:
+      tags:
+      - ProjectScopes
+      summary: Create Project Revenue Record
+      operationId: create_project_revenue_record_api_v1_projects__project_scope_id__revenue_records_post
+      parameters:
+      - name: project_scope_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Scope Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectRevenueRecordRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectRevenueRecordResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags:
+      - ProjectScopes
+      summary: List Project Revenue Records
+      operationId: list_project_revenue_records_api_v1_projects__project_scope_id__revenue_records_get
+      parameters:
+      - name: project_scope_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Scope Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectRevenueRecordListResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/preorders:
     post:
       tags:
       - Preorders
       summary: Create Preorder
       operationId: create_preorder_api_v1_preorders_post
-      parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       requestBody:
         content:
           application/json:
@@ -1288,10 +1476,6 @@ paths:
       summary: Get Preorder
       operationId: get_preorder_api_v1_preorders__preorder_id__get
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: preorder_id
         in: path
         required: true
@@ -1324,10 +1508,6 @@ paths:
       summary: Adjust Preorder
       operationId: adjust_preorder_api_v1_preorders__preorder_id__adjust_post
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: preorder_id
         in: path
         required: true
@@ -1366,10 +1546,6 @@ paths:
       summary: Confirm Preorder
       operationId: confirm_preorder_api_v1_preorders__preorder_id__confirm_post
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: preorder_id
         in: path
         required: true
@@ -1408,10 +1584,6 @@ paths:
       summary: Activate Preorder
       operationId: activate_preorder_api_v1_preorders__preorder_id__activate_post
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: preorder_id
         in: path
         required: true
@@ -1450,10 +1622,6 @@ paths:
       summary: Cancel Preorder
       operationId: cancel_preorder_api_v1_preorders__preorder_id__cancel_post
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: preorder_id
         in: path
         required: true
@@ -1492,11 +1660,6 @@ paths:
       - Allocations
       summary: Create Order
       operationId: create_order_api_v1_orders_post
-      parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       requestBody:
         content:
           application/json:
@@ -1530,10 +1693,6 @@ paths:
       summary: Get Order
       operationId: get_order_api_v1_orders__order_id__get
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: order_id
         in: path
         required: true
@@ -1567,10 +1726,6 @@ paths:
       summary: Confirm Order
       operationId: confirm_order_api_v1_orders__order_id__confirm_post
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: order_id
         in: path
         required: true
@@ -1612,10 +1767,6 @@ paths:
       summary: Allocate Order
       operationId: allocate_order_api_v1_orders__order_id__allocate_post
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: order_id
         in: path
         required: true
@@ -1655,10 +1806,6 @@ paths:
       summary: Adjust Allocation
       operationId: adjust_allocation_api_v1_orders__order_id__allocations__allocation_id__adjust_post
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: order_id
         in: path
         required: true
@@ -1704,10 +1851,6 @@ paths:
       summary: Release Allocation
       operationId: release_allocation_api_v1_orders__order_id__allocations__allocation_id__release_post
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: order_id
         in: path
         required: true
@@ -1753,10 +1896,6 @@ paths:
       summary: Pack Order
       operationId: pack_order_api_v1_orders__order_id__pack_post
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: order_id
         in: path
         required: true
@@ -1796,10 +1935,6 @@ paths:
       summary: Ship Order
       operationId: ship_order_api_v1_orders__order_id__ship_post
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: order_id
         in: path
         required: true
@@ -1839,10 +1974,6 @@ paths:
       summary: Deliver Order
       operationId: deliver_order_api_v1_orders__order_id__deliver_post
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: order_id
         in: path
         required: true
@@ -1882,10 +2013,6 @@ paths:
       summary: Fail Delivery
       operationId: fail_delivery_api_v1_orders__order_id__fail_delivery_post
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: order_id
         in: path
         required: true
@@ -1925,10 +2052,6 @@ paths:
       summary: Request Cancel Order
       operationId: request_cancel_order_api_v1_orders__order_id__request_cancel_post
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: order_id
         in: path
         required: true
@@ -1968,10 +2091,6 @@ paths:
       summary: Cancel Order
       operationId: cancel_order_api_v1_orders__order_id__cancel_post
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: order_id
         in: path
         required: true
@@ -2011,11 +2130,6 @@ paths:
       - Lots
       summary: Create Harvested Lot
       operationId: create_harvested_lot_api_v1_lots_post
-      parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       requestBody:
         content:
           application/json:
@@ -2029,12 +2143,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LotResponse'
-        '403':
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Validation error
           content:
@@ -2047,11 +2155,6 @@ paths:
       - Lots
       summary: Create Processed Lot
       operationId: create_processed_lot_api_v1_lots_processed_post
-      parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       requestBody:
         content:
           application/json:
@@ -2065,12 +2168,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LotResponse'
-        '403':
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
         '422':
           description: Validation error
           content:
@@ -2084,10 +2181,6 @@ paths:
       summary: Get Lot
       operationId: get_lot_api_v1_lots__lot_id__get
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: lot_id
         in: path
         required: true
@@ -2126,10 +2219,6 @@ paths:
       summary: Release Lot
       operationId: release_lot_api_v1_lots__lot_id__release_post
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: lot_id
         in: path
         required: true
@@ -2150,7 +2239,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/LotResponse'
         '403':
-          description: Permission or approval required
+          description: Forbidden
           content:
             application/json:
               schema:
@@ -2174,10 +2263,6 @@ paths:
       summary: Block Lot
       operationId: block_lot_api_v1_lots__lot_id__block_post
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: lot_id
         in: path
         required: true
@@ -2222,10 +2307,6 @@ paths:
       summary: Unblock Lot
       operationId: unblock_lot_api_v1_lots__lot_id__unblock_post
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: lot_id
         in: path
         required: true
@@ -2270,10 +2351,6 @@ paths:
       summary: Adjust Lot Quantity
       operationId: adjust_lot_quantity_api_v1_lots__lot_id__adjust_post
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: lot_id
         in: path
         required: true
@@ -2318,10 +2395,6 @@ paths:
       summary: Add Lot Evidence
       operationId: add_lot_evidence_api_v1_lots__lot_id__evidence_post
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: lot_id
         in: path
         required: true
@@ -2365,10 +2438,6 @@ paths:
       summary: Get Lot Evidence
       operationId: get_lot_evidence_api_v1_lots__lot_id__evidence_get
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: lot_id
         in: path
         required: true
@@ -2407,10 +2476,6 @@ paths:
       summary: Create Lot Qc Review
       operationId: create_lot_qc_review_api_v1_lots__lot_id__qc_reviews_post
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: lot_id
         in: path
         required: true
@@ -2454,10 +2519,6 @@ paths:
       summary: Get Lot Qc Reviews
       operationId: get_lot_qc_reviews_api_v1_lots__lot_id__qc_reviews_get
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: lot_id
         in: path
         required: true
@@ -2495,11 +2556,6 @@ paths:
       - Farm
       summary: List Plots
       operationId: list_plots_api_v1_farm_plots_get
-      parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       responses:
         '200':
           description: Successful Response
@@ -2523,10 +2579,6 @@ paths:
       summary: List Crop Cycles
       operationId: list_crop_cycles_api_v1_farm_crop_cycles_get
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: plotId
         in: query
         required: false
@@ -2572,10 +2624,6 @@ paths:
       summary: Get Customer 360
       operationId: get_customer_360_api_v1_views_customer_360__customer_id__get
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: customer_id
         in: path
         required: true
@@ -2614,10 +2662,6 @@ paths:
       summary: Get Available Lots Board
       operationId: get_available_lots_board_api_v1_views_available_lots_get
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: skuId
         in: query
         required: false
@@ -2651,11 +2695,6 @@ paths:
       - Views
       summary: Get Pending Fulfillment
       operationId: get_pending_fulfillment_api_v1_views_pending_fulfillment_get
-      parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       responses:
         '200':
           description: Successful Response
@@ -2675,11 +2714,6 @@ paths:
       - Views
       summary: Get Farm View
       operationId: get_farm_view_api_v1_views_farm_get
-      parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       responses:
         '200':
           description: Successful Response
@@ -2699,11 +2733,6 @@ paths:
       - Views
       summary: Get Farm Summary Board
       operationId: get_farm_summary_board_api_v1_views_farm_summary_board_get
-      parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       responses:
         '200':
           description: Successful Response
@@ -2717,6 +2746,40 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/views/project-contribution-summary:
+    get:
+      tags:
+      - Views
+      summary: Get Project Contribution Summary
+      operationId: get_project_contribution_summary_api_v1_views_project_contribution_summary_get
+      parameters:
+      - name: projectScopeId
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Projectscopeid
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectContributionSummaryResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/events:
     get:
       tags:
@@ -2724,9 +2787,6 @@ paths:
       summary: List Events
       operationId: list_events_api_v1_events_get
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: aggregateType
         in: query
         required: false
@@ -2801,10 +2861,6 @@ paths:
       summary: List Audit Logs
       operationId: list_audit_logs_api_v1_audit_get
       parameters:
-      - $ref: '#/components/parameters/ActorIdHeader'
-      - $ref: '#/components/parameters/ActorRoleHeader'
-      - $ref: '#/components/parameters/BypassRequestedHeader'
-      - $ref: '#/components/parameters/DelegatedActorRoleHeader'
       - name: targetType
         in: query
         required: false
@@ -2908,50 +2964,15 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 components:
-  parameters:
-    ActorIdHeader:
-      name: X-Actor-Id
-      in: header
-      required: false
-      schema:
-        type: string
-      description: Optional caller identity used for protected route audit trails.
-    ActorRoleHeader:
-      name: X-Actor-Role
-      in: header
-      required: false
-      schema:
-        type: string
-      description: Caller role used to authorize protected routes in Phase 1.
-    BypassRequestedHeader:
-      name: X-Bypass-Requested
-      in: header
-      required: false
-      schema:
-        type: boolean
-      description: Optional bypass mechanism flag. Phase 1 denies all bypass attempts.
-    ExternalRefHeader:
-      name: X-External-Ref
-      in: header
-      required: false
-      schema:
-        type: string
-      description: Optional external system reference used by trusted integration customer writes.
-    DelegatedActorIdHeader:
-      name: X-Delegated-Actor-Id
-      in: header
-      required: false
-      schema:
-        type: string
-      description: Optional delegated human actor identity for advisory agent context.
-    DelegatedActorRoleHeader:
-      name: X-Delegated-Actor-Role
-      in: header
-      required: false
-      schema:
-        type: string
-      description: Delegated human role for advisory agent access on routes that explicitly permit it.
   schemas:
+    ActivateOrganizationRequest:
+      properties:
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      title: ActivateOrganizationRequest
     ActivatePreorderRequest:
       properties:
         meta:
@@ -2960,6 +2981,14 @@ components:
           - type: 'null'
       type: object
       title: ActivatePreorderRequest
+    ActivateProjectScopeRequest:
+      properties:
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      title: ActivateProjectScopeRequest
     AddLotEvidenceRequest:
       properties:
         evidenceType:
@@ -3143,6 +3172,14 @@ components:
       - consumed
       - cancelled
       title: AllocationStatus
+    ArchiveProjectScopeRequest:
+      properties:
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      title: ArchiveProjectScopeRequest
     AuditLogEntry:
       properties:
         auditId:
@@ -3248,14 +3285,14 @@ components:
         lotCode:
           type: string
           title: Lotcode
-        productSkuId:
-          type: string
-          title: Productskuid
         organizationId:
           anyOf:
           - type: string
           - type: 'null'
           title: Organizationid
+        productSkuId:
+          type: string
+          title: Productskuid
         releasedQty:
           type: number
           title: Releasedqty
@@ -3317,6 +3354,32 @@ components:
       required:
       - reason
       title: CancelPreorderRequest
+    CloseOrganizationRequest:
+      properties:
+        reason:
+          type: string
+          title: Reason
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - reason
+      title: CloseOrganizationRequest
+    CloseProjectScopeRequest:
+      properties:
+        reason:
+          type: string
+          title: Reason
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - reason
+      title: CloseProjectScopeRequest
     ConfirmOrderRequest:
       properties:
         meta:
@@ -3333,52 +3396,14 @@ components:
           - type: 'null'
       type: object
       title: ConfirmPreorderRequest
-    CreateOrganizationRequest:
+    ConfirmProjectContributionRequest:
       properties:
-        contactEmail:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Contactemail
-        contactPhone:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Contactphone
-        localitySummary:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Localitysummary
         meta:
           anyOf:
           - $ref: '#/components/schemas/Meta'
           - type: 'null'
-        name:
-          type: string
-          title: Name
-        organizationType:
-          $ref: '#/components/schemas/OrganizationType'
-        region:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Region
-        representativeName:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Representativename
-        shortDescription:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Shortdescription
       type: object
-      required:
-      - name
-      - organizationType
-      title: CreateOrganizationRequest
+      title: ConfirmProjectContributionRequest
     CreateCustomerRequest:
       properties:
         fullName:
@@ -3501,14 +3526,14 @@ components:
       title: CreateOrderLineRequest
     CreateOrderRequest:
       properties:
-        customerId:
-          type: string
-          title: Customerid
         organizationId:
           anyOf:
           - type: string
           - type: 'null'
           title: Organizationid
+        customerId:
+          type: string
+          title: Customerid
         channel:
           type: string
           title: Channel
@@ -3547,16 +3572,62 @@ components:
       - channel
       - lines
       title: CreateOrderRequest
+    CreateOrganizationRequest:
+      properties:
+        name:
+          type: string
+          title: Name
+        organizationType:
+          $ref: '#/components/schemas/OrganizationType'
+        region:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Region
+        localitySummary:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Localitysummary
+        representativeName:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Representativename
+        contactPhone:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Contactphone
+        contactEmail:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Contactemail
+        shortDescription:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Shortdescription
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - name
+      - organizationType
+      title: CreateOrganizationRequest
     CreatePreorderRequest:
       properties:
-        customerId:
-          type: string
-          title: Customerid
         organizationId:
           anyOf:
           - type: string
           - type: 'null'
           title: Organizationid
+        customerId:
+          type: string
+          title: Customerid
         productSkuId:
           type: string
           title: Productskuid
@@ -3644,6 +3715,176 @@ components:
       - actualQty
       - harvestOrProductionDate
       title: CreateProcessedLotRequest
+    CreateProjectAssignmentRequest:
+      properties:
+        targetType:
+          $ref: '#/components/schemas/ProjectAssignmentTargetType'
+        targetId:
+          type: string
+          title: Targetid
+        isPrimary:
+          type: boolean
+          title: Isprimary
+          default: false
+        attributionWeight:
+          anyOf:
+          - type: number
+            maximum: 1.0
+            minimum: 0.0
+          - type: 'null'
+          title: Attributionweight
+        metadata:
+          anyOf:
+          - additionalProperties:
+              type: string
+            type: object
+          - type: 'null'
+          title: Metadata
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - targetType
+      - targetId
+      title: CreateProjectAssignmentRequest
+    CreateProjectCostRecordRequest:
+      properties:
+        costType:
+          type: string
+          const: labor_payout
+          title: Costtype
+        amount:
+          type: number
+          title: Amount
+        currency:
+          type: string
+          title: Currency
+        recognizedAt:
+          type: string
+          title: Recognizedat
+        sourceObjectType:
+          type: string
+          const: project_contribution_event
+          title: Sourceobjecttype
+        sourceObjectId:
+          type: string
+          title: Sourceobjectid
+        attributionPolicy:
+          type: string
+          const: direct_source_link
+          title: Attributionpolicy
+        metadata:
+          anyOf:
+          - additionalProperties:
+              type: string
+            type: object
+          - type: 'null'
+          title: Metadata
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - costType
+      - amount
+      - currency
+      - recognizedAt
+      - sourceObjectType
+      - sourceObjectId
+      - attributionPolicy
+      title: CreateProjectCostRecordRequest
+    CreateProjectRevenueRecordRequest:
+      properties:
+        revenueType:
+          type: string
+          const: delivered_order_sale
+          title: Revenuetype
+        grossAmount:
+          type: number
+          title: Grossamount
+        netAmount:
+          type: number
+          title: Netamount
+        currency:
+          type: string
+          title: Currency
+        sourceObjectType:
+          type: string
+          const: order
+          title: Sourceobjecttype
+        sourceObjectId:
+          type: string
+          title: Sourceobjectid
+        metadata:
+          anyOf:
+          - additionalProperties:
+              type: string
+            type: object
+          - type: 'null'
+          title: Metadata
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - revenueType
+      - grossAmount
+      - netAmount
+      - currency
+      - sourceObjectType
+      - sourceObjectId
+      title: CreateProjectRevenueRecordRequest
+    CreateProjectScopeRequest:
+      properties:
+        organizationId:
+          type: string
+          title: Organizationid
+        name:
+          type: string
+          title: Name
+        projectScopeType:
+          $ref: '#/components/schemas/ProjectScopeType'
+        seasonYear:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Seasonyear
+        ownerActorId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Owneractorid
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        parentProjectScopeId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Parentprojectscopeid
+        metadata:
+          anyOf:
+          - additionalProperties:
+              type: string
+            type: object
+          - type: 'null'
+          title: Metadata
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - organizationId
+      - name
+      - projectScopeType
+      title: CreateProjectScopeRequest
     CreateQCReviewRequest:
       properties:
         checklistVersion:
@@ -3706,6 +3947,12 @@ components:
           - type: string
           - type: 'null'
           title: Expectedharvestto
+        assignments:
+          items:
+            $ref: '#/components/schemas/ProjectAssignmentSummary'
+          type: array
+          title: Assignments
+          default: []
       type: object
       required:
       - cropCycleId
@@ -3939,655 +4186,6 @@ components:
       - phone
       - status
       title: CustomerSummary
-    OrganizationDetail:
-      properties:
-        contactEmail:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Contactemail
-        contactPhone:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Contactphone
-        createdAt:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Createdat
-        localitySummary:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Localitysummary
-        name:
-          type: string
-          title: Name
-        organizationCode:
-          type: string
-          title: Organizationcode
-        organizationId:
-          type: string
-          title: Organizationid
-        organizationType:
-          $ref: '#/components/schemas/OrganizationType'
-        region:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Region
-        representativeName:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Representativename
-        shortDescription:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Shortdescription
-        status:
-          $ref: '#/components/schemas/OrganizationStatus'
-        updatedAt:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Updatedat
-      type: object
-      required:
-      - organizationId
-      - organizationCode
-      - name
-      - organizationType
-      - status
-      title: OrganizationDetail
-    OrganizationListResponse:
-      properties:
-        items:
-          items:
-            $ref: '#/components/schemas/OrganizationSummary'
-          type: array
-          title: Items
-      type: object
-      required:
-      - items
-      title: OrganizationListResponse
-    OrganizationResponse:
-      properties:
-        data:
-          $ref: '#/components/schemas/OrganizationDetail'
-      type: object
-      required:
-      - data
-      title: OrganizationResponse
-    OrganizationStatus:
-      type: string
-      enum:
-      - draft
-      - active
-      - paused
-      - closed
-      title: OrganizationStatus
-    OrganizationSummary:
-      properties:
-        createdAt:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Createdat
-        name:
-          type: string
-          title: Name
-        organizationCode:
-          type: string
-          title: Organizationcode
-        organizationId:
-          type: string
-          title: Organizationid
-        organizationType:
-          $ref: '#/components/schemas/OrganizationType'
-        region:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Region
-        status:
-          $ref: '#/components/schemas/OrganizationStatus'
-      type: object
-      required:
-      - organizationId
-      - organizationCode
-      - name
-      - organizationType
-      - status
-      title: OrganizationSummary
-    OrganizationType:
-      type: string
-      enum:
-      - household_producer
-      - family_business
-      - solo_founder
-      - cooperative
-      - startup_operator
-      - other
-      title: OrganizationType
-    ProjectScopeDetail:
-      properties:
-        createdAt:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Createdat
-        description:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Description
-        metadata:
-          anyOf:
-          - additionalProperties:
-              type: string
-            type: object
-          - type: 'null'
-          title: Metadata
-        name:
-          type: string
-          title: Name
-        organizationId:
-          type: string
-          title: Organizationid
-        ownerActorId:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Owneractorid
-        parentProjectScopeId:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Parentprojectscopeid
-        projectScopeCode:
-          type: string
-          title: Projectscopecode
-        projectScopeId:
-          type: string
-          title: Projectscopeid
-        projectScopeType:
-          $ref: '#/components/schemas/ProjectScopeType'
-        seasonYear:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Seasonyear
-        status:
-          $ref: '#/components/schemas/ProjectScopeStatus'
-        updatedAt:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Updatedat
-      type: object
-      required:
-      - projectScopeId
-      - organizationId
-      - projectScopeCode
-      - name
-      - projectScopeType
-      - status
-      title: ProjectScopeDetail
-    CreateProjectAssignmentRequest:
-      properties:
-        attributionWeight:
-          anyOf:
-          - maximum: 1.0
-            minimum: 0.0
-            type: number
-          - type: 'null'
-          title: Attributionweight
-        isPrimary:
-          type: boolean
-          title: Isprimary
-          default: false
-        metadata:
-          anyOf:
-          - additionalProperties:
-              type: string
-            type: object
-          - type: 'null'
-          title: Metadata
-        meta:
-          anyOf:
-          - $ref: '#/components/schemas/Meta'
-          - type: 'null'
-        targetId:
-          type: string
-          title: Targetid
-        targetType:
-          $ref: '#/components/schemas/ProjectAssignmentTargetType'
-      type: object
-      required:
-      - targetType
-      - targetId
-      title: CreateProjectAssignmentRequest
-    EndProjectAssignmentRequest:
-      properties:
-        meta:
-          anyOf:
-          - $ref: '#/components/schemas/Meta'
-          - type: 'null'
-        reason:
-          type: string
-          title: Reason
-      type: object
-      required:
-      - reason
-      title: EndProjectAssignmentRequest
-    ProjectAssignmentDetail:
-      properties:
-        attributionWeight:
-          anyOf:
-          - type: number
-          - type: 'null'
-          title: Attributionweight
-        createdAt:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Createdat
-        endedAt:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Endedat
-        endedReason:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Endedreason
-        isPrimary:
-          type: boolean
-          title: Isprimary
-          default: false
-        metadata:
-          anyOf:
-          - additionalProperties:
-              type: string
-            type: object
-          - type: 'null'
-          title: Metadata
-        projectAssignmentId:
-          type: string
-          title: Projectassignmentid
-        projectScopeId:
-          type: string
-          title: Projectscopeid
-        targetId:
-          type: string
-          title: Targetid
-        targetType:
-          $ref: '#/components/schemas/ProjectAssignmentTargetType'
-      type: object
-      required:
-      - projectAssignmentId
-      - projectScopeId
-      - targetType
-      - targetId
-      title: ProjectAssignmentDetail
-    ProjectAssignmentListResponse:
-      properties:
-        items:
-          items:
-            $ref: '#/components/schemas/ProjectAssignmentSummary'
-          type: array
-          title: Items
-      type: object
-      required:
-      - items
-      title: ProjectAssignmentListResponse
-    ProjectAssignmentResponse:
-      properties:
-        data:
-          $ref: '#/components/schemas/ProjectAssignmentDetail'
-      type: object
-      required:
-      - data
-      title: ProjectAssignmentResponse
-    ProjectAssignmentSummary:
-      properties:
-        attributionWeight:
-          anyOf:
-          - type: number
-          - type: 'null'
-          title: Attributionweight
-        createdAt:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Createdat
-        endedAt:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Endedat
-        isPrimary:
-          type: boolean
-          title: Isprimary
-          default: false
-        projectAssignmentId:
-          type: string
-          title: Projectassignmentid
-        projectScopeId:
-          type: string
-          title: Projectscopeid
-        targetId:
-          type: string
-          title: Targetid
-        targetType:
-          $ref: '#/components/schemas/ProjectAssignmentTargetType'
-      type: object
-      required:
-      - projectAssignmentId
-      - projectScopeId
-      - targetType
-      - targetId
-      title: ProjectAssignmentSummary
-    ProjectAssignmentTargetType:
-      type: string
-      enum:
-      - plot
-      - crop_cycle
-      - lot
-      - preorder
-      - order
-      title: ProjectAssignmentTargetType
-    ProjectScopeListResponse:
-      properties:
-        items:
-          items:
-            $ref: '#/components/schemas/ProjectScopeSummary'
-          type: array
-          title: Items
-      type: object
-      required:
-      - items
-      title: ProjectScopeListResponse
-    ProjectScopeResponse:
-      properties:
-        data:
-          $ref: '#/components/schemas/ProjectScopeDetail'
-      type: object
-      required:
-      - data
-      title: ProjectScopeResponse
-    ProjectScopeStatus:
-      type: string
-      enum:
-      - draft
-      - active
-      - paused
-      - closed
-      - archived
-      title: ProjectScopeStatus
-    ProjectScopeSummary:
-      properties:
-        createdAt:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Createdat
-        name:
-          type: string
-          title: Name
-        organizationId:
-          type: string
-          title: Organizationid
-        ownerActorId:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Owneractorid
-        projectScopeCode:
-          type: string
-          title: Projectscopecode
-        projectScopeId:
-          type: string
-          title: Projectscopeid
-        projectScopeType:
-          $ref: '#/components/schemas/ProjectScopeType'
-        seasonYear:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Seasonyear
-        status:
-          $ref: '#/components/schemas/ProjectScopeStatus'
-      type: object
-      required:
-      - projectScopeId
-      - organizationId
-      - projectScopeCode
-      - name
-      - projectScopeType
-      - status
-      title: ProjectScopeSummary
-    ProjectScopeType:
-      type: string
-      enum:
-      - value_stream
-      - product_line
-      - household_livelihood
-      - experience
-      - campaign
-      - umbrella_program
-      - shared_service
-      title: ProjectScopeType
-    CreateProjectScopeRequest:
-      properties:
-        description:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Description
-        meta:
-          anyOf:
-          - $ref: '#/components/schemas/Meta'
-          - type: 'null'
-        metadata:
-          anyOf:
-          - additionalProperties:
-              type: string
-            type: object
-          - type: 'null'
-          title: Metadata
-        name:
-          type: string
-          title: Name
-        organizationId:
-          type: string
-          title: Organizationid
-        ownerActorId:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Owneractorid
-        parentProjectScopeId:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Parentprojectscopeid
-        projectScopeType:
-          $ref: '#/components/schemas/ProjectScopeType'
-        seasonYear:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Seasonyear
-      type: object
-      required:
-      - organizationId
-      - name
-      - projectScopeType
-      title: CreateProjectScopeRequest
-    UpdateProjectScopeRequest:
-      properties:
-        description:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Description
-        meta:
-          anyOf:
-          - $ref: '#/components/schemas/Meta'
-          - type: 'null'
-        metadata:
-          anyOf:
-          - additionalProperties:
-              type: string
-            type: object
-          - type: 'null'
-          title: Metadata
-        name:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Name
-        ownerActorId:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Owneractorid
-        parentProjectScopeId:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Parentprojectscopeid
-        seasonYear:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Seasonyear
-      type: object
-      title: UpdateProjectScopeRequest
-    ActivateProjectScopeRequest:
-      properties:
-        meta:
-          anyOf:
-          - $ref: '#/components/schemas/Meta'
-          - type: 'null'
-      type: object
-      title: ActivateProjectScopeRequest
-    PauseProjectScopeRequest:
-      properties:
-        meta:
-          anyOf:
-          - $ref: '#/components/schemas/Meta'
-          - type: 'null'
-        reason:
-          type: string
-          title: Reason
-      type: object
-      required:
-      - reason
-      title: PauseProjectScopeRequest
-    CloseProjectScopeRequest:
-      properties:
-        meta:
-          anyOf:
-          - $ref: '#/components/schemas/Meta'
-          - type: 'null'
-        reason:
-          type: string
-          title: Reason
-      type: object
-      required:
-      - reason
-      title: CloseProjectScopeRequest
-    ArchiveProjectScopeRequest:
-      properties:
-        meta:
-          anyOf:
-          - $ref: '#/components/schemas/Meta'
-          - type: 'null'
-      type: object
-      title: ArchiveProjectScopeRequest
-    PauseOrganizationRequest:
-      properties:
-        meta:
-          anyOf:
-          - $ref: '#/components/schemas/Meta'
-          - type: 'null'
-        reason:
-          type: string
-          title: Reason
-      type: object
-      required:
-      - reason
-      title: PauseOrganizationRequest
-    CloseOrganizationRequest:
-      properties:
-        meta:
-          anyOf:
-          - $ref: '#/components/schemas/Meta'
-          - type: 'null'
-        reason:
-          type: string
-          title: Reason
-      type: object
-      required:
-      - reason
-      title: CloseOrganizationRequest
-    ActivateOrganizationRequest:
-      properties:
-        meta:
-          anyOf:
-          - $ref: '#/components/schemas/Meta'
-          - type: 'null'
-      type: object
-      title: ActivateOrganizationRequest
-    UpdateOrganizationRequest:
-      properties:
-        contactEmail:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Contactemail
-        contactPhone:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Contactphone
-        localitySummary:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Localitysummary
-        meta:
-          anyOf:
-          - $ref: '#/components/schemas/Meta'
-          - type: 'null'
-        name:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Name
-        region:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Region
-        representativeName:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Representativename
-        shortDescription:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Shortdescription
-      type: object
-      title: UpdateOrganizationRequest
     DeliverOrderRequest:
       properties:
         deliveredQtySummary:
@@ -4718,6 +4316,19 @@ components:
       - items
       - total
       title: DomainEventListResponse
+    EndProjectAssignmentRequest:
+      properties:
+        reason:
+          type: string
+          title: Reason
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - reason
+      title: EndProjectAssignmentRequest
     ErrorResponse:
       properties:
         code:
@@ -4924,14 +4535,14 @@ components:
         lotCode:
           type: string
           title: Lotcode
-        productSkuId:
-          type: string
-          title: Productskuid
         organizationId:
           anyOf:
           - type: string
           - type: 'null'
           title: Organizationid
+        productSkuId:
+          type: string
+          title: Productskuid
         sourceType:
           type: string
           enum:
@@ -4967,6 +4578,12 @@ components:
           type: integer
           title: Version
           default: 1
+        assignments:
+          items:
+            $ref: '#/components/schemas/ProjectAssignmentSummary'
+          type: array
+          title: Assignments
+          default: []
       type: object
       required:
       - lotId
@@ -5091,6 +4708,20 @@ components:
           - type: string
           - type: 'null'
           title: Externalref
+        bypassRequested:
+          type: boolean
+          title: Bypassrequested
+          default: false
+        delegatedActorId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Delegatedactorid
+        delegatedActorRole:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Delegatedactorrole
       type: object
       title: Meta
     OrderDetail:
@@ -5101,14 +4732,14 @@ components:
         orderCode:
           type: string
           title: Ordercode
-        customerId:
-          type: string
-          title: Customerid
         organizationId:
           anyOf:
           - type: string
           - type: 'null'
           title: Organizationid
+        customerId:
+          type: string
+          title: Customerid
         orderDate:
           anyOf:
           - type: string
@@ -5184,6 +4815,12 @@ components:
             $ref: '#/components/schemas/OrderLine'
           type: array
           title: Lines
+        assignments:
+          items:
+            $ref: '#/components/schemas/ProjectAssignmentSummary'
+          type: array
+          title: Assignments
+          default: []
       type: object
       required:
       - orderId
@@ -5268,6 +4905,139 @@ components:
       - cancelled
       - failed
       title: OrderStatus
+    OrganizationDetail:
+      properties:
+        organizationId:
+          type: string
+          title: Organizationid
+        organizationCode:
+          type: string
+          title: Organizationcode
+        name:
+          type: string
+          title: Name
+        organizationType:
+          $ref: '#/components/schemas/OrganizationType'
+        status:
+          $ref: '#/components/schemas/OrganizationStatus'
+        region:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Region
+        createdAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdat
+        localitySummary:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Localitysummary
+        representativeName:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Representativename
+        contactPhone:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Contactphone
+        contactEmail:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Contactemail
+        shortDescription:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Shortdescription
+        updatedAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Updatedat
+      type: object
+      required:
+      - organizationId
+      - organizationCode
+      - name
+      - organizationType
+      - status
+      title: OrganizationDetail
+    OrganizationListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/OrganizationSummary'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: OrganizationListResponse
+    OrganizationResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/OrganizationDetail'
+      type: object
+      required:
+      - data
+      title: OrganizationResponse
+    OrganizationStatus:
+      type: string
+      enum:
+      - draft
+      - active
+      - paused
+      - closed
+      title: OrganizationStatus
+    OrganizationSummary:
+      properties:
+        organizationId:
+          type: string
+          title: Organizationid
+        organizationCode:
+          type: string
+          title: Organizationcode
+        name:
+          type: string
+          title: Name
+        organizationType:
+          $ref: '#/components/schemas/OrganizationType'
+        status:
+          $ref: '#/components/schemas/OrganizationStatus'
+        region:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Region
+        createdAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdat
+      type: object
+      required:
+      - organizationId
+      - organizationCode
+      - name
+      - organizationType
+      - status
+      title: OrganizationSummary
+    OrganizationType:
+      type: string
+      enum:
+      - household_producer
+      - family_business
+      - solo_founder
+      - cooperative
+      - startup_operator
+      - other
+      title: OrganizationType
     PackOrderRequest:
       properties:
         packedQtySummary:
@@ -5300,6 +5070,32 @@ components:
       - orderLineId
       - packedQty
       title: PackQtyItem
+    PauseOrganizationRequest:
+      properties:
+        reason:
+          type: string
+          title: Reason
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - reason
+      title: PauseOrganizationRequest
+    PauseProjectScopeRequest:
+      properties:
+        reason:
+          type: string
+          title: Reason
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - reason
+      title: PauseProjectScopeRequest
     PaymentStatus:
       type: string
       enum:
@@ -5387,6 +5183,12 @@ components:
           type: string
           title: Status
           default: active
+        assignments:
+          items:
+            $ref: '#/components/schemas/ProjectAssignmentSummary'
+          type: array
+          title: Assignments
+          default: []
       type: object
       required:
       - plotId
@@ -5464,14 +5266,14 @@ components:
         preorderCode:
           type: string
           title: Preordercode
-        customerId:
-          type: string
-          title: Customerid
         organizationId:
           anyOf:
           - type: string
           - type: 'null'
           title: Organizationid
+        customerId:
+          type: string
+          title: Customerid
         productSkuId:
           type: string
           title: Productskuid
@@ -5507,6 +5309,11 @@ components:
             $ref: '#/components/schemas/PreorderAdjustmentEntry'
           type: array
           title: Adjustmenthistory
+        assignments:
+          items:
+            $ref: '#/components/schemas/ProjectAssignmentSummary'
+          type: array
+          title: Assignments
       type: object
       required:
       - preorderId
@@ -5536,6 +5343,597 @@ components:
       - completed
       - cancelled
       title: PreorderStatus
+    ProjectAssignmentDetail:
+      properties:
+        projectAssignmentId:
+          type: string
+          title: Projectassignmentid
+        projectScopeId:
+          type: string
+          title: Projectscopeid
+        targetType:
+          $ref: '#/components/schemas/ProjectAssignmentTargetType'
+        targetId:
+          type: string
+          title: Targetid
+        isPrimary:
+          type: boolean
+          title: Isprimary
+          default: false
+        attributionWeight:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Attributionweight
+        createdAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdat
+        endedAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Endedat
+        endedReason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Endedreason
+        metadata:
+          anyOf:
+          - additionalProperties:
+              type: string
+            type: object
+          - type: 'null'
+          title: Metadata
+      type: object
+      required:
+      - projectAssignmentId
+      - projectScopeId
+      - targetType
+      - targetId
+      title: ProjectAssignmentDetail
+    ProjectAssignmentListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ProjectAssignmentSummary'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: ProjectAssignmentListResponse
+    ProjectAssignmentResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/ProjectAssignmentDetail'
+      type: object
+      required:
+      - data
+      title: ProjectAssignmentResponse
+    ProjectAssignmentSummary:
+      properties:
+        projectAssignmentId:
+          type: string
+          title: Projectassignmentid
+        projectScopeId:
+          type: string
+          title: Projectscopeid
+        targetType:
+          $ref: '#/components/schemas/ProjectAssignmentTargetType'
+        targetId:
+          type: string
+          title: Targetid
+        isPrimary:
+          type: boolean
+          title: Isprimary
+          default: false
+        attributionWeight:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Attributionweight
+        createdAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdat
+        endedAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Endedat
+      type: object
+      required:
+      - projectAssignmentId
+      - projectScopeId
+      - targetType
+      - targetId
+      title: ProjectAssignmentSummary
+    ProjectAssignmentTargetType:
+      type: string
+      enum:
+      - plot
+      - crop_cycle
+      - lot
+      - preorder
+      - order
+      title: ProjectAssignmentTargetType
+    ProjectContributionDetail:
+      properties:
+        projectContributionEventId:
+          type: string
+          title: Projectcontributioneventid
+        projectScopeId:
+          type: string
+          title: Projectscopeid
+        projectAssignmentId:
+          type: string
+          title: Projectassignmentid
+        organizationId:
+          type: string
+          title: Organizationid
+        actorId:
+          type: string
+          title: Actorid
+        subjectType:
+          type: string
+          title: Subjecttype
+        subjectId:
+          type: string
+          title: Subjectid
+        contributionType:
+          type: string
+          title: Contributiontype
+        role:
+          type: string
+          title: Role
+        quantity:
+          type: number
+          title: Quantity
+        unit:
+          type: string
+          title: Unit
+        estimatedValue:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Estimatedvalue
+        currency:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Currency
+        status:
+          $ref: '#/components/schemas/ProjectContributionStatus'
+        confirmedBy:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Confirmedby
+        confirmedAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Confirmedat
+        rejectionReason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Rejectionreason
+        source:
+          type: string
+          title: Source
+          default: manual
+        metadata:
+          additionalProperties:
+            type: string
+          type: object
+          title: Metadata
+        createdAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdat
+      type: object
+      required:
+      - projectContributionEventId
+      - projectScopeId
+      - projectAssignmentId
+      - organizationId
+      - actorId
+      - subjectType
+      - subjectId
+      - contributionType
+      - role
+      - quantity
+      - unit
+      - status
+      title: ProjectContributionDetail
+    ProjectContributionListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ProjectContributionDetail'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: ProjectContributionListResponse
+    ProjectContributionResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/ProjectContributionDetail'
+      type: object
+      required:
+      - data
+      title: ProjectContributionResponse
+    ProjectContributionStatus:
+      type: string
+      enum:
+      - proposed
+      - confirmed
+      - rejected
+      title: ProjectContributionStatus
+    ProjectContributionSummaryItem:
+      properties:
+        projectScopeId:
+          type: string
+          title: Projectscopeid
+        projectScopeCode:
+          type: string
+          title: Projectscopecode
+        projectScopeName:
+          type: string
+          title: Projectscopename
+        proposedCount:
+          type: integer
+          title: Proposedcount
+        confirmedCount:
+          type: integer
+          title: Confirmedcount
+        rejectedCount:
+          type: integer
+          title: Rejectedcount
+        confirmedQuantity:
+          type: number
+          title: Confirmedquantity
+        confirmedEstimatedValue:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Confirmedestimatedvalue
+        currency:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Currency
+      type: object
+      required:
+      - projectScopeId
+      - projectScopeCode
+      - projectScopeName
+      - proposedCount
+      - confirmedCount
+      - rejectedCount
+      - confirmedQuantity
+      title: ProjectContributionSummaryItem
+    ProjectContributionSummaryResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ProjectContributionSummaryItem'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: ProjectContributionSummaryResponse
+    ProjectCostRecordDetail:
+      properties:
+        costRecordId:
+          type: string
+          title: Costrecordid
+        projectScopeId:
+          type: string
+          title: Projectscopeid
+        organizationId:
+          type: string
+          title: Organizationid
+        costType:
+          type: string
+          const: labor_payout
+          title: Costtype
+        amount:
+          type: number
+          title: Amount
+        currency:
+          type: string
+          title: Currency
+        recognizedAt:
+          type: string
+          title: Recognizedat
+        sourceObjectType:
+          type: string
+          const: project_contribution_event
+          title: Sourceobjecttype
+        sourceObjectId:
+          type: string
+          title: Sourceobjectid
+        attributionPolicy:
+          type: string
+          const: direct_source_link
+          title: Attributionpolicy
+        metadata:
+          additionalProperties:
+            type: string
+          type: object
+          title: Metadata
+        createdAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdat
+      type: object
+      required:
+      - costRecordId
+      - projectScopeId
+      - organizationId
+      - costType
+      - amount
+      - currency
+      - recognizedAt
+      - sourceObjectType
+      - sourceObjectId
+      - attributionPolicy
+      title: ProjectCostRecordDetail
+    ProjectCostRecordListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ProjectCostRecordDetail'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: ProjectCostRecordListResponse
+    ProjectCostRecordResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/ProjectCostRecordDetail'
+      type: object
+      required:
+      - data
+      title: ProjectCostRecordResponse
+    ProjectRevenueRecordDetail:
+      properties:
+        revenueRecordId:
+          type: string
+          title: Revenuerecordid
+        projectScopeId:
+          type: string
+          title: Projectscopeid
+        organizationId:
+          type: string
+          title: Organizationid
+        customerId:
+          type: string
+          title: Customerid
+        revenueType:
+          type: string
+          const: delivered_order_sale
+          title: Revenuetype
+        grossAmount:
+          type: number
+          title: Grossamount
+        netAmount:
+          type: number
+          title: Netamount
+        currency:
+          type: string
+          title: Currency
+        recognizedAt:
+          type: string
+          title: Recognizedat
+        sourceObjectType:
+          type: string
+          const: order
+          title: Sourceobjecttype
+        sourceObjectId:
+          type: string
+          title: Sourceobjectid
+        metadata:
+          additionalProperties:
+            type: string
+          type: object
+          title: Metadata
+        createdAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdat
+      type: object
+      required:
+      - revenueRecordId
+      - projectScopeId
+      - organizationId
+      - customerId
+      - revenueType
+      - grossAmount
+      - netAmount
+      - currency
+      - recognizedAt
+      - sourceObjectType
+      - sourceObjectId
+      title: ProjectRevenueRecordDetail
+    ProjectRevenueRecordListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ProjectRevenueRecordDetail'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: ProjectRevenueRecordListResponse
+    ProjectRevenueRecordResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/ProjectRevenueRecordDetail'
+      type: object
+      required:
+      - data
+      title: ProjectRevenueRecordResponse
+    ProjectScopeDetail:
+      properties:
+        projectScopeId:
+          type: string
+          title: Projectscopeid
+        organizationId:
+          type: string
+          title: Organizationid
+        projectScopeCode:
+          type: string
+          title: Projectscopecode
+        name:
+          type: string
+          title: Name
+        projectScopeType:
+          $ref: '#/components/schemas/ProjectScopeType'
+        status:
+          $ref: '#/components/schemas/ProjectScopeStatus'
+        seasonYear:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Seasonyear
+        ownerActorId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Owneractorid
+        createdAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdat
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        parentProjectScopeId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Parentprojectscopeid
+        metadata:
+          anyOf:
+          - additionalProperties:
+              type: string
+            type: object
+          - type: 'null'
+          title: Metadata
+        updatedAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Updatedat
+      type: object
+      required:
+      - projectScopeId
+      - organizationId
+      - projectScopeCode
+      - name
+      - projectScopeType
+      - status
+      title: ProjectScopeDetail
+    ProjectScopeListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ProjectScopeSummary'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: ProjectScopeListResponse
+    ProjectScopeResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/ProjectScopeDetail'
+      type: object
+      required:
+      - data
+      title: ProjectScopeResponse
+    ProjectScopeStatus:
+      type: string
+      enum:
+      - draft
+      - active
+      - paused
+      - closed
+      - archived
+      title: ProjectScopeStatus
+    ProjectScopeSummary:
+      properties:
+        projectScopeId:
+          type: string
+          title: Projectscopeid
+        organizationId:
+          type: string
+          title: Organizationid
+        projectScopeCode:
+          type: string
+          title: Projectscopecode
+        name:
+          type: string
+          title: Name
+        projectScopeType:
+          $ref: '#/components/schemas/ProjectScopeType'
+        status:
+          $ref: '#/components/schemas/ProjectScopeStatus'
+        seasonYear:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Seasonyear
+        ownerActorId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Owneractorid
+        createdAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdat
+      type: object
+      required:
+      - projectScopeId
+      - organizationId
+      - projectScopeCode
+      - name
+      - projectScopeType
+      - status
+      title: ProjectScopeSummary
+    ProjectScopeType:
+      type: string
+      enum:
+      - value_stream
+      - product_line
+      - household_livelihood
+      - experience
+      - campaign
+      - umbrella_program
+      - shared_service
+      title: ProjectScopeType
     QCReviewItem:
       properties:
         qcReviewId:
@@ -5590,6 +5988,85 @@ components:
       required:
       - data
       title: QCReviewResponse
+    RecordProjectContributionRequest:
+      properties:
+        projectAssignmentId:
+          type: string
+          title: Projectassignmentid
+        organizationId:
+          type: string
+          title: Organizationid
+        actorId:
+          type: string
+          title: Actorid
+        subjectType:
+          type: string
+          title: Subjecttype
+        subjectId:
+          type: string
+          title: Subjectid
+        contributionType:
+          type: string
+          title: Contributiontype
+        role:
+          type: string
+          title: Role
+        quantity:
+          type: number
+          title: Quantity
+        unit:
+          type: string
+          title: Unit
+        estimatedValue:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Estimatedvalue
+        currency:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Currency
+        source:
+          type: string
+          title: Source
+          default: manual
+        metadata:
+          anyOf:
+          - additionalProperties:
+              type: string
+            type: object
+          - type: 'null'
+          title: Metadata
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - projectAssignmentId
+      - organizationId
+      - actorId
+      - subjectType
+      - subjectId
+      - contributionType
+      - role
+      - quantity
+      - unit
+      title: RecordProjectContributionRequest
+    RejectProjectContributionRequest:
+      properties:
+        reason:
+          type: string
+          title: Reason
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - reason
+      title: RejectProjectContributionRequest
     ReleaseAllocationRequest:
       properties:
         reason:
@@ -5747,6 +6224,89 @@ components:
           - type: 'null'
       type: object
       title: UpdateCustomerRequest
+    UpdateOrganizationRequest:
+      properties:
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        region:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Region
+        localitySummary:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Localitysummary
+        representativeName:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Representativename
+        contactPhone:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Contactphone
+        contactEmail:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Contactemail
+        shortDescription:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Shortdescription
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      title: UpdateOrganizationRequest
+    UpdateProjectScopeRequest:
+      properties:
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        seasonYear:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Seasonyear
+        ownerActorId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Owneractorid
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        parentProjectScopeId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Parentprojectscopeid
+        metadata:
+          anyOf:
+          - additionalProperties:
+              type: string
+            type: object
+          - type: 'null'
+          title: Metadata
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      title: UpdateProjectScopeRequest
     UpsertPreferenceRequest:
       properties:
         preferenceType:

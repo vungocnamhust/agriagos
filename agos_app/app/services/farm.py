@@ -2,10 +2,12 @@ import uuid
 from typing import Any
 
 from app.models.common import Meta
+from app.models.project_assignments import ProjectAssignmentSummary
 from app.services.read_authz import authorize_read_surface
 from app.store import farm as farm_store
 from app.store import postgres_sync
 from app.store import memory as store
+from app.store import project_assignments as project_assignment_store
 
 
 def list_plots() -> list[dict[str, Any]]:
@@ -35,7 +37,7 @@ def list_plots_for_actor(meta: Meta | None) -> list[dict[str, Any]]:
         reason_code="forbidden_farm_plot_read",
         detail="Actor is not allowed to list raw farm plots.",
     )
-    return list_plots()
+    return [_with_assignments(plot, "plot", plot["plotId"]) for plot in list_plots()]
 
 
 def list_crop_cycles_for_actor(plot_id: str | None, status: str | None, meta: Meta | None) -> list[dict[str, Any]]:
@@ -48,7 +50,22 @@ def list_crop_cycles_for_actor(plot_id: str | None, status: str | None, meta: Me
         reason_code="forbidden_crop_cycle_read",
         detail="Actor is not allowed to list raw crop cycles.",
     )
-    return list_crop_cycles(plot_id, status)
+    return [_with_assignments(cycle, "crop_cycle", cycle["cropCycleId"]) for cycle in list_crop_cycles(plot_id, status)]
+
+
+def _with_assignments(record: dict[str, Any], target_type: str, target_id: str) -> dict[str, Any]:
+    enriched = dict(record)
+    enriched["assignments"] = _list_assignment_summaries(target_type, target_id)
+    return enriched
+
+
+def _list_assignment_summaries(target_type: str, target_id: str) -> list[ProjectAssignmentSummary]:
+    records = (
+        project_assignment_store.list_project_assignments_for_target(target_type, target_id)
+        if postgres_sync.is_enabled()
+        else store.list_project_assignments_for_target(target_type, target_id)
+    )
+    return [ProjectAssignmentSummary(**record) for record in records]
 
 
 def seed_demo_farm() -> None:

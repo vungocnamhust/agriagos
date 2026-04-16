@@ -65,7 +65,7 @@ Organization dùng để trả lời các câu hỏi như:
 **Định nghĩa:** một đơn vị triển khai hoặc môi trường vận hành có lựa chọn integration riêng.
 
 Tenant giúp mô tả các quyết định như:
-- tenant nào dùng LiteFarm
+- tenant nào dùng FarmOS
 - tenant nào giữ plot/crop summary trực tiếp trong Core
 - tenant nào cần contract integration riêng
 
@@ -163,9 +163,13 @@ Cost record có thể đến từ:
 
 Accounting final vẫn có thể nằm ở ERP, nhưng cost record trong Core phục vụ operational P&L theo project.
 
+Runtime Phase 1 hiện mới mở lane đầu tiên: `CostRecord` được ghi dưới `ProjectScope` từ confirmed `ProjectContributionEvent` bằng chính sách `direct_source_link`. Các nguồn cost khác và split allocation vẫn là rollout sau.
+
 ## 3.9 Revenue Record
 
 **Định nghĩa:** một canonical operational fact ghi nhận doanh thu hoặc giá trị thương mại được nhận diện cho `ProjectScope`.
+
+Runtime Phase 1 hiện đã mở baseline đầu tiên: `RevenueRecord` được ghi dưới `ProjectScope` từ delivered `Order` đã có active `ProjectAssignment` vào cùng scope. Các nguồn revenue khác và split allocation vẫn là rollout sau.
 
 Revenue record có thể seed từ:
 - delivered order

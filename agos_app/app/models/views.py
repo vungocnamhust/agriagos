@@ -1,21 +1,25 @@
 from typing import Literal
 
 from pydantic import BaseModel
+
 from app.models.customers import CustomerDetail
 from app.models.enums import CropCycleStatus, GrowthStage, LotStatus
 from app.models.orders import OrderDetail
 from app.models.preorders import PreorderDetail
+
 
 class CustomerPreferenceItem(BaseModel):
     preferenceType: str
     preferenceValue: str
     confidenceLevel: float
 
+
 class Customer360View(BaseModel):
     customer: CustomerDetail
     activePreorders: list[PreorderDetail]
     recentOrders: list[OrderDetail]
     preferences: list[CustomerPreferenceItem]
+
 
 class AvailableLotView(BaseModel):
     lotId: str
@@ -24,7 +28,8 @@ class AvailableLotView(BaseModel):
     productSkuId: str
     releasedQty: float
     availableQty: float
-    status: LotStatus  # (06-state-transitions.md)
+    status: LotStatus
+
 
 class AvailableLotListResponse(BaseModel):
     items: list[AvailableLotView]
@@ -52,6 +57,7 @@ class FarmSummaryBoardItem(BaseModel):
 class FarmSummaryBoardResponse(BaseModel):
     items: list[FarmSummaryBoardItem]
 
+
 class PendingFulfillmentView(BaseModel):
     orderId: str
     orderCode: str
@@ -60,5 +66,22 @@ class PendingFulfillmentView(BaseModel):
     status: Literal["confirmed", "allocated", "packed", "shipped"]
     shippingDeadline: str | None = None
 
+
 class PendingFulfillmentListResponse(BaseModel):
     items: list[PendingFulfillmentView]
+
+
+class ProjectContributionSummaryItem(BaseModel):
+    projectScopeId: str
+    projectScopeCode: str
+    projectScopeName: str
+    proposedCount: int
+    confirmedCount: int
+    rejectedCount: int
+    confirmedQuantity: float
+    confirmedEstimatedValue: float | None = None
+    currency: str | None = None
+
+
+class ProjectContributionSummaryResponse(BaseModel):
+    items: list[ProjectContributionSummaryItem]

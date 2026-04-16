@@ -38,10 +38,12 @@ from app.models.orders import (
     RequestCancelOrderRequest,
     ShipOrderRequest,
 )
+from app.models.project_assignments import ProjectAssignmentSummary
 from app.services import audit as audit_service
 from app.store import postgres_sync
 from app.store import memory as store
 from app.store import organizations as organization_store
+from app.store import project_assignments as project_assignment_store
 from app.store._db import transaction as postgres_transaction
 
 
@@ -120,6 +122,7 @@ def _cancel_roles_for_status(order_status: str | None) -> frozenset[str]:
 
 def _build_order_detail(record: dict[str, Any]) -> OrderDetail:
     lines = [OrderLine(**ln) for ln in record.get("lines", [])]
+    assignments = _list_assignment_summaries("order", record["orderId"])
     return OrderDetail(
         orderId=record["orderId"],
         orderCode=record["orderCode"],
@@ -142,7 +145,17 @@ def _build_order_detail(record: dict[str, Any]) -> OrderDetail:
         sourcePreorderFlag=bool(record.get("sourcePreorderFlag", False)),
         version=int(record.get("version", 1) or 1),
         lines=lines,
+        assignments=assignments,
     )
+
+
+def _list_assignment_summaries(target_type: str, target_id: str) -> list[ProjectAssignmentSummary]:
+    records = (
+        project_assignment_store.list_project_assignments_for_target(target_type, target_id)
+        if postgres_sync.is_enabled()
+        else store.list_project_assignments_for_target(target_type, target_id)
+    )
+    return [ProjectAssignmentSummary(**record) for record in records]
 
 
 def _linked_preorder_ids(lines: list[dict[str, Any]]) -> list[str]:

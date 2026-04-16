@@ -69,7 +69,7 @@ Policy baseline cho runtime hiện tại và các slice tiếp theo:
 - org-scoped RBAC/ABAC và membership theo organization là phase sau, không được ngầm giả định đã tồn tại
 
 ### 3.7 ProjectScope baseline policy
-`ProjectScope` là lớp soft scope dưới `Organization`. PR docs này chỉ chốt policy baseline; runtime authz sẽ rollout theo các slice sau.
+`ProjectScope` là lớp soft scope dưới `Organization`. Runtime Phase 1 hiện đã cover aggregate `ProjectScope`, assignment / contribution lanes, cost-record lane đầu tiên, revenue-record lane đầu tiên, và read-model `project-contribution-summary`; các policy lanes sâu hơn vẫn rollout dần theo slices sau.
 
 Policy baseline:
 - Founder / Super Admin và Admin là nhóm chính được tạo, sửa, activate, pause, close, archive `ProjectScope`

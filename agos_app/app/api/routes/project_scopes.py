@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Request
@@ -11,6 +12,23 @@ from app.models.project_assignments import (
     EndProjectAssignmentRequest,
     ProjectAssignmentListResponse,
     ProjectAssignmentResponse,
+)
+from app.models.project_contributions import (
+    ConfirmProjectContributionRequest,
+    ProjectContributionListResponse,
+    ProjectContributionResponse,
+    RecordProjectContributionRequest,
+    RejectProjectContributionRequest,
+)
+from app.models.project_cost_records import (
+    CreateProjectCostRecordRequest,
+    ProjectCostRecordListResponse,
+    ProjectCostRecordResponse,
+)
+from app.models.project_revenue_records import (
+    CreateProjectRevenueRecordRequest,
+    ProjectRevenueRecordListResponse,
+    ProjectRevenueRecordResponse,
 )
 from app.models.project_scopes import (
     ActivateProjectScopeRequest,
@@ -25,11 +43,14 @@ from app.models.project_scopes import (
 )
 from app.services import project_scopes as svc
 from app.services import project_assignments as assignment_svc
+from app.services import project_contributions as contribution_svc
+from app.services import project_cost_records as cost_record_svc
+from app.services import project_revenue_records as revenue_record_svc
 
 router = APIRouter()
 
 
-PROJECT_SCOPE_ERROR_RESPONSES = {
+PROJECT_SCOPE_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     403: {"model": ErrorResponse, "description": "Forbidden"},
     404: {"model": ErrorResponse, "description": "Aggregate not found"},
     422: {"model": ErrorResponse, "description": "Validation error"},
@@ -103,4 +124,121 @@ def end_project_assignment(
         str(project_scope_id),
         str(project_assignment_id),
         apply_request_correlation(request, payload),
+    )
+
+
+@router.post(
+    "/{project_scope_id}/contributions",
+    response_model=ProjectContributionResponse,
+    status_code=201,
+    responses=PROJECT_SCOPE_ERROR_RESPONSES,
+)
+def record_project_contribution(
+    project_scope_id: UUID,
+    request: Request,
+    payload: RecordProjectContributionRequest,
+) -> ProjectContributionResponse:
+    return contribution_svc.record_project_contribution(str(project_scope_id), apply_request_correlation(request, payload))
+
+
+@router.get(
+    "/{project_scope_id}/contributions",
+    response_model=ProjectContributionListResponse,
+    responses=PROJECT_SCOPE_ERROR_RESPONSES,
+)
+def list_project_contributions(project_scope_id: UUID, request: Request) -> ProjectContributionListResponse:
+    return ProjectContributionListResponse(
+        items=contribution_svc.list_project_contributions_for_actor(str(project_scope_id), meta=request_meta(request))
+    )
+
+
+@router.post(
+    "/{project_scope_id}/contributions/{project_contribution_event_id}/confirm",
+    response_model=ProjectContributionResponse,
+    responses=PROJECT_SCOPE_ERROR_RESPONSES,
+)
+def confirm_project_contribution(
+    project_scope_id: UUID,
+    project_contribution_event_id: UUID,
+    request: Request,
+    payload: ConfirmProjectContributionRequest,
+) -> ProjectContributionResponse:
+    return contribution_svc.confirm_project_contribution(
+        str(project_scope_id),
+        str(project_contribution_event_id),
+        apply_request_correlation(request, payload),
+    )
+
+
+@router.post(
+    "/{project_scope_id}/contributions/{project_contribution_event_id}/reject",
+    response_model=ProjectContributionResponse,
+    responses=PROJECT_SCOPE_ERROR_RESPONSES,
+)
+def reject_project_contribution(
+    project_scope_id: UUID,
+    project_contribution_event_id: UUID,
+    request: Request,
+    payload: RejectProjectContributionRequest,
+) -> ProjectContributionResponse:
+    return contribution_svc.reject_project_contribution(
+        str(project_scope_id),
+        str(project_contribution_event_id),
+        apply_request_correlation(request, payload),
+    )
+
+
+@router.post(
+    "/{project_scope_id}/cost-records",
+    response_model=ProjectCostRecordResponse,
+    status_code=201,
+    responses=PROJECT_SCOPE_ERROR_RESPONSES,
+)
+def create_project_cost_record(
+    project_scope_id: UUID,
+    request: Request,
+    payload: CreateProjectCostRecordRequest,
+) -> ProjectCostRecordResponse:
+    return cost_record_svc.create_project_cost_record(str(project_scope_id), apply_request_correlation(request, payload))
+
+
+@router.get(
+    "/{project_scope_id}/cost-records",
+    response_model=ProjectCostRecordListResponse,
+    responses=PROJECT_SCOPE_ERROR_RESPONSES,
+)
+def list_project_cost_records(project_scope_id: UUID, request: Request) -> ProjectCostRecordListResponse:
+    return ProjectCostRecordListResponse(
+        items=cost_record_svc.list_project_cost_records_for_actor(str(project_scope_id), meta=request_meta(request))
+    )
+
+
+@router.post(
+    "/{project_scope_id}/revenue-records",
+    response_model=ProjectRevenueRecordResponse,
+    status_code=201,
+    responses=PROJECT_SCOPE_ERROR_RESPONSES,
+)
+def create_project_revenue_record(
+    project_scope_id: UUID,
+    request: Request,
+    payload: CreateProjectRevenueRecordRequest,
+) -> ProjectRevenueRecordResponse:
+    return revenue_record_svc.create_project_revenue_record(
+        str(project_scope_id),
+        apply_request_correlation(request, payload),
+    )
+
+
+@router.get(
+    "/{project_scope_id}/revenue-records",
+    response_model=ProjectRevenueRecordListResponse,
+    responses=PROJECT_SCOPE_ERROR_RESPONSES,
+)
+def list_project_revenue_records(project_scope_id: UUID, request: Request) -> ProjectRevenueRecordListResponse:
+    return ProjectRevenueRecordListResponse(
+        items=revenue_record_svc.list_project_revenue_records_for_actor(
+            str(project_scope_id),
+            meta=request_meta(request),
+        )
     )

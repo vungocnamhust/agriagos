@@ -156,7 +156,7 @@ Payload tối thiểu:
 
 ## 3.0B Project assignment, contribution, và financial attribution events
 
-> Nhóm event này cũng là docs-first baseline. Chúng tồn tại để lock payload shape và semantics trước khi runtime slice được ship.
+> Runtime Phase 1 hiện đã emit dotted-lowercase events cho assignment, contribution, và lane cost-record đầu tiên. Các event còn lại trong nhóm này vẫn là docs-first baseline cho rollout sau.
 
 ### `ProjectAssignmentAdded`
 Khi một target được gắn vào một `ProjectScope`.
@@ -241,6 +241,8 @@ Payload tối thiểu:
 ### `CostRecorded`
 Khi một operational cost fact được ghi nhận.
 
+Runtime name hiện tại: `project_cost_record.recorded`.
+
 Payload tối thiểu:
 - cost_record_id
 - organization_id
@@ -249,9 +251,13 @@ Payload tối thiểu:
 - amount
 - currency
 - recognized_at
+- source_object_type
+- source_object_id
 
 ### `RevenueRecorded`
 Khi một operational revenue fact được ghi nhận.
+
+Runtime name hiện tại: `project_revenue_record.recorded`.
 
 Payload tối thiểu:
 - revenue_record_id
@@ -262,6 +268,9 @@ Payload tối thiểu:
 - net_amount
 - currency
 - recognized_at
+- source_object_type
+- source_object_id
+- customer_id
 
 ### `FinancialAllocationRecorded`
 Khi một cost hoặc revenue được split sang nhiều `ProjectScope`.
