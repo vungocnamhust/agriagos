@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from app.core import events
 from app.core.authz import ensure_bypass_permitted, normalize_actor_role
 from app.core.codegen import generate_lot_code
+from app.core.policy_sets import LOT_OPERATIONS_ROLES, LOT_QC_ROLES
 from app.core.write_context import build_request_hash, meta_context
 from app.core.gateway import assert_lot_transition, check_idempotency, record_idempotency
 from app.models.common import Meta
@@ -53,11 +54,11 @@ VALID_QC_RESULTS = {"pending", "passed", "failed", "needs_more_evidence"}
 STANDARD_LOT_UNIT = "kg"
 SENSITIVE_RELEASE_ROLES = {"farm_manager", "ops", "ops_manager"}
 APPROVAL_BYPASS_ROLES = {"admin", "founder", "super_admin", "admin_van_hanh"}
-_LOT_READ_ROLES = frozenset({"founder", "super_admin", "admin", "ops", "farm_manager", "qc_reviewer"})
-_LOT_CREATE_ROLES = frozenset({"founder", "super_admin", "admin", "ops", "farm_manager"})
-_LOT_STATE_WRITE_ROLES = frozenset({"founder", "super_admin", "admin", "ops", "farm_manager"})
-_LOT_EVIDENCE_WRITE_ROLES = frozenset({"founder", "super_admin", "admin", "ops", "farm_manager", "qc_reviewer"})
-_LOT_QC_WRITE_ROLES = frozenset({"founder", "super_admin", "admin", "ops", "farm_manager", "qc_reviewer"})
+_LOT_READ_ROLES = LOT_QC_ROLES
+_LOT_CREATE_ROLES = LOT_OPERATIONS_ROLES
+_LOT_STATE_WRITE_ROLES = LOT_OPERATIONS_ROLES
+_LOT_EVIDENCE_WRITE_ROLES = LOT_QC_ROLES
+_LOT_QC_WRITE_ROLES = LOT_QC_ROLES
 
 
 def _effective_lot_actor_role(context: dict[str, Any], *, allow_delegated_agent: bool = False) -> str | None:

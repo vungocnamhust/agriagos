@@ -51,6 +51,20 @@ def _detail_to_code(status: int, detail: str) -> str:
     return _STATUS_CODE_MAP.get(status, "ERROR")
 
 
+def _normalize_validation_errors(errors: list[dict]) -> list[dict]:
+    normalized_errors: list[dict] = []
+    for error in errors:
+        normalized_error = dict(error)
+        context = normalized_error.get("ctx")
+        if isinstance(context, dict):
+            normalized_error["ctx"] = {
+                key: (str(value) if isinstance(value, BaseException) else value)
+                for key, value in context.items()
+            }
+        normalized_errors.append(normalized_error)
+    return normalized_errors
+
+
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     cid = getattr(request.state, "correlation_id", None)
@@ -73,7 +87,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             code="VALIDATION_ERROR",
             message="Request validation failed",
             correlationId=cid,
-            details={"errors": exc.errors()},
+            details={"errors": _normalize_validation_errors(exc.errors())},
         ).model_dump(exclude_none=True),
     )
 

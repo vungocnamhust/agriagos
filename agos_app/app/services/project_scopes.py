@@ -10,7 +10,9 @@ from fastapi import HTTPException
 from app.core import events
 from app.core.authz import ensure_bypass_permitted, normalize_actor_role
 from app.core.codegen import generate_project_scope_code
+from app.core.event_registry import AggregateType, ProjectScopeEventName
 from app.core.gateway import assert_project_scope_transition, check_idempotency, record_idempotency
+from app.core.policy_sets import FOUNDATION_ADMIN_ROLES
 from app.core.write_context import append_audit_decision, build_request_hash, meta_context
 from app.models.common import Meta
 from app.models.project_scopes import (
@@ -30,8 +32,8 @@ from app.store import project_scopes as project_scope_store
 from app.store._db import is_enabled as postgres_enabled, transaction as postgres_transaction
 
 
-_PROJECT_SCOPE_READ_ROLES = frozenset({"founder", "super_admin", "admin"})
-_PROJECT_SCOPE_WRITE_ROLES = frozenset({"founder", "super_admin", "admin"})
+_PROJECT_SCOPE_READ_ROLES = FOUNDATION_ADMIN_ROLES
+_PROJECT_SCOPE_WRITE_ROLES = FOUNDATION_ADMIN_ROLES
 
 
 def _build_project_scope_detail(record: dict[str, Any]) -> ProjectScopeDetail:
@@ -67,14 +69,14 @@ def _build_project_scope_summary(record: dict[str, Any]) -> ProjectScopeSummary:
 
 
 def _emit_project_scope_event(
-    event_name: str,
+    event_name: ProjectScopeEventName,
     project_scope_id: str,
     payload: dict[str, Any],
     context: dict[str, Any],
 ) -> dict[str, Any]:
     return events.emit(
         event_name=event_name,
-        aggregate_type="ProjectScope",
+        aggregate_type=AggregateType.project_scope,
         aggregate_id=project_scope_id,
         payload=payload,
         actor_id=context.get("actor_id"),
@@ -206,7 +208,7 @@ def create_project_scope(payload: CreateProjectScopeRequest) -> ProjectScopeResp
         project_scope_store.upsert_project_scope(record)
         if not postgres_enabled():
             memory_store.save_project_scope(project_scope_id, record)
-        event = _emit_project_scope_event("project_scope.created", project_scope_id, payload=record, context=context)
+        event = _emit_project_scope_event(ProjectScopeEventName.created, project_scope_id, payload=record, context=context)
         _audit_project_scope("project_scope.create", project_scope_id, "allowed", context, after_snapshot=record, event=event)
         record_idempotency(
             key,
@@ -294,7 +296,7 @@ def update_project_scope(project_scope_id: str, payload: UpdateProjectScopeReque
         if not postgres_enabled():
             memory_store.save_project_scope(project_scope_id, record)
         event = _emit_project_scope_event(
-            "project_scope.updated",
+            ProjectScopeEventName.updated,
             project_scope_id,
             payload={
                 "projectScopeId": project_scope_id,
@@ -403,7 +405,7 @@ def activate_project_scope(project_scope_id: str, payload: ActivateProjectScopeR
         action_name="project_scope.activate",
         action="activate",
         denied_detail="Actor is not allowed to activate project scopes.",
-        event_name="project_scope.activated",
+        event_name=ProjectScopeEventName.activated,
     )
 
 
@@ -414,7 +416,7 @@ def pause_project_scope(project_scope_id: str, payload: PauseProjectScopeRequest
         action_name="project_scope.pause",
         action="pause",
         denied_detail="Actor is not allowed to pause project scopes.",
-        event_name="project_scope.paused",
+        event_name=ProjectScopeEventName.paused,
         reason=payload.reason,
     )
 
@@ -426,7 +428,7 @@ def close_project_scope(project_scope_id: str, payload: CloseProjectScopeRequest
         action_name="project_scope.close",
         action="close",
         denied_detail="Actor is not allowed to close project scopes.",
-        event_name="project_scope.closed",
+        event_name=ProjectScopeEventName.closed,
         reason=payload.reason,
     )
 
@@ -438,5 +440,5 @@ def archive_project_scope(project_scope_id: str, payload: ArchiveProjectScopeReq
         action_name="project_scope.archive",
         action="archive",
         denied_detail="Actor is not allowed to archive project scopes.",
-        event_name="project_scope.archived",
+        event_name=ProjectScopeEventName.archived,
     )

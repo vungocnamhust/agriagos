@@ -50,6 +50,11 @@ def generate_shared_resource_code(now: datetime | None = None) -> str:
     return f"RES-{t:%Y%m}-{_next_seq('RES', t):04d}"
 
 
+def generate_actor_code(now: datetime | None = None) -> str:
+    t = now or _now()
+    return f"ACT-{t:%Y%m}-{_next_seq('ACT', t):04d}"
+
+
 def generate_preorder_code(now: datetime | None = None) -> str:
     t = now or _now()
     return f"DT-{t:%Y%m}-{_next_seq('DT', t):04d}"

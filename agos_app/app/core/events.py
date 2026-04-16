@@ -12,6 +12,7 @@ Aggregate type labels use short canonical names: Customer, Order, Lot, Preorder,
 import re
 import uuid
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Any
 
 from app.store import events as store
@@ -34,8 +35,8 @@ def _to_event_type(dotted_name: str) -> str:
 
 
 def emit(
-    event_name: str,
-    aggregate_type: str,
+    event_name: str | Enum,
+    aggregate_type: str | Enum,
     aggregate_id: str,
     payload: dict[str, Any],
     actor_type: str = "user",
@@ -58,12 +59,14 @@ def emit(
         correlation_id: Groups related events across a workflow.
         source:         Event source label, e.g. "core" or "integration".
     """
+    normalized_event_name = event_name.value if isinstance(event_name, Enum) else event_name
+    normalized_aggregate_type = aggregate_type.value if isinstance(aggregate_type, Enum) else aggregate_type
     event: dict[str, Any] = {
         "eventId": str(uuid.uuid4()),
-        "eventName": event_name,                   # dotted lowercase — runtime/query style
-        "eventType": _to_event_type(event_name),   # PascalCase — class/doc style
+        "eventName": normalized_event_name,                   # dotted lowercase — runtime/query style
+        "eventType": _to_event_type(normalized_event_name),   # PascalCase — class/doc style
         "eventVersion": event_version,
-        "aggregateType": aggregate_type,
+        "aggregateType": normalized_aggregate_type,
         "aggregateId": aggregate_id,
         "occurredAt": _now(),
         "actorType": actor_type,

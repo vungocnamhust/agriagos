@@ -5,31 +5,33 @@ from typing import Any
 
 from fastapi import HTTPException
 
+from app.models.enums import ActorRole
+
 
 ROLE_ALIASES = {
-    "super_admin": "super_admin",
-    "superadmin": "super_admin",
-    "founder": "founder",
-    "admin": "admin",
-    "admin_van_hanh": "admin",
-    "operations_admin": "admin",
-    "sales": "sales",
-    "cskh": "cskh",
-    "customer_service": "cskh",
-    "customer_success": "cskh",
-    "integration": "integration",
-    "ops": "ops",
-    "ops_manager": "ops",
-    "ops_lead": "ops",
-    "farm_manager": "farm_manager",
-    "farm manager": "farm_manager",
-    "accountant": "accountant",
-    "viewer": "viewer",
-    "viewer_analyst": "viewer",
-    "agent": "agent",
-    "automation": "agent",
-    "qc_reviewer": "qc_reviewer",
-    "qc reviewer": "qc_reviewer",
+    ActorRole.super_admin.value: ActorRole.super_admin.value,
+    "superadmin": ActorRole.super_admin.value,
+    ActorRole.founder.value: ActorRole.founder.value,
+    ActorRole.admin.value: ActorRole.admin.value,
+    "admin_van_hanh": ActorRole.admin.value,
+    "operations_admin": ActorRole.admin.value,
+    ActorRole.sales.value: ActorRole.sales.value,
+    ActorRole.cskh.value: ActorRole.cskh.value,
+    "customer_service": ActorRole.cskh.value,
+    "customer_success": ActorRole.cskh.value,
+    ActorRole.integration.value: ActorRole.integration.value,
+    ActorRole.ops.value: ActorRole.ops.value,
+    "ops_manager": ActorRole.ops.value,
+    "ops_lead": ActorRole.ops.value,
+    ActorRole.farm_manager.value: ActorRole.farm_manager.value,
+    "farm manager": ActorRole.farm_manager.value,
+    ActorRole.accountant.value: ActorRole.accountant.value,
+    ActorRole.viewer.value: ActorRole.viewer.value,
+    "viewer_analyst": ActorRole.viewer.value,
+    ActorRole.agent.value: ActorRole.agent.value,
+    "automation": ActorRole.agent.value,
+    ActorRole.qc_reviewer.value: ActorRole.qc_reviewer.value,
+    "qc reviewer": ActorRole.qc_reviewer.value,
 }
 
 
@@ -61,9 +63,11 @@ class AuthContext:
         }
 
 
-def normalize_actor_role(actor_role: str | None) -> str | None:
+def normalize_actor_role(actor_role: str | ActorRole | None) -> str | None:
     if actor_role is None:
         return None
+    if isinstance(actor_role, ActorRole):
+        return actor_role.value
     normalized = actor_role.strip().lower().replace("/", " ").replace("-", " ")
     normalized = "_".join(normalized.split())
     return ROLE_ALIASES.get(normalized, normalized)

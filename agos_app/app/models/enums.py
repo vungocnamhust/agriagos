@@ -63,6 +63,46 @@ class SharedResourceType(str, Enum):
     other = "other"
 
 
+class ActorIdentityType(str, Enum):
+    person = "person"
+    household = "household"
+    organization_actor = "organization_actor"
+    automation_principal = "automation_principal"
+
+
+class ActorIdentityStatus(str, Enum):
+    active = "active"
+    inactive = "inactive"
+
+
+class ActorAffiliationKind(str, Enum):
+    membership = "membership"
+    stewardship = "stewardship"
+    contractor = "contractor"
+    partner = "partner"
+    observer = "observer"
+
+
+class ActorAffiliationStatus(str, Enum):
+    active = "active"
+    ended = "ended"
+
+
+class ActorRole(str, Enum):
+    super_admin = "super_admin"
+    founder = "founder"
+    admin = "admin"
+    sales = "sales"
+    cskh = "cskh"
+    integration = "integration"
+    ops = "ops"
+    farm_manager = "farm_manager"
+    accountant = "accountant"
+    viewer = "viewer"
+    agent = "agent"
+    qc_reviewer = "qc_reviewer"
+
+
 class ProjectAssignmentTargetType(str, Enum):
     plot = "plot"
     crop_cycle = "crop_cycle"
@@ -75,6 +115,20 @@ class ProjectContributionStatus(str, Enum):
     proposed = "proposed"
     confirmed = "confirmed"
     rejected = "rejected"
+
+
+class ProjectContributionVerificationStatus(str, Enum):
+    self_reported = "self_reported"
+    system_detected = "system_detected"
+    verified = "verified"
+    rejected = "rejected"
+
+
+class ProjectContributionVerificationSource(str, Enum):
+    manual_submission = "manual_submission"
+    field_log = "field_log"
+    admin_confirmed = "admin_confirmed"
+    admin_rejected = "admin_rejected"
 
 
 class PreorderStatus(str, Enum):

@@ -12,6 +12,7 @@ from fastapi import HTTPException
 from app.core import events
 from app.core.authz import ensure_bypass_permitted, normalize_actor_role
 from app.core.gateway import check_idempotency, record_idempotency
+from app.core.policy_sets import FOUNDATION_ADMIN_ROLES
 from app.core.write_context import append_audit_decision, build_request_hash, meta_context
 from app.models.common import Meta
 from app.models.enums import ProjectAssignmentTargetType
@@ -33,8 +34,8 @@ from app.store import orders as order_store
 from app.store import preorders as preorder_store
 
 
-_PROJECT_ASSIGNMENT_READ_ROLES = frozenset({"founder", "super_admin", "admin"})
-_PROJECT_ASSIGNMENT_WRITE_ROLES = frozenset({"founder", "super_admin", "admin"})
+_PROJECT_ASSIGNMENT_READ_ROLES = FOUNDATION_ADMIN_ROLES
+_PROJECT_ASSIGNMENT_WRITE_ROLES = FOUNDATION_ADMIN_ROLES
 
 
 def _build_project_assignment_detail(record: dict[str, Any]) -> ProjectAssignmentDetail:

@@ -5,12 +5,9 @@ from typing import Any, Iterable
 from fastapi import HTTPException
 
 from app.core.authz import ensure_bypass_permitted, normalize_actor_role
+from app.core.policy_sets import PROJECT_SCOPED_EVENT_QUERY_ROLES, UNSCOPED_EVENT_QUERY_ROLES
 from app.core.write_context import append_audit_decision, meta_context
 from app.models.common import Meta
-
-
-UNSCOPED_EVENT_ROLES = frozenset({"founder", "super_admin"})
-SCOPED_EVENT_ROLES = frozenset({"admin", "accountant", "viewer"})
 
 
 def _effective_actor_role(context: dict[str, Any], *, allow_delegated_agent: bool = True) -> str | None:
@@ -97,10 +94,10 @@ def authorize_scoped_event_query(
     )
 
     effective_actor_role = _effective_actor_role(context)
-    if effective_actor_role in UNSCOPED_EVENT_ROLES:
+    if effective_actor_role in UNSCOPED_EVENT_QUERY_ROLES:
         return context
 
-    if effective_actor_role not in SCOPED_EVENT_ROLES:
+    if effective_actor_role not in PROJECT_SCOPED_EVENT_QUERY_ROLES:
         _deny_read(
             action_name="event.query",
             target_type="EventStream",

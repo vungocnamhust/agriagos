@@ -11,6 +11,7 @@ from app.core import events
 from app.core.authz import ensure_bypass_permitted, normalize_actor_role
 from app.core.codegen import generate_organization_code
 from app.core.gateway import assert_organization_transition, check_idempotency, record_idempotency
+from app.core.policy_sets import FOUNDATION_ADMIN_ROLES
 from app.core.write_context import append_audit_decision, build_request_hash, meta_context
 from app.models.common import Meta
 from app.models.organizations import (
@@ -29,8 +30,8 @@ from app.store import organizations as organization_store
 from app.store._db import is_enabled as postgres_enabled, transaction as postgres_transaction
 
 
-_ORGANIZATION_READ_ROLES = frozenset({"founder", "super_admin", "admin"})
-_ORGANIZATION_WRITE_ROLES = frozenset({"founder", "super_admin", "admin"})
+_ORGANIZATION_READ_ROLES = FOUNDATION_ADMIN_ROLES
+_ORGANIZATION_WRITE_ROLES = FOUNDATION_ADMIN_ROLES
 
 
 def _build_organization_detail(record: dict[str, Any]) -> OrganizationDetail:
