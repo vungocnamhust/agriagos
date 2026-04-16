@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from app.core.authz import build_auth_context, ensure_bypass_permitted, normalize_actor_role
 from app.core.write_context import meta_context
 from app.models.common import Meta
+from app.models.enums import ActorRole
 from app.store import memory
 
 
@@ -20,6 +21,10 @@ from app.store import memory
 )
 def test_normalize_actor_role_maps_phase1_aliases(actor_role: str, expected: str) -> None:
     assert normalize_actor_role(actor_role) == expected
+
+
+def test_normalize_actor_role_accepts_actor_role_enum() -> None:
+    assert normalize_actor_role(ActorRole.accountant) == "accountant"
 
 
 def test_build_auth_context_keeps_raw_and_normalized_roles() -> None:

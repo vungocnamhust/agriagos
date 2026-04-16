@@ -1,5 +1,7 @@
 from fastapi import APIRouter
 from app.api.routes import (
+    actor_affiliations,
+    actor_authority,
     audit,
     health,
     customers,
@@ -16,6 +18,8 @@ from app.api.routes import (
 
 api_router = APIRouter()
 api_router.include_router(health.router, tags=["Health"])
+api_router.include_router(actor_authority.router, prefix="/api/v1/actors", tags=["ActorAuthority"])
+api_router.include_router(actor_affiliations.router, prefix="/api/v1/affiliations", tags=["ActorAuthority"])
 api_router.include_router(customers.router, prefix="/api/v1/customers", tags=["Customers"])
 api_router.include_router(organizations.router, prefix="/api/v1/organizations", tags=["Organizations"])
 api_router.include_router(project_scopes.router, prefix="/api/v1/projects", tags=["ProjectScopes"])

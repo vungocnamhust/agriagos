@@ -19,12 +19,16 @@ _customers: dict[str, dict[str, Any]] = {}
 _preferences: dict[str, list[dict[str, Any]]] = defaultdict(list)  # customer_id → [pref]
 _customer_duplicate_candidates: dict[str, dict[str, Any]] = {}
 _organizations: dict[str, dict[str, Any]] = {}
+_actor_identities: dict[str, dict[str, Any]] = {}
+_actor_affiliations: dict[str, dict[str, Any]] = {}
 _project_scopes: dict[str, dict[str, Any]] = {}
 _shared_resources: dict[str, dict[str, Any]] = {}
+_shared_resource_allocations: dict[str, dict[str, Any]] = {}
 _project_assignments: dict[str, dict[str, Any]] = {}
 _project_contributions: dict[str, dict[str, Any]] = {}
 _project_cost_records: dict[str, dict[str, Any]] = {}
 _project_revenue_records: dict[str, dict[str, Any]] = {}
+_financial_allocations: dict[str, dict[str, Any]] = {}
 
 _preorders: dict[str, dict[str, Any]] = {}
 _orders: dict[str, dict[str, Any]] = {}
@@ -61,6 +65,14 @@ def list_customers() -> list[dict[str, Any]]:
 
 def list_organizations() -> list[dict[str, Any]]:
     return list(_organizations.values())
+
+
+def list_actor_identities() -> list[dict[str, Any]]:
+    return list(_actor_identities.values())
+
+
+def list_actor_affiliations() -> list[dict[str, Any]]:
+    return list(_actor_affiliations.values())
 
 
 def list_project_scopes() -> list[dict[str, Any]]:
@@ -158,6 +170,14 @@ def get_organization(organization_id: str) -> dict[str, Any] | None:
     return _organizations.get(organization_id)
 
 
+def get_actor_identity(actor_id: str) -> dict[str, Any] | None:
+    return _actor_identities.get(actor_id)
+
+
+def get_actor_affiliation(actor_affiliation_id: str) -> dict[str, Any] | None:
+    return _actor_affiliations.get(actor_affiliation_id)
+
+
 def get_project_scope(project_scope_id: str) -> dict[str, Any] | None:
     return _project_scopes.get(project_scope_id)
 
@@ -235,12 +255,40 @@ def save_organization(organization_id: str, record: dict[str, Any]) -> None:
     _organizations[organization_id] = record
 
 
+def save_actor_identity(actor_id: str, record: dict[str, Any]) -> None:
+    _actor_identities[actor_id] = record
+
+
+def save_actor_affiliation(actor_affiliation_id: str, record: dict[str, Any]) -> None:
+    _actor_affiliations[actor_affiliation_id] = record
+
+
 def save_project_scope(project_scope_id: str, record: dict[str, Any]) -> None:
     _project_scopes[project_scope_id] = record
 
 
 def save_shared_resource(shared_resource_id: str, record: dict[str, Any]) -> None:
     _shared_resources[shared_resource_id] = record
+
+
+def save_shared_resource_allocation(allocation_id: str, record: dict[str, Any]) -> None:
+    _shared_resource_allocations[allocation_id] = record
+
+
+def list_shared_resource_allocations(shared_resource_id: str) -> list[dict[str, Any]]:
+    return [
+        record
+        for record in _shared_resource_allocations.values()
+        if record.get("sharedResourceId") == shared_resource_id
+    ]
+
+
+def get_active_shared_resource_allocated_capacity(shared_resource_id: str) -> float:
+    return sum(
+        float(record.get("allocatedCapacity") or 0.0) - float(record.get("releasedCapacity") or 0.0)
+        for record in _shared_resource_allocations.values()
+        if record.get("sharedResourceId") == shared_resource_id and record.get("status") == "active"
+    )
 
 
 def save_project_assignment(project_assignment_id: str, record: dict[str, Any]) -> None:
@@ -257,6 +305,10 @@ def save_project_cost_record(cost_record_id: str, record: dict[str, Any]) -> Non
 
 def save_project_revenue_record(revenue_record_id: str, record: dict[str, Any]) -> None:
     _project_revenue_records[revenue_record_id] = record
+
+
+def save_financial_allocation(financial_allocation_id: str, record: dict[str, Any]) -> None:
+    _financial_allocations[financial_allocation_id] = record
 
 
 def customer_phone_exists(phone: str) -> bool:
@@ -503,11 +555,16 @@ def reset_state() -> None:
     _preferences.clear()
     _customer_duplicate_candidates.clear()
     _organizations.clear()
+    _actor_identities.clear()
+    _actor_affiliations.clear()
     _project_scopes.clear()
+    _shared_resources.clear()
+    _shared_resource_allocations.clear()
     _project_assignments.clear()
     _project_contributions.clear()
     _project_cost_records.clear()
     _project_revenue_records.clear()
+    _financial_allocations.clear()
     _preorders.clear()
     _orders.clear()
     _allocations.clear()

@@ -39,6 +39,7 @@ from app.models.orders import (
     ShipOrderRequest,
 )
 from app.models.project_assignments import ProjectAssignmentSummary
+from app.services._audit_metadata import build_authority_audit_metadata
 from app.services import audit as audit_service
 from app.store import postgres_sync
 from app.store import memory as store
@@ -109,7 +110,7 @@ def _assert_order_access(
         context,
         before_snapshot=before_snapshot,
         reason_code=reason_code,
-        metadata={"message": detail, "effectiveActorRole": actor_role},
+        metadata={"message": detail, **build_authority_audit_metadata(context), "effectiveActorRole": actor_role},
     )
     raise HTTPException(status_code=403, detail=detail)
 
@@ -118,6 +119,25 @@ def _cancel_roles_for_status(order_status: str | None) -> frozenset[str]:
     if order_status in _SENSITIVE_CANCEL_STATUSES:
         return _ORDER_SENSITIVE_CANCEL_ROLES
     return _ORDER_STANDARD_CANCEL_ROLES
+
+
+def _requires_sensitive_cancel_approval(record: dict[str, Any]) -> bool:
+    if record.get("status") in _SENSITIVE_CANCEL_STATUSES:
+        return True
+    if record.get("shippedAt") or record.get("deliveredAt"):
+        return True
+    for line in record.get("lines", []):
+        if _float_value(line.get("packedQty")) > 0:
+            return True
+        if _float_value(line.get("deliveredQty")) > 0:
+            return True
+    return False
+
+
+def _cancel_roles_for_record(record: dict[str, Any]) -> frozenset[str]:
+    if _requires_sensitive_cancel_approval(record):
+        return _ORDER_SENSITIVE_CANCEL_ROLES
+    return _cancel_roles_for_status(record.get("status"))
 
 
 def _build_order_detail(record: dict[str, Any]) -> OrderDetail:
@@ -183,14 +203,35 @@ def _organization_exists(organization_id: str) -> bool:
     return store.get_organization(organization_id) is not None
 
 
-def _validate_organization_id(organization_id: str | None) -> str | None:
+def _validate_organization_id(
+    organization_id: str | None,
+    *,
+    action_name: str,
+    order_id: str,
+    context: dict[str, Any],
+) -> str | None:
     if organization_id is None:
         return None
     normalized = organization_id.strip()
     if not normalized:
-        raise HTTPException(status_code=422, detail="organizationId cannot be blank.")
+        _raise_order_denied(
+            action_name=action_name,
+            order_id=order_id,
+            context=context,
+            detail="organizationId cannot be blank.",
+            reason_code="organization_id_blank",
+            status_code=422,
+        )
     if not _organization_exists(normalized):
-        raise HTTPException(status_code=422, detail="Referenced organization was not found.")
+        _raise_order_denied(
+            action_name=action_name,
+            order_id=order_id,
+            context=context,
+            detail="Referenced organization was not found.",
+            reason_code="organization_not_found",
+            status_code=422,
+            metadata={"organizationId": normalized},
+        )
     return normalized
 
 
@@ -200,7 +241,12 @@ def _resolve_order_organization_id(
     context: dict[str, Any],
     pending_order_id: str,
 ) -> str | None:
-    validated_requested_id = _validate_organization_id(requested_organization_id)
+    validated_requested_id = _validate_organization_id(
+        requested_organization_id,
+        action_name="order.create",
+        order_id=pending_order_id,
+        context=context,
+    )
     if not linked_preorder_ids:
         return validated_requested_id
 
@@ -217,6 +263,7 @@ def _resolve_order_organization_id(
                 status_code=404,
                 metadata={"sourcePreorderId": preorder_id},
             )
+        assert preorder_record is not None
         preorder_org_id = preorder_record.get("organizationId")
         if preorder_org_id is not None:
             linked_org_ids.add(str(preorder_org_id))
@@ -486,7 +533,30 @@ def _raise_order_denied(
         context,
         before_snapshot=before_snapshot,
         reason_code=reason_code,
-        metadata={"message": detail, **(metadata or {})},
+        metadata={"message": detail, **build_authority_audit_metadata(context), **(metadata or {})},
+    )
+    raise HTTPException(status_code=status_code, detail=detail)
+
+
+def _raise_order_escalated(
+    *,
+    action_name: str,
+    order_id: str,
+    context: dict[str, Any],
+    detail: str,
+    reason_code: str,
+    status_code: int = 403,
+    before_snapshot: Any | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    _audit_order_decision(
+        action_name,
+        order_id,
+        "escalated",
+        context,
+        before_snapshot=before_snapshot,
+        reason_code=reason_code,
+        metadata={"message": detail, **build_authority_audit_metadata(context), **(metadata or {})},
     )
     raise HTTPException(status_code=status_code, detail=detail)
 
@@ -774,7 +844,7 @@ def _get_order_record_or_404(
                 "denied",
                 context,
                 reason_code="order_not_found",
-                metadata={"message": "Order not found."},
+                metadata={"message": "Order not found.", **build_authority_audit_metadata(context)},
             )
         raise HTTPException(status_code=404, detail="Order not found.")
     return record
@@ -956,7 +1026,7 @@ def confirm_order(order_id: str, payload: ConfirmOrderRequest | None = None) -> 
             context,
             before_snapshot=before_snapshot,
             reason_code="state_transition_rejected",
-            metadata={"message": str(exc.detail)},
+            metadata={"message": str(exc.detail), **build_authority_audit_metadata(context)},
         )
         raise
 
@@ -1022,7 +1092,7 @@ def allocate_order(order_id: str, payload: AllocateOrderRequest) -> AllocationRe
             context,
             before_snapshot=before_snapshot,
             reason_code="state_transition_rejected",
-            metadata={"message": str(exc.detail)},
+            metadata={"message": str(exc.detail), **build_authority_audit_metadata(context)},
         )
         raise
 
@@ -1057,7 +1127,7 @@ def allocate_order(order_id: str, payload: AllocateOrderRequest) -> AllocationRe
                     context,
                     before_snapshot=before_snapshot,
                     reason_code="state_transition_rejected",
-                    metadata={"message": str(exc.detail)},
+                    metadata={"message": str(exc.detail), **build_authority_audit_metadata(context)},
                 )
                 raise
 
@@ -1154,7 +1224,7 @@ def allocate_order(order_id: str, payload: AllocateOrderRequest) -> AllocationRe
             context,
             before_snapshot=before_snapshot,
             reason_code="state_transition_rejected",
-            metadata={"message": str(exc.detail)},
+            metadata={"message": str(exc.detail), **build_authority_audit_metadata(context)},
         )
         raise
 
@@ -1624,7 +1694,7 @@ def pack_order(order_id: str, payload: PackOrderRequest) -> OrderResponse:
             context,
             before_snapshot=before_snapshot,
             reason_code="state_transition_rejected",
-            metadata={"message": str(exc.detail)},
+            metadata={"message": str(exc.detail), **build_authority_audit_metadata(context)},
         )
         raise
     preview_lines = copy.deepcopy(record["lines"])
@@ -1671,7 +1741,7 @@ def pack_order(order_id: str, payload: PackOrderRequest) -> OrderResponse:
             context,
             before_snapshot=before_snapshot,
             reason_code="state_transition_rejected",
-            metadata={"message": str(exc.detail)},
+            metadata={"message": str(exc.detail), **build_authority_audit_metadata(context)},
         )
         raise
 
@@ -1749,7 +1819,7 @@ def ship_order(order_id: str, payload: ShipOrderRequest) -> OrderResponse:
             context,
             before_snapshot=before_snapshot,
             reason_code="state_transition_rejected",
-            metadata={"message": str(exc.detail)},
+            metadata={"message": str(exc.detail), **build_authority_audit_metadata(context)},
         )
         raise
     record["status"] = next_status
@@ -1811,7 +1881,7 @@ def deliver_order(order_id: str, payload: DeliverOrderRequest) -> OrderResponse:
             context,
             before_snapshot=before_snapshot,
             reason_code="state_transition_rejected",
-            metadata={"message": str(exc.detail)},
+            metadata={"message": str(exc.detail), **build_authority_audit_metadata(context)},
         )
         raise
 
@@ -1868,7 +1938,7 @@ def deliver_order(order_id: str, payload: DeliverOrderRequest) -> OrderResponse:
             context,
             before_snapshot=before_snapshot,
             reason_code="state_transition_rejected",
-            metadata={"message": str(exc.detail)},
+            metadata={"message": str(exc.detail), **build_authority_audit_metadata(context)},
         )
         raise
 
@@ -1965,7 +2035,7 @@ def fail_delivery(order_id: str, payload: FailDeliveryRequest) -> OrderResponse:
             context,
             before_snapshot=before_snapshot,
             reason_code="state_transition_rejected",
-            metadata={"message": str(exc.detail)},
+            metadata={"message": str(exc.detail), **build_authority_audit_metadata(context)},
         )
         raise
 
@@ -2031,7 +2101,7 @@ def request_cancel_order(order_id: str, payload: RequestCancelOrderRequest) -> O
             context,
             before_snapshot=before_snapshot,
             reason_code="state_transition_rejected",
-            metadata={"message": str(exc.detail)},
+            metadata={"message": str(exc.detail), **build_authority_audit_metadata(context)},
         )
         raise
     record["status"] = next_status
@@ -2072,7 +2142,7 @@ def cancel_order(order_id: str, payload: CancelOrderRequest | None) -> OrderResp
         context=context,
         action_name="order.cancel",
         order_id=order_id,
-        allowed_roles=_cancel_roles_for_status(record.get("status")),
+        allowed_roles=_cancel_roles_for_record(record),
         reason_code="forbidden_order_write",
         detail="Actor is not allowed to cancel this order.",
         before_snapshot=before_snapshot,
@@ -2080,6 +2150,22 @@ def cancel_order(order_id: str, payload: CancelOrderRequest | None) -> OrderResp
     key = context["idempotency_key"]
     if cached := check_idempotency(key):
         return OrderResponse(**cached)
+
+    if _requires_sensitive_cancel_approval(record) and not (payload and payload.approvalRef):
+        _raise_order_escalated(
+            action_name="order.cancel",
+            order_id=order_id,
+            context=context,
+            detail="Packed-or-later order cancel requires approvalRef.",
+            reason_code="approval_required",
+            status_code=403,
+            before_snapshot=before_snapshot,
+            metadata={
+                "requiredApprovalRef": True,
+                "requiredApproverRoles": ["admin", "founder", "super_admin", "ops"],
+                "escalationOwner": "operations_admin",
+            },
+        )
 
     try:
         next_status = assert_order_transition(record, "cancel")
@@ -2091,14 +2177,12 @@ def cancel_order(order_id: str, payload: CancelOrderRequest | None) -> OrderResp
             context,
             before_snapshot=before_snapshot,
             reason_code="state_transition_rejected",
-            metadata={"message": str(exc.detail)},
+            metadata={"message": str(exc.detail), **build_authority_audit_metadata(context)},
         )
         raise
     allocations = _get_allocations_for_order(order_id)
     preorder_by_line_id = {line["orderLineId"]: line.get("sourcePreorderId") for line in record.get("lines", [])}
 
-    # Release reserved inventory back to lots
-    result = OrderResponse(data=_build_order_detail(record))
     if postgres_sync.is_enabled():
         with postgres_transaction():
             postgres_sync.cancel_order_atomic(order_id, next_status)
@@ -2118,13 +2202,18 @@ def cancel_order(order_id: str, payload: CancelOrderRequest | None) -> OrderResp
                         "lotId": alloc["lotId"],
                         "releasedQty": alloc.get("allocatedQty", 0.0),
                         "reason": payload.reason if payload else None,
+                        "approvalRef": payload.approvalRef if payload else None,
                     },
                     context,
                 )
             event = _emit_order_event(
                 "order.cancelled",
                 order_id,
-                {"orderId": order_id, "reason": payload.reason if payload else None},
+                {
+                    "orderId": order_id,
+                    "reason": payload.reason if payload else None,
+                    "approvalRef": payload.approvalRef if payload else None,
+                },
                 context,
             )
             _audit_order_decision(
@@ -2136,6 +2225,7 @@ def cancel_order(order_id: str, payload: CancelOrderRequest | None) -> OrderResp
                 after_snapshot=record,
                 event=event,
             )
+            result = OrderResponse(data=_build_order_detail(record))
             record_idempotency(
                 key,
                 result.model_dump(),
@@ -2185,13 +2275,18 @@ def cancel_order(order_id: str, payload: CancelOrderRequest | None) -> OrderResp
                         "lotId": alloc["lotId"],
                         "releasedQty": alloc.get("allocatedQty", 0.0),
                         "reason": payload.reason if payload else None,
+                        "approvalRef": payload.approvalRef if payload else None,
                     },
                     context,
                 )
             event = _emit_order_event(
                 "order.cancelled",
                 order_id,
-                {"orderId": order_id, "reason": payload.reason if payload else None},
+                {
+                    "orderId": order_id,
+                    "reason": payload.reason if payload else None,
+                    "approvalRef": payload.approvalRef if payload else None,
+                },
                 context,
             )
             _audit_order_decision(
@@ -2203,6 +2298,7 @@ def cancel_order(order_id: str, payload: CancelOrderRequest | None) -> OrderResp
                 after_snapshot=record,
                 event=event,
             )
+            result = OrderResponse(data=_build_order_detail(record))
             record_idempotency(
                 key,
                 result.model_dump(),

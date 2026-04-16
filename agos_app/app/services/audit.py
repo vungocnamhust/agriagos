@@ -14,6 +14,8 @@ COMMON_AUDIT_REASON_CODES = frozenset(
         "state_transition_rejected",
         "customer_not_found",
         "preorder_not_found",
+        "organization_id_blank",
+        "organization_not_found",
         "approval_required",
         "persistence_failed",
     }

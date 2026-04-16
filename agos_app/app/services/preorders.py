@@ -25,6 +25,7 @@ from app.models.preorders import (
     PreorderResponse,
 )
 from app.models.project_assignments import ProjectAssignmentSummary
+from app.services._audit_metadata import build_authority_audit_metadata
 from app.services import audit as audit_service
 from app.store import postgres_sync
 from app.store import memory as store
@@ -179,7 +180,7 @@ def _assert_preorder_access(
         context,
         before_snapshot=before_snapshot,
         reason_code=reason_code,
-        metadata={"message": detail, "effectiveActorRole": actor_role},
+        metadata={"message": detail, **build_authority_audit_metadata(context), "effectiveActorRole": actor_role},
     )
     raise HTTPException(status_code=403, detail=detail)
 
@@ -202,7 +203,7 @@ def _raise_preorder_denied(
         context,
         before_snapshot=before_snapshot,
         reason_code=reason_code,
-        metadata={"message": detail, **(metadata or {})},
+        metadata={"message": detail, **build_authority_audit_metadata(context), **(metadata or {})},
     )
     raise HTTPException(status_code=status_code, detail=detail)
 
@@ -228,7 +229,7 @@ def _get_preorder_record_or_404(
                 "denied",
                 context,
                 reason_code="preorder_not_found",
-                metadata={"message": "Preorder not found."},
+                metadata={"message": "Preorder not found.", **build_authority_audit_metadata(context)},
             )
         raise HTTPException(status_code=404, detail="Preorder not found.")
     return _normalized_preorder_record(record)
@@ -240,14 +241,35 @@ def _organization_exists(organization_id: str) -> bool:
     return store.get_organization(organization_id) is not None
 
 
-def _validate_organization_id(organization_id: str | None) -> str | None:
+def _validate_organization_id(
+    organization_id: str | None,
+    *,
+    action_name: str,
+    preorder_id: str,
+    context: dict[str, Any],
+) -> str | None:
     if organization_id is None:
         return None
     normalized = organization_id.strip()
     if not normalized:
-        raise HTTPException(status_code=422, detail="organizationId cannot be blank.")
+        _raise_preorder_denied(
+            action_name=action_name,
+            preorder_id=preorder_id,
+            context=context,
+            detail="organizationId cannot be blank.",
+            reason_code="organization_id_blank",
+            status_code=422,
+        )
     if not _organization_exists(normalized):
-        raise HTTPException(status_code=422, detail="Referenced organization was not found.")
+        _raise_preorder_denied(
+            action_name=action_name,
+            preorder_id=preorder_id,
+            context=context,
+            detail="Referenced organization was not found.",
+            reason_code="organization_not_found",
+            status_code=422,
+            metadata={"organizationId": normalized},
+        )
     return normalized
 
 
@@ -276,13 +298,18 @@ def create_preorder(payload: CreatePreorderRequest) -> PreorderResponse:
             "denied",
             context,
             reason_code="customer_not_found",
-            metadata={"message": "Customer not found."},
+            metadata={"message": "Customer not found.", **build_authority_audit_metadata(context)},
         )
         raise HTTPException(status_code=404, detail="Customer not found.")
 
     preorder_id = str(uuid.uuid4())
     preorder_code = _new_preorder_code()
-    organization_id = _validate_organization_id(payload.organizationId)
+    organization_id = _validate_organization_id(
+        payload.organizationId,
+        action_name="preorder.create",
+        preorder_id=f"pending:{payload.customerId}",
+        context=context,
+    )
 
     record: dict[str, Any] = {
         "preorderId": preorder_id,
@@ -368,7 +395,7 @@ def confirm_preorder(preorder_id: str, payload: ConfirmPreorderRequest) -> Preor
             context,
             before_snapshot=before_snapshot,
             reason_code="state_transition_rejected",
-            metadata={"message": str(exc.detail)},
+            metadata={"message": str(exc.detail), **build_authority_audit_metadata(context)},
         )
         raise
 
@@ -429,7 +456,7 @@ def activate_preorder(preorder_id: str, payload: ActivatePreorderRequest) -> Pre
             context,
             before_snapshot=before_snapshot,
             reason_code="state_transition_rejected",
-            metadata={"message": str(exc.detail)},
+            metadata={"message": str(exc.detail), **build_authority_audit_metadata(context)},
         )
         raise
 
@@ -491,7 +518,7 @@ def adjust_preorder(preorder_id: str, payload: AdjustPreorderRequest) -> Preorde
             context,
             before_snapshot=before_snapshot,
             reason_code="state_transition_rejected",
-            metadata={"message": str(exc.detail)},
+            metadata={"message": str(exc.detail), **build_authority_audit_metadata(context)},
         )
         raise
 
@@ -600,7 +627,7 @@ def cancel_preorder(preorder_id: str, payload: CancelPreorderRequest) -> Preorde
             context,
             before_snapshot=before_snapshot,
             reason_code="state_transition_rejected",
-            metadata={"message": str(exc.detail)},
+            metadata={"message": str(exc.detail), **build_authority_audit_metadata(context)},
         )
         raise
 

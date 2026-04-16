@@ -13,6 +13,7 @@ from app.core import gateway
 from app.services import customers as customer_service
 from app.services import farm as farm_service
 from app.services import financial_allocations as financial_allocation_service
+from app.services import actor_authority as actor_authority_service
 from app.services import organizations as organization_service
 from app.services import project_assignments as project_assignment_service
 from app.services import project_contributions as project_contribution_service
@@ -42,6 +43,7 @@ def default_to_memory_store(monkeypatch: pytest.MonkeyPatch, request: pytest.Fix
     monkeypatch.setattr(_db, "is_enabled", lambda: False)
     monkeypatch.setattr(postgres_sync, "is_enabled", lambda: False)
     monkeypatch.setattr(gateway, "postgres_enabled", lambda: False)
+    monkeypatch.setattr(actor_authority_service, "postgres_enabled", lambda: False)
     monkeypatch.setattr(customer_service, "postgres_enabled", lambda: False)
     monkeypatch.setattr(organization_service, "postgres_enabled", lambda: False)
     monkeypatch.setattr(project_assignment_service, "postgres_enabled", lambda: False)
