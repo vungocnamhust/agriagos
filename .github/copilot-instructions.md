@@ -9,6 +9,10 @@ Agri OS is a deterministic-core FastAPI repository for agricultural supply chain
 - Preserve the current deterministic-core design: AI and integration surfaces are advisory or translational, not canonical write-path owners.
 - When instructions here are incomplete, consult the nearest architecture or rule file before searching broadly.
 - Use prompt files for user-invoked task templates, skills for multi-step reusable workflows, and custom agents for narrow review or mapping roles.
+- Follow the task-to-agent pipeline in `.github/agent-invocation-policy.md` so implementation lanes stay narrow and review lanes stay risk-based.
+- Use `.github/agent-selection-cheatsheet.md` for the short-form decision table and `.github/global-agent-inventory.md` to keep global agents trimmed to repo-fit lanes.
+- Treat global agents in the `ignore` bucket as unavailable by default unless the task explicitly changes scope.
+- Use `.github/skills/skill-library/SKILL.md` as the single router when a library-only specialist is genuinely needed.
 
 ## Bootstrap And Run
 
