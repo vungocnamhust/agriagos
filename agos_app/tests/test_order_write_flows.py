@@ -544,6 +544,78 @@ def test_cancel_order_releases_allocation_and_records_release_movement(monkeypat
     assert allocations[0]["status"] == "cancelled"
 
 
+def test_cancel_order_requires_approval_after_packing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(orders.postgres_sync, "is_enabled", lambda: False)
+    memory.save_customer("customer-1", {"customerId": "customer-1", "fullName": "Alice"})
+
+    created = orders.create_order(
+        CreateOrderRequest(
+            customerId="customer-1",
+            channel="direct",
+            lines=[CreateOrderLineRequest(productSkuId="sku-1", orderedQty=2, unit="kg")],
+            meta=_admin_meta("corr-create-packed-cancel"),
+        )
+    )
+    orders.confirm_order(created.data.orderId, ConfirmOrderRequest(meta=_admin_meta("corr-confirm-packed-cancel")))
+    _seed_released_lot(lot_id="lot-packed-cancel", available_qty=2)
+    orders.allocate_order(
+        created.data.orderId,
+        AllocateOrderRequest(
+            allocations=[
+                AllocateItem(
+                    orderLineId=created.data.lines[0].orderLineId,
+                    lotId="lot-packed-cancel",
+                    allocatedQty=2,
+                )
+            ],
+            meta=_admin_meta("corr-allocate-packed-cancel"),
+        ),
+    )
+    orders.pack_order(
+        created.data.orderId,
+        PackOrderRequest(
+            packedQtySummary=[PackQtyItem(orderLineId=created.data.lines[0].orderLineId, packedQty=2)],
+            meta=_admin_meta("corr-pack-packed-cancel"),
+        ),
+    )
+    orders.request_cancel_order(
+        created.data.orderId,
+        RequestCancelOrderRequest(
+            reason="customer_changed_mind",
+            meta=_admin_meta("corr-request-packed-cancel"),
+        ),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        orders.cancel_order(
+            created.data.orderId,
+            CancelOrderRequest(
+                reason="customer_changed_mind",
+                meta=_admin_meta("corr-cancel-packed-denied"),
+            ),
+        )
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "Packed-or-later order cancel requires approvalRef."
+
+    escalated_audit = memory.list_audit_logs()[-1]
+    assert escalated_audit["decision"] == "escalated"
+    assert escalated_audit["reasonCode"] == "approval_required"
+    assert escalated_audit["beforeSnapshot"]["status"] == "cancel_requested"
+    assert escalated_audit["metadata"]["requiredApprovalRef"] is True
+
+    response = orders.cancel_order(
+        created.data.orderId,
+        CancelOrderRequest(
+            reason="customer_changed_mind",
+            approvalRef="APR-ORDER-001",
+            meta=_admin_meta("corr-cancel-packed-allowed"),
+        ),
+    )
+
+    assert response.data.status == "cancelled"
+
+
 def test_create_order_denies_viewer_role(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(orders.postgres_sync, "is_enabled", lambda: False)
     memory.save_customer("customer-1", {"customerId": "customer-1", "fullName": "Alice"})

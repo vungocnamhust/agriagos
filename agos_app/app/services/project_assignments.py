@@ -11,6 +11,7 @@ from fastapi import HTTPException
 
 from app.core import events
 from app.core.authz import ensure_bypass_permitted, normalize_actor_role
+from app.core.event_registry import AggregateType, ProjectAssignmentEventName
 from app.core.gateway import check_idempotency, record_idempotency
 from app.core.policy_sets import FOUNDATION_ADMIN_ROLES
 from app.core.write_context import append_audit_decision, build_request_hash, meta_context
@@ -23,6 +24,7 @@ from app.models.project_assignments import (
     ProjectAssignmentResponse,
     ProjectAssignmentSummary,
 )
+from app.services._audit_metadata import build_authority_audit_metadata
 from app.services.read_authz import authorize_read_surface
 from app.store import memory as memory_store
 from app.store import project_assignments as project_assignment_store
@@ -117,7 +119,7 @@ def _assert_can_write_project_assignment(
         context,
         before_snapshot=before_snapshot,
         reason_code="forbidden_project_assignment_write",
-        metadata={"message": detail},
+        metadata={"message": detail, **build_authority_audit_metadata(context)},
     )
     raise HTTPException(status_code=403, detail=detail)
 
@@ -163,9 +165,41 @@ def _get_target_record(target_type: ProjectAssignmentTargetType, target_id: str)
     raise ValueError(f"Unsupported target type: {target_type}")
 
 
+def _assert_target_matches_scope_organization(
+    *,
+    scope: dict[str, Any],
+    target_record: dict[str, Any],
+    context: dict[str, Any],
+) -> None:
+    scope_organization_id = scope.get("organizationId")
+    target_organization_id = target_record.get("organizationId")
+    if scope_organization_id is None or target_organization_id is None:
+        return
+    if scope_organization_id == target_organization_id:
+        return
+
+    _audit_project_assignment(
+        "project_assignment.create",
+        "pending",
+        "denied",
+        context,
+        reason_code="project_assignment_target_organization_mismatch",
+        metadata={
+            "message": "Project assignment target must belong to the same organization as the project scope.",
+            "scopeOrganizationId": scope_organization_id,
+            "targetOrganizationId": target_organization_id,
+            **build_authority_audit_metadata(context),
+        },
+    )
+    raise HTTPException(
+        status_code=422,
+        detail="Project assignment target must belong to the same organization as the project scope.",
+    )
+
+
 def create_project_assignment(project_scope_id: str, payload: CreateProjectAssignmentRequest) -> ProjectAssignmentResponse:
     context = meta_context(payload.meta)
-    _get_project_scope_record_or_404(project_scope_id)
+    scope = _get_project_scope_record_or_404(project_scope_id)
     _assert_can_write_project_assignment(
         context,
         action_name="project_assignment.create",
@@ -185,9 +219,10 @@ def create_project_assignment(project_scope_id: str, payload: CreateProjectAssig
             "denied",
             context,
             reason_code="project_assignment_target_not_found",
-            metadata={"message": "Project assignment target not found."},
+            metadata={"message": "Project assignment target not found.", **build_authority_audit_metadata(context)},
         )
         raise HTTPException(status_code=404, detail="Project assignment target not found.")
+    _assert_target_matches_scope_organization(scope=scope, target_record=target_record, context=context)
 
     timestamp = memory_store.now_iso()
     project_assignment_id = str(uuid.uuid4())
@@ -209,8 +244,8 @@ def create_project_assignment(project_scope_id: str, payload: CreateProjectAssig
         if not postgres_enabled():
             memory_store.save_project_assignment(project_assignment_id, record)
         event = events.emit(
-            event_name="project_assignment.created",
-            aggregate_type="ProjectAssignment",
+            event_name=ProjectAssignmentEventName.created,
+            aggregate_type=AggregateType.project_assignment,
             aggregate_id=project_assignment_id,
             payload=record,
             actor_id=context.get("actor_id"),
@@ -225,6 +260,7 @@ def create_project_assignment(project_scope_id: str, payload: CreateProjectAssig
             context,
             after_snapshot=record,
             event=event,
+            metadata=build_authority_audit_metadata(context),
         )
         record_idempotency(
             key,
@@ -285,7 +321,7 @@ def end_project_assignment(
             context,
             before_snapshot=before_snapshot,
             reason_code="project_assignment_already_ended",
-            metadata={"message": "Project assignment is already ended."},
+            metadata={"message": "Project assignment is already ended.", **build_authority_audit_metadata(context)},
         )
         raise HTTPException(status_code=422, detail="Project assignment is already ended.")
 
@@ -297,8 +333,8 @@ def end_project_assignment(
         if not postgres_enabled():
             memory_store.save_project_assignment(project_assignment_id, record)
         event = events.emit(
-            event_name="project_assignment.ended",
-            aggregate_type="ProjectAssignment",
+            event_name=ProjectAssignmentEventName.ended,
+            aggregate_type=AggregateType.project_assignment,
             aggregate_id=project_assignment_id,
             payload={
                 "projectAssignmentId": project_assignment_id,
@@ -319,6 +355,7 @@ def end_project_assignment(
             before_snapshot=before_snapshot,
             after_snapshot=record,
             event=event,
+            metadata=build_authority_audit_metadata(context),
         )
         record_idempotency(
             key,

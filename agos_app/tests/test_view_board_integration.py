@@ -281,6 +281,184 @@ def test_fetch_available_lots_board_filters_to_released_positive_qty_and_honors_
 
 
 @pytest.mark.postgres_integration
+def test_fetch_shared_resource_allocation_summary_filters_by_organization_and_resource_type(
+    postgres_db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _enable_view_store(monkeypatch, postgres_db_session)
+
+    code_suffix = uuid.uuid4().hex[:8]
+    organization_1 = str(uuid.uuid4())
+    organization_2 = str(uuid.uuid4())
+    project_scope_id = str(uuid.uuid4())
+    resource_1 = str(uuid.uuid4())
+    resource_2 = str(uuid.uuid4())
+    resource_3 = str(uuid.uuid4())
+
+    _insert_organization(postgres_db_session, organization_1, f"ORG-SRS-{code_suffix}-1", "Shared Summary Org One")
+    _insert_organization(postgres_db_session, organization_2, f"ORG-SRS-{code_suffix}-2", "Shared Summary Org Two")
+
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO project_scopes (
+                project_scope_id,
+                organization_id,
+                project_scope_code,
+                name,
+                project_scope_type,
+                status,
+                owner_actor_id
+            ) VALUES (
+                CAST(:project_scope_id AS uuid),
+                CAST(:organization_id AS uuid),
+                :project_scope_code,
+                :name,
+                'value_stream',
+                'active',
+                'founder-1'
+            )
+            """
+        ),
+        {
+            "project_scope_id": project_scope_id,
+            "organization_id": organization_1,
+            "project_scope_code": f"PRJ-SRS-{code_suffix}",
+            "name": "Shared Summary Scope",
+        },
+    )
+
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO shared_resources (
+                shared_resource_id,
+                organization_id,
+                resource_code,
+                name,
+                resource_type,
+                status,
+                capacity_value,
+                capacity_unit
+            ) VALUES
+            (
+                CAST(:resource_1 AS uuid),
+                CAST(:organization_1 AS uuid),
+                :resource_code_1,
+                'Warehouse One',
+                'warehouse',
+                'active',
+                20,
+                'ton'
+            ),
+            (
+                CAST(:resource_2 AS uuid),
+                CAST(:organization_1 AS uuid),
+                :resource_code_2,
+                'Van One',
+                'vehicle',
+                'active',
+                4,
+                'slot'
+            ),
+            (
+                CAST(:resource_3 AS uuid),
+                CAST(:organization_2 AS uuid),
+                :resource_code_3,
+                'Warehouse Two',
+                'warehouse',
+                'active',
+                10,
+                'ton'
+            )
+            """
+        ),
+        {
+            "resource_1": resource_1,
+            "resource_2": resource_2,
+            "resource_3": resource_3,
+            "organization_1": organization_1,
+            "organization_2": organization_2,
+            "resource_code_1": f"RES-SRS-{code_suffix}-1",
+            "resource_code_2": f"RES-SRS-{code_suffix}-2",
+            "resource_code_3": f"RES-SRS-{code_suffix}-3",
+        },
+    )
+
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO shared_resource_allocations (
+                allocation_id,
+                shared_resource_id,
+                project_scope_id,
+                allocation_basis,
+                allocated_capacity,
+                released_capacity,
+                status,
+                effective_at,
+                released_at
+            ) VALUES
+            (
+                CAST(:allocation_1 AS uuid),
+                CAST(:resource_1 AS uuid),
+                CAST(:project_scope_id AS uuid),
+                'manual',
+                8,
+                0,
+                'active',
+                CAST('2026-04-16T10:00:00+00:00' AS timestamptz),
+                NULL
+            ),
+            (
+                CAST(:allocation_2 AS uuid),
+                CAST(:resource_1 AS uuid),
+                CAST(:project_scope_id AS uuid),
+                'manual',
+                3,
+                3,
+                'released',
+                CAST('2026-04-16T11:00:00+00:00' AS timestamptz),
+                CAST('2026-04-16T12:00:00+00:00' AS timestamptz)
+            ),
+            (
+                CAST(:allocation_3 AS uuid),
+                CAST(:resource_2 AS uuid),
+                CAST(:project_scope_id AS uuid),
+                'manual',
+                2,
+                0,
+                'active',
+                CAST('2026-04-16T13:00:00+00:00' AS timestamptz),
+                NULL
+            )
+            """
+        ),
+        {
+            "allocation_1": str(uuid.uuid4()),
+            "allocation_2": str(uuid.uuid4()),
+            "allocation_3": str(uuid.uuid4()),
+            "resource_1": resource_1,
+            "resource_2": resource_2,
+            "project_scope_id": project_scope_id,
+        },
+    )
+
+    filtered = views_service.get_shared_resource_allocation_summary(
+        organization_id=organization_1,
+        resource_type="warehouse",
+    )
+
+    assert [item.resourceCode for item in filtered.items] == [f"RES-SRS-{code_suffix}-1"]
+    assert filtered.items[0].allocationCount == 2
+    assert filtered.items[0].activeAllocationCount == 1
+    assert filtered.items[0].allocatedCapacityTotal == 11.0
+    assert filtered.items[0].releasedCapacityTotal == 3.0
+    assert filtered.items[0].activeCapacityTotal == 8.0
+    assert filtered.items[0].utilizationPct == 40.0
+
+
+@pytest.mark.postgres_integration
 def test_fetch_pending_fulfillment_board_keeps_phase1_statuses_and_sorts_by_deadline(
     postgres_db_session: Session,
     monkeypatch: pytest.MonkeyPatch,

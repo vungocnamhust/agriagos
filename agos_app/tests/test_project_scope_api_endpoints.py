@@ -175,3 +175,5 @@ def test_project_scope_update_requires_mutable_fields() -> None:
     )
     assert empty_update.status_code == 422
     assert empty_update.json()["code"] == "VALIDATION_ERROR"
+    assert memory.list_audit_logs()[-1]["actionName"] == "project_scope.update"
+    assert memory.list_audit_logs()[-1]["reasonCode"] == "empty_update_payload"

@@ -452,6 +452,57 @@ def test_project_contribution_audit_captures_authority_context_for_allow_and_den
     assert denied_audit["metadata"]["delegatedActorRole"] == "viewer"
 
 
+def test_project_contribution_confirm_replays_cached_success_for_same_idempotency_key() -> None:
+    project_scope_id = "00000000-0000-0000-0000-00000000b412"
+    assignment_id = "00000000-0000-0000-0000-00000000b413"
+    _seed_project_scope(project_scope_id)
+    _seed_project_assignment(project_scope_id, assignment_id)
+
+    created = client.post(
+        f"/api/v1/projects/{project_scope_id}/contributions",
+        json={
+            "projectAssignmentId": assignment_id,
+            "organizationId": "org-1",
+            "actorId": "farmer-1",
+            "subjectType": "lot",
+            "subjectId": "lot-1",
+            "contributionType": "labor_day",
+            "role": "producer",
+            "quantity": 1,
+            "unit": "day",
+            "meta": {
+                "correlationId": "corr-project-contribution-confirm-idem-create",
+                "idempotencyKey": "idem-project-contribution-confirm-idem-create",
+                "actorId": "admin-1",
+                "actorRole": "admin",
+            },
+        },
+    )
+    contribution_id = created.json()["data"]["projectContributionEventId"]
+
+    payload = {
+        "verificationNote": "same replay",
+        "meta": {
+            "correlationId": "corr-project-contribution-confirm-idem",
+            "idempotencyKey": "idem-project-contribution-confirm-idem",
+            "actorId": "admin-1",
+            "actorRole": "admin",
+        },
+    }
+    first = client.post(
+        f"/api/v1/projects/{project_scope_id}/contributions/{contribution_id}/confirm",
+        json=payload,
+    )
+    second = client.post(
+        f"/api/v1/projects/{project_scope_id}/contributions/{contribution_id}/confirm",
+        json=payload,
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json() == first.json()
+
+
 def test_project_contribution_memory_path_reject_does_not_overwrite_confirmed_record_after_stale_read(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -199,6 +199,10 @@ def test_project_cost_record_routes_reject_missing_or_unconfirmed_contribution_s
     )
     assert unconfirmed.status_code == 422
     assert unconfirmed.json()["message"] == "Cost source contribution must be confirmed."
+    audit = memory.list_audit_logs()[-1]
+    assert audit["reasonCode"] == "project_cost_record_source_unconfirmed"
+    assert audit["metadata"]["authorityBasis"] == "runtime_role"
+    assert audit["metadata"]["effectiveActorRole"] == "admin"
 
 
 def test_project_cost_record_service_validates_contribution_after_transaction_entry(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -254,3 +258,70 @@ def test_project_cost_record_service_validates_contribution_after_transaction_en
 
     assert transaction_entered is True
     assert response.data.projectScopeId == project_scope_id
+
+
+def test_project_cost_record_audit_captures_authority_context_for_allow_and_deny() -> None:
+    project_scope_id = "00000000-0000-0000-0000-00000000c409"
+    assignment_id = "00000000-0000-0000-0000-00000000c410"
+    contribution_id = "00000000-0000-0000-0000-00000000c411"
+    _seed_project_scope(project_scope_id)
+    _seed_project_assignment(project_scope_id, assignment_id)
+    _record_confirmed_contribution(project_scope_id, assignment_id, contribution_id)
+
+    allowed = client.post(
+        f"/api/v1/projects/{project_scope_id}/cost-records",
+        json={
+            "costType": "labor_payout",
+            "amount": 450000,
+            "currency": "VND",
+            "recognizedAt": "2026-04-16T10:00:00Z",
+            "sourceObjectType": "project_contribution_event",
+            "sourceObjectId": contribution_id,
+            "attributionPolicy": "direct_source_link",
+            "meta": {
+                "correlationId": "corr-project-cost-audit-allow",
+                "idempotencyKey": "idem-project-cost-audit-allow",
+                "actorId": "admin-1",
+                "actorRole": "admin",
+                "delegatedActorId": "principal-1",
+                "delegatedActorRole": "viewer",
+            },
+        },
+    )
+
+    assert allowed.status_code == 201
+    allowed_audit = memory.list_audit_logs()[-1]
+    assert allowed_audit["actionName"] == "project_cost_record.record"
+    assert allowed_audit["metadata"]["authorityBasis"] == "runtime_role"
+    assert allowed_audit["metadata"]["effectiveActorRole"] == "admin"
+    assert allowed_audit["metadata"]["delegatedActorId"] == "principal-1"
+    assert allowed_audit["metadata"]["delegatedActorRole"] == "viewer"
+
+    denied = client.post(
+        f"/api/v1/projects/{project_scope_id}/cost-records",
+        json={
+            "costType": "labor_payout",
+            "amount": 450000,
+            "currency": "VND",
+            "recognizedAt": "2026-04-16T10:00:00Z",
+            "sourceObjectType": "project_contribution_event",
+            "sourceObjectId": contribution_id,
+            "attributionPolicy": "direct_source_link",
+            "meta": {
+                "correlationId": "corr-project-cost-audit-deny",
+                "idempotencyKey": "idem-project-cost-audit-deny",
+                "actorId": "sales-1",
+                "actorRole": "sales",
+                "delegatedActorId": "principal-2",
+                "delegatedActorRole": "accountant",
+            },
+        },
+    )
+
+    assert denied.status_code == 403
+    denied_audit = memory.list_audit_logs()[-1]
+    assert denied_audit["reasonCode"] == "forbidden_project_cost_record_write"
+    assert denied_audit["metadata"]["authorityBasis"] == "runtime_role"
+    assert denied_audit["metadata"]["effectiveActorRole"] == "sales"
+    assert denied_audit["metadata"]["delegatedActorId"] == "principal-2"
+    assert denied_audit["metadata"]["delegatedActorRole"] == "accountant"

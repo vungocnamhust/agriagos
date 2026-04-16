@@ -135,6 +135,11 @@ def test_preorder_activate_route_rejects_completed_transition() -> None:
     assert response.status_code == 422
     assert response.json()["code"] == "VALIDATION_ERROR"
     assert response.json()["message"] == "Preorder transition 'activate' not allowed from state 'completed'."
+    audit = memory.list_audit_logs()[-1]
+    assert audit["actionName"] == "preorder.activate"
+    assert audit["reasonCode"] == "state_transition_rejected"
+    assert audit["metadata"]["authorityBasis"] == "runtime_role"
+    assert audit["metadata"]["effectiveActorRole"] == "sales"
 
 
 def test_preorder_route_rejects_viewer_create() -> None:
@@ -167,6 +172,83 @@ def test_preorder_route_rejects_viewer_create() -> None:
     assert response.status_code == 403
     assert response.json()["code"] == "FORBIDDEN"
     assert response.json()["message"] == "Actor is not allowed to create preorders."
+    audit = memory.list_audit_logs()[-1]
+    assert audit["reasonCode"] == "forbidden_preorder_write"
+    assert audit["metadata"]["authorityBasis"] == "runtime_role"
+    assert audit["metadata"]["effectiveActorRole"] == "viewer"
+
+
+def test_preorder_create_route_audits_invalid_organization_reference() -> None:
+    customer = client.post(
+        "/api/v1/customers",
+        json={
+            "fullName": "Preorder Invalid Org User",
+            "phone": "0900000411",
+            "meta": {
+                "correlationId": "corr-preorder-invalid-org-customer",
+                "idempotencyKey": "idem-preorder-invalid-org-customer",
+                "actorId": "sales-1",
+                "actorRole": "sales",
+            },
+        },
+    )
+    customer_id = customer.json()["data"]["customerId"]
+
+    response = client.post(
+        "/api/v1/preorders",
+        json={
+            "customerId": customer_id,
+            "organizationId": "missing-org",
+            "productSkuId": "sku-1",
+            "committedQty": 4,
+            "meta": {"correlationId": "corr-preorder-invalid-org", "idempotencyKey": "idem-preorder-invalid-org"},
+        },
+        headers=_auth_headers(actor_role="sales", actor_id="sales-1"),
+    )
+
+    assert response.status_code == 422
+    assert response.json()["message"] == "Referenced organization was not found."
+    audit = memory.list_audit_logs()[-1]
+    assert audit["reasonCode"] == "organization_not_found"
+    assert audit["metadata"]["authorityBasis"] == "runtime_role"
+    assert audit["metadata"]["effectiveActorRole"] == "sales"
+    assert audit["metadata"]["organizationId"] == "missing-org"
+
+
+def test_preorder_create_route_audits_blank_organization_reference() -> None:
+    customer = client.post(
+        "/api/v1/customers",
+        json={
+            "fullName": "Preorder Blank Org User",
+            "phone": "0900000412",
+            "meta": {
+                "correlationId": "corr-preorder-blank-org-customer",
+                "idempotencyKey": "idem-preorder-blank-org-customer",
+                "actorId": "sales-1",
+                "actorRole": "sales",
+            },
+        },
+    )
+    customer_id = customer.json()["data"]["customerId"]
+
+    response = client.post(
+        "/api/v1/preorders",
+        json={
+            "customerId": customer_id,
+            "organizationId": "  ",
+            "productSkuId": "sku-1",
+            "committedQty": 4,
+            "meta": {"correlationId": "corr-preorder-blank-org", "idempotencyKey": "idem-preorder-blank-org"},
+        },
+        headers=_auth_headers(actor_role="sales", actor_id="sales-1"),
+    )
+
+    assert response.status_code == 422
+    assert response.json()["message"] == "organizationId cannot be blank."
+    audit = memory.list_audit_logs()[-1]
+    assert audit["reasonCode"] == "organization_id_blank"
+    assert audit["metadata"]["authorityBasis"] == "runtime_role"
+    assert audit["metadata"]["effectiveActorRole"] == "sales"
 
 
 def test_preorder_detail_route_includes_project_assignments() -> None:

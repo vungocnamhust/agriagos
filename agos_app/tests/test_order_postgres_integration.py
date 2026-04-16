@@ -4,6 +4,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -899,6 +900,173 @@ def test_fulfillment_metadata_and_last_purchase_persist_on_postgres_path(
         {"customer_id": "00000000-0000-0000-0000-00000000c003"},
     ).mappings().one()
     assert customer_row["last_order_at"] is not None
+
+
+@pytest.mark.postgres_integration
+def test_cancel_packed_order_requires_approval_on_postgres_path(
+    postgres_db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_db, "is_enabled", lambda: True)
+    monkeypatch.setattr(_db, "read_session", lambda session=None: _bound_read_session(postgres_db_session))
+    monkeypatch.setattr(_db, "write_session", lambda session=None: _bound_write_session(postgres_db_session))
+    monkeypatch.setattr(order_service.postgres_sync, "is_enabled", lambda: True)
+    monkeypatch.setattr(order_service, "postgres_transaction", lambda: _bound_transaction(postgres_db_session))
+
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO customers (
+                customer_id,
+                tenant_id,
+                customer_code,
+                full_name,
+                phone,
+                phone_normalized,
+                channel_source,
+                status,
+                tags,
+                notes
+            ) VALUES (
+                :customer_id,
+                'default',
+                'KH-PACK-CANCEL-001',
+                'Packed Cancel PG User',
+                '+84900009999',
+                '84900009999',
+                'internal_ui',
+                'active',
+                '[]'::jsonb,
+                null
+            )
+            """
+        ),
+        {"customer_id": "00000000-0000-0000-0000-00000000c099"},
+    )
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO product_skus (product_sku_id, tenant_id, sku_code, sku_name, unit, status)
+            VALUES (:product_sku_id, 'default', 'SKU-PACK-CANCEL-1', 'Packed Cancel SKU', 'kg', 'active')
+            """
+        ),
+        {"product_sku_id": "00000000-0000-0000-0000-000000000599"},
+    )
+    postgres_db_session.execute(
+        text(
+            """
+            INSERT INTO lots (
+                lot_id,
+                tenant_id,
+                lot_code,
+                product_sku_id,
+                source_type,
+                source_ref_id,
+                harvest_or_production_date,
+                actual_qty,
+                available_qty,
+                reserved_qty,
+                released_qty,
+                status,
+                updated_at
+            ) VALUES (
+                :lot_id,
+                'default',
+                'LOT-PACK-CANCEL-001',
+                :product_sku_id,
+                'processing_batch',
+                'PROC-PACK-CANCEL-001',
+                now(),
+                5,
+                5,
+                0,
+                5,
+                'released',
+                now()
+            )
+            """
+        ),
+        {
+            "lot_id": "00000000-0000-0000-0000-000000000799",
+            "product_sku_id": "00000000-0000-0000-0000-000000000599",
+        },
+    )
+
+    created = order_service.create_order(
+        CreateOrderRequest(
+            customerId="00000000-0000-0000-0000-00000000c099",
+            channel="web",
+            lines=[CreateOrderLineRequest(productSkuId="00000000-0000-0000-0000-000000000599", orderedQty=2, unit="kg")],
+            meta=_admin_meta("corr-pg-pack-cancel-create", "idem-pg-pack-cancel-create"),
+        )
+    )
+    order_id = created.data.orderId
+    order_line_id = created.data.lines[0].orderLineId
+
+    order_service.confirm_order(
+        order_id,
+        ConfirmOrderRequest(meta=_admin_meta("corr-pg-pack-cancel-confirm", "idem-pg-pack-cancel-confirm")),
+    )
+    order_service.allocate_order(
+        order_id,
+        AllocateOrderRequest(
+            allocations=[
+                AllocateItem(
+                    orderLineId=order_line_id,
+                    lotId="00000000-0000-0000-0000-000000000799",
+                    allocatedQty=2,
+                )
+            ],
+            meta=_admin_meta("corr-pg-pack-cancel-allocate", "idem-pg-pack-cancel-allocate"),
+        ),
+    )
+    order_service.pack_order(
+        order_id,
+        PackOrderRequest(
+            packedQtySummary=[PackQtyItem(orderLineId=order_line_id, packedQty=2)],
+            meta=_admin_meta("corr-pg-pack-cancel-pack", "idem-pg-pack-cancel-pack"),
+        ),
+    )
+    order_service.request_cancel_order(
+        order_id,
+        RequestCancelOrderRequest(
+            reason="customer_changed_mind",
+            meta=_admin_meta("corr-pg-pack-cancel-request", "idem-pg-pack-cancel-request"),
+        ),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        order_service.cancel_order(
+            order_id,
+            CancelOrderRequest(
+                reason="customer_changed_mind",
+                meta=_admin_meta("corr-pg-pack-cancel-denied", "idem-pg-pack-cancel-denied"),
+            ),
+        )
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "Packed-or-later order cancel requires approvalRef."
+
+    audit_row = postgres_db_session.execute(
+        text(
+            """
+            SELECT decision, reason_code, before_snapshot, after_snapshot, metadata
+            FROM audit_logs
+            WHERE target_type = 'Order'
+              AND target_id = :order_id
+              AND action_name = 'order.cancel'
+            ORDER BY created_at DESC, audit_id DESC
+            LIMIT 1
+            """
+        ),
+        {"order_id": order_id},
+    ).mappings().one()
+
+    assert audit_row["decision"] == "escalated"
+    assert audit_row["reason_code"] == "approval_required"
+    assert audit_row["after_snapshot"] is None
+    assert audit_row["before_snapshot"]["status"] == "cancel_requested"
+    assert audit_row["metadata"]["requiredApprovalRef"] is True
 
 
 @pytest.mark.postgres_integration

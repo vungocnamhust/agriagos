@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import uuid
+from concurrent.futures.thread import ThreadPoolExecutor
 from collections.abc import Iterator
 from contextlib import contextmanager
+from threading import Barrier
 
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.models.common import Meta
 from app.models.project_contributions import (
@@ -541,3 +543,107 @@ def test_project_contribution_confirm_does_not_overwrite_rejected_record_after_s
     ).mappings().one()
     assert row["status"] == "rejected"
     assert row["confirmed_by"] is None
+
+
+@pytest.mark.postgres_integration
+def test_project_contribution_transition_allows_only_one_true_concurrent_terminal_write(
+    migrated_postgres_engine,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_db, "is_enabled", lambda: True)
+
+    organization_id = str(uuid.uuid4())
+    project_scope_id = str(uuid.uuid4())
+    assignment_id = str(uuid.uuid4())
+    contribution_id = str(uuid.uuid4())
+    actor_id = str(uuid.uuid4())
+    subject_id = str(uuid.uuid4())
+
+    seed_session = sessionmaker(
+        bind=migrated_postgres_engine,
+        autoflush=False,
+        autocommit=False,
+        expire_on_commit=False,
+        class_=Session,
+    )()
+    try:
+        _seed_organization(seed_session, organization_id)
+        _seed_project_scope(seed_session, project_scope_id, organization_id)
+        _seed_project_assignment(seed_session, assignment_id, project_scope_id)
+        seed_session.commit()
+    finally:
+        seed_session.close()
+
+    project_contribution_store.upsert_project_contribution(
+        {
+            "projectContributionEventId": contribution_id,
+            "projectScopeId": project_scope_id,
+            "projectAssignmentId": assignment_id,
+            "organizationId": organization_id,
+            "actorId": actor_id,
+            "actorType": "person",
+            "subjectType": "lot",
+            "subjectId": subject_id,
+            "contributionType": "labor_day",
+            "role": "producer",
+            "quantity": 2,
+            "unit": "day",
+            "estimatedValue": 500000,
+            "currency": "VND",
+            "status": "proposed",
+            "confirmedBy": None,
+            "confirmedAt": None,
+            "rejectionReason": None,
+            "source": "manual",
+            "metadata": {},
+            "createdAt": "2026-04-16T10:00:00Z",
+        }
+    )
+
+    barrier = Barrier(2)
+
+    def _attempt_transition(next_status: str) -> dict[str, object]:
+        updated_record = {
+            "projectContributionEventId": contribution_id,
+            "projectScopeId": project_scope_id,
+            "projectAssignmentId": assignment_id,
+            "organizationId": organization_id,
+            "actorId": actor_id,
+            "actorType": "person",
+            "subjectType": "lot",
+            "subjectId": subject_id,
+            "contributionType": "labor_day",
+            "role": "producer",
+            "quantity": 2,
+            "unit": "day",
+            "estimatedValue": 500000,
+            "currency": "VND",
+            "status": next_status,
+            "confirmedBy": "admin-1" if next_status == "confirmed" else None,
+            "confirmedAt": "2026-04-16T11:00:00Z" if next_status == "confirmed" else None,
+            "rejectionReason": "conflict" if next_status == "rejected" else None,
+            "source": "manual",
+            "verificationStatus": "verified" if next_status == "confirmed" else "rejected",
+            "verificationSource": "admin_confirmed" if next_status == "confirmed" else "admin_rejected",
+            "metadata": {},
+        }
+        barrier.wait()
+        transitioned = project_contribution_store.transition_project_contribution_from_proposed(updated_record)
+        return {"status": next_status, "transitioned": transitioned}
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(_attempt_transition, ["confirmed", "rejected"]))
+
+    transitioned = [result for result in results if result["transitioned"] is not None]
+    assert len(transitioned) == 1
+    winner = transitioned[0]
+    persisted = project_contribution_store.fetch_project_contribution(contribution_id)
+
+    assert persisted is not None
+    assert persisted["status"] == winner["status"]
+    if winner["status"] == "confirmed":
+        assert persisted["confirmedBy"] == "admin-1"
+        assert persisted["rejectionReason"] is None
+    else:
+        assert persisted["confirmedBy"] is None
+        assert persisted["rejectionReason"] == "conflict"

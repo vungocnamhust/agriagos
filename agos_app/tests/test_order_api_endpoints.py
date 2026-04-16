@@ -191,6 +191,94 @@ def test_order_detail_route_includes_project_assignments() -> None:
     assert detail.json()["assignments"][0]["projectScopeId"] == "00000000-0000-0000-0000-00000000a301"
 
 
+def test_cancel_packed_order_requires_approval_ref() -> None:
+    customer_id = _create_customer()
+
+    created = client.post(
+        "/api/v1/orders",
+        headers=_auth_headers(),
+        json={
+            "customerId": customer_id,
+            "channel": "direct",
+            "lines": [{"productSkuId": "sku-1", "orderedQty": 2, "unit": "kg"}],
+            "meta": {
+                "correlationId": "corr-api-packed-cancel-create",
+                "idempotencyKey": "idem-api-packed-cancel-create",
+            },
+        },
+    )
+    assert created.status_code == 201
+    order_id = created.json()["data"]["orderId"]
+    order_line_id = created.json()["data"]["lines"][0]["orderLineId"]
+
+    confirmed = client.post(
+        f"/api/v1/orders/{order_id}/confirm",
+        headers=_auth_headers(),
+        json={"meta": {"correlationId": "corr-api-packed-cancel-confirm", "idempotencyKey": "idem-api-packed-cancel-confirm"}},
+    )
+    assert confirmed.status_code == 200
+
+    _seed_released_lot(lot_id="lot-api-packed-cancel", available_qty=2)
+    allocated = client.post(
+        f"/api/v1/orders/{order_id}/allocate",
+        headers=_auth_headers(),
+        json={
+            "allocations": [{"orderLineId": order_line_id, "lotId": "lot-api-packed-cancel", "allocatedQty": 2}],
+            "meta": {
+                "correlationId": "corr-api-packed-cancel-allocate",
+                "idempotencyKey": "idem-api-packed-cancel-allocate",
+            },
+        },
+    )
+    assert allocated.status_code == 200
+
+    packed = client.post(
+        f"/api/v1/orders/{order_id}/pack",
+        headers=_auth_headers(),
+        json={
+            "packedQtySummary": [{"orderLineId": order_line_id, "packedQty": 2}],
+            "meta": {
+                "correlationId": "corr-api-packed-cancel-pack",
+                "idempotencyKey": "idem-api-packed-cancel-pack",
+            },
+        },
+    )
+    assert packed.status_code == 200
+
+    requested = client.post(
+        f"/api/v1/orders/{order_id}/request-cancel",
+        headers=_auth_headers(),
+        json={
+            "reason": "customer_changed_mind",
+            "meta": {
+                "correlationId": "corr-api-packed-cancel-request",
+                "idempotencyKey": "idem-api-packed-cancel-request",
+            },
+        },
+    )
+    assert requested.status_code == 200
+
+    denied = client.post(
+        f"/api/v1/orders/{order_id}/cancel",
+        headers=_auth_headers(),
+        json={
+            "reason": "customer_changed_mind",
+            "meta": {
+                "correlationId": "corr-api-packed-cancel-denied",
+                "idempotencyKey": "idem-api-packed-cancel-denied",
+            },
+        },
+    )
+
+    assert denied.status_code == 403
+    assert denied.json()["message"] == "Packed-or-later order cancel requires approvalRef."
+
+    audit_entry = memory.list_audit_logs()[-1]
+    assert audit_entry["decision"] == "escalated"
+    assert audit_entry["reasonCode"] == "approval_required"
+    assert audit_entry["metadata"]["requiredApprovalRef"] is True
+
+
 def test_order_create_route_rejects_missing_source_preorder() -> None:
     customer_id = _create_customer()
 
@@ -219,6 +307,134 @@ def test_order_create_route_rejects_missing_source_preorder() -> None:
     body = response.json()
     assert body["code"] == "NOT_FOUND"
     assert body["message"] == "Preorder missing-preorder-id not found."
+    audit = memory.list_audit_logs()[-1]
+    assert audit["actionName"] == "order.create"
+    assert audit["reasonCode"] == "source_preorder_not_found"
+    assert audit["metadata"]["authorityBasis"] == "runtime_role"
+    assert audit["metadata"]["effectiveActorRole"] == "admin"
+
+
+def test_order_create_route_denies_viewer_with_authority_audit_metadata() -> None:
+    customer_id = _create_customer()
+
+    response = client.post(
+        "/api/v1/orders",
+        headers=_auth_headers("viewer", "viewer-1"),
+        json={
+            "customerId": customer_id,
+            "channel": "direct",
+            "lines": [{"productSkuId": "sku-1", "orderedQty": 1, "unit": "kg"}],
+            "meta": {
+                "correlationId": "corr-api-order-viewer-deny",
+                "idempotencyKey": "idem-api-order-viewer-deny",
+                "delegatedActorId": "principal-1",
+                "delegatedActorRole": "sales",
+            },
+        },
+    )
+
+    assert response.status_code == 403
+    audit = memory.list_audit_logs()[-1]
+    assert audit["reasonCode"] == "forbidden_order_write"
+    assert audit["metadata"]["authorityBasis"] == "runtime_role"
+    assert audit["metadata"]["effectiveActorRole"] == "viewer"
+    assert audit["metadata"]["delegatedActorId"] == "principal-1"
+    assert audit["metadata"]["delegatedActorRole"] == "sales"
+
+
+def test_order_create_route_audits_invalid_organization_reference() -> None:
+    customer_id = _create_customer()
+
+    response = client.post(
+        "/api/v1/orders",
+        headers=_auth_headers(),
+        json={
+            "customerId": customer_id,
+            "organizationId": "missing-org",
+            "channel": "direct",
+            "lines": [{"productSkuId": "sku-1", "orderedQty": 1, "unit": "kg"}],
+            "meta": {
+                "correlationId": "corr-api-order-invalid-org",
+                "idempotencyKey": "idem-api-order-invalid-org",
+            },
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["message"] == "Referenced organization was not found."
+    audit = memory.list_audit_logs()[-1]
+    assert audit["reasonCode"] == "organization_not_found"
+    assert audit["metadata"]["authorityBasis"] == "runtime_role"
+    assert audit["metadata"]["effectiveActorRole"] == "admin"
+    assert audit["metadata"]["organizationId"] == "missing-org"
+
+
+def test_order_create_route_audits_blank_organization_reference() -> None:
+    customer_id = _create_customer()
+
+    response = client.post(
+        "/api/v1/orders",
+        headers=_auth_headers(),
+        json={
+            "customerId": customer_id,
+            "organizationId": "   ",
+            "channel": "direct",
+            "lines": [{"productSkuId": "sku-1", "orderedQty": 1, "unit": "kg"}],
+            "meta": {
+                "correlationId": "corr-api-order-blank-org",
+                "idempotencyKey": "idem-api-order-blank-org",
+            },
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["message"] == "organizationId cannot be blank."
+    audit = memory.list_audit_logs()[-1]
+    assert audit["reasonCode"] == "organization_id_blank"
+    assert audit["metadata"]["authorityBasis"] == "runtime_role"
+    assert audit["metadata"]["effectiveActorRole"] == "admin"
+
+
+def test_order_ship_route_audits_invalid_transition_with_authority_context() -> None:
+    customer_id = _create_customer()
+    created = client.post(
+        "/api/v1/orders",
+        headers=_auth_headers(role="admin", actor_id="admin-1"),
+        json={
+            "customerId": customer_id,
+            "channel": "direct",
+            "lines": [{"productSkuId": "sku-1", "orderedQty": 1, "unit": "kg"}],
+            "meta": {
+                "correlationId": "corr-api-order-invalid-ship-create",
+                "idempotencyKey": "idem-api-order-invalid-ship-create",
+            },
+        },
+    )
+    order_id = created.json()["data"]["orderId"]
+
+    response = client.post(
+        f"/api/v1/orders/{order_id}/ship",
+        headers=_auth_headers(role="ops", actor_id="ops-1"),
+        json={
+            "carrier": "gha",
+            "trackingRef": "TRK-INVALID-1",
+            "shippedAt": "2026-04-15T10:00:00Z",
+            "meta": {
+                "correlationId": "corr-api-order-invalid-ship",
+                "idempotencyKey": "idem-api-order-invalid-ship",
+                "delegatedActorId": "dispatcher-1",
+                "delegatedActorRole": "ops_manager",
+            },
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "VALIDATION_ERROR"
+    audit = memory.list_audit_logs()[-1]
+    assert audit["actionName"] == "order.ship"
+    assert audit["reasonCode"] == "state_transition_rejected"
+    assert audit["metadata"]["authorityBasis"] == "runtime_role"
+    assert audit["metadata"]["effectiveActorRole"] == "ops"
 
 
 def test_raw_order_detail_route_denies_delegated_agent() -> None:

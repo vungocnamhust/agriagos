@@ -278,6 +278,10 @@ def test_project_revenue_record_routes_reject_duplicate_source_and_invalid_amoun
     )
     assert duplicate.status_code == 409
     assert duplicate.json()["message"] == "Revenue source order already has a revenue record for this project scope."
+    duplicate_audit = memory.list_audit_logs()[-1]
+    assert duplicate_audit["reasonCode"] == "project_revenue_record_duplicate_source"
+    assert duplicate_audit["metadata"]["authorityBasis"] == "runtime_role"
+    assert duplicate_audit["metadata"]["effectiveActorRole"] == "admin"
 
     invalid_amounts = client.post(
         f"/api/v1/projects/{project_scope_id}/revenue-records",
@@ -298,6 +302,10 @@ def test_project_revenue_record_routes_reject_duplicate_source_and_invalid_amoun
     )
     assert invalid_amounts.status_code == 422
     assert invalid_amounts.json()["message"] == "Gross amount must be greater than or equal to net amount."
+    invalid_audit = memory.list_audit_logs()[-1]
+    assert invalid_audit["reasonCode"] == "project_revenue_record_invalid_amounts"
+    assert invalid_audit["metadata"]["authorityBasis"] == "runtime_role"
+    assert invalid_audit["metadata"]["effectiveActorRole"] == "admin"
 
 
 def test_project_revenue_record_service_validates_order_after_transaction_entry(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -356,3 +364,67 @@ def test_project_revenue_record_service_validates_order_after_transaction_entry(
     assert transaction_entered is True
     assert response.data.projectScopeId == project_scope_id
     assert response.data.customerId == "cust-1"
+
+
+def test_project_revenue_record_audit_captures_authority_context_for_allow_and_deny() -> None:
+    project_scope_id = "00000000-0000-0000-0000-00000000d415"
+    order_id = "00000000-0000-0000-0000-00000000d416"
+    _seed_project_scope(project_scope_id)
+    _seed_order(order_id=order_id, status="delivered", delivered_at="2026-04-16T10:00:00Z")
+    _seed_project_assignment(project_scope_id, order_id)
+
+    allowed = client.post(
+        f"/api/v1/projects/{project_scope_id}/revenue-records",
+        json={
+            "revenueType": "delivered_order_sale",
+            "grossAmount": 900000,
+            "netAmount": 850000,
+            "currency": "VND",
+            "sourceObjectType": "order",
+            "sourceObjectId": order_id,
+            "meta": {
+                "correlationId": "corr-project-revenue-audit-allow",
+                "idempotencyKey": "idem-project-revenue-audit-allow",
+                "actorId": "admin-1",
+                "actorRole": "admin",
+                "delegatedActorId": "principal-1",
+                "delegatedActorRole": "viewer",
+            },
+        },
+    )
+
+    assert allowed.status_code == 201
+    allowed_audit = memory.list_audit_logs()[-1]
+    assert allowed_audit["actionName"] == "project_revenue_record.record"
+    assert allowed_audit["metadata"]["authorityBasis"] == "runtime_role"
+    assert allowed_audit["metadata"]["effectiveActorRole"] == "admin"
+    assert allowed_audit["metadata"]["delegatedActorId"] == "principal-1"
+    assert allowed_audit["metadata"]["delegatedActorRole"] == "viewer"
+
+    denied = client.post(
+        f"/api/v1/projects/{project_scope_id}/revenue-records",
+        json={
+            "revenueType": "delivered_order_sale",
+            "grossAmount": 900000,
+            "netAmount": 850000,
+            "currency": "VND",
+            "sourceObjectType": "order",
+            "sourceObjectId": order_id,
+            "meta": {
+                "correlationId": "corr-project-revenue-audit-deny",
+                "idempotencyKey": "idem-project-revenue-audit-deny",
+                "actorId": "sales-1",
+                "actorRole": "sales",
+                "delegatedActorId": "principal-2",
+                "delegatedActorRole": "accountant",
+            },
+        },
+    )
+
+    assert denied.status_code == 403
+    denied_audit = memory.list_audit_logs()[-1]
+    assert denied_audit["reasonCode"] == "forbidden_project_revenue_record_write"
+    assert denied_audit["metadata"]["authorityBasis"] == "runtime_role"
+    assert denied_audit["metadata"]["effectiveActorRole"] == "sales"
+    assert denied_audit["metadata"]["delegatedActorId"] == "principal-2"
+    assert denied_audit["metadata"]["delegatedActorRole"] == "accountant"

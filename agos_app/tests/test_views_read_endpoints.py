@@ -961,6 +961,152 @@ def test_project_impacted_actors_summary_denies_unauthorized_roles() -> None:
     assert memory.list_audit_logs()[-1]["reasonCode"] == "forbidden_project_impacted_actors_summary_view"
 
 
+def test_shared_resource_allocation_summary_aggregates_resources_and_utilization() -> None:
+    memory.save_shared_resource(
+        "resource-summary-1",
+        {
+            "sharedResourceId": "resource-summary-1",
+            "organizationId": "org-summary-1",
+            "resourceCode": "RES-001",
+            "name": "Shared Warehouse",
+            "resourceType": "warehouse",
+            "status": "active",
+            "capacityValue": 20.0,
+            "capacityUnit": "ton",
+            "description": "Primary warehouse",
+            "createdAt": "2026-04-16T08:00:00Z",
+            "updatedAt": "2026-04-16T08:00:00Z",
+        },
+    )
+    memory.save_shared_resource(
+        "resource-summary-2",
+        {
+            "sharedResourceId": "resource-summary-2",
+            "organizationId": "org-summary-1",
+            "resourceCode": "RES-002",
+            "name": "Shared Truck",
+            "resourceType": "vehicle",
+            "status": "active",
+            "capacityValue": None,
+            "capacityUnit": None,
+            "description": None,
+            "createdAt": "2026-04-16T09:00:00Z",
+            "updatedAt": "2026-04-16T09:00:00Z",
+        },
+    )
+    memory.save_shared_resource_allocation(
+        "resource-allocation-1",
+        {
+            "allocationId": "resource-allocation-1",
+            "sharedResourceId": "resource-summary-1",
+            "projectScopeId": "scope-summary-1",
+            "allocationBasis": "manual",
+            "allocatedCapacity": 8.0,
+            "releasedCapacity": 0.0,
+            "status": "active",
+            "effectiveAt": "2026-04-16T10:00:00Z",
+            "releasedAt": None,
+            "createdAt": "2026-04-16T10:00:00Z",
+            "updatedAt": "2026-04-16T10:00:00Z",
+        },
+    )
+    memory.save_shared_resource_allocation(
+        "resource-allocation-2",
+        {
+            "allocationId": "resource-allocation-2",
+            "sharedResourceId": "resource-summary-1",
+            "projectScopeId": "scope-summary-2",
+            "allocationBasis": "manual",
+            "allocatedCapacity": 4.0,
+            "releasedCapacity": 4.0,
+            "status": "released",
+            "effectiveAt": "2026-04-16T11:00:00Z",
+            "releasedAt": "2026-04-16T12:00:00Z",
+            "createdAt": "2026-04-16T11:00:00Z",
+            "updatedAt": "2026-04-16T12:00:00Z",
+        },
+    )
+
+    response = client.get(
+        "/api/v1/views/shared-resource-allocation-summary",
+        headers=_auth_headers(actor_role="viewer", actor_id="viewer-1"),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["items"]
+    assert [item["resourceCode"] for item in payload] == ["RES-001", "RES-002"]
+    assert payload[0]["organizationId"] == "org-summary-1"
+    assert payload[0]["allocationCount"] == 2
+    assert payload[0]["activeAllocationCount"] == 1
+    assert payload[0]["allocatedCapacityTotal"] == 12.0
+    assert payload[0]["releasedCapacityTotal"] == 4.0
+    assert payload[0]["activeCapacityTotal"] == 8.0
+    assert payload[0]["utilizationPct"] == 40.0
+    assert payload[1]["allocationCount"] == 0
+    assert payload[1]["activeAllocationCount"] == 0
+    assert payload[1]["allocatedCapacityTotal"] == 0.0
+    assert payload[1]["releasedCapacityTotal"] == 0.0
+    assert payload[1]["activeCapacityTotal"] == 0.0
+    assert payload[1]["utilizationPct"] is None
+
+
+def test_shared_resource_allocation_summary_filters_by_resource_type() -> None:
+    memory.save_shared_resource(
+        "resource-filter-1",
+        {
+            "sharedResourceId": "resource-filter-1",
+            "organizationId": "org-filter-1",
+            "resourceCode": "RES-FILTER-001",
+            "name": "Filter Warehouse",
+            "resourceType": "warehouse",
+            "status": "active",
+            "capacityValue": 10.0,
+            "capacityUnit": "ton",
+            "description": None,
+            "createdAt": "2026-04-16T08:00:00Z",
+            "updatedAt": "2026-04-16T08:00:00Z",
+        },
+    )
+    memory.save_shared_resource(
+        "resource-filter-2",
+        {
+            "sharedResourceId": "resource-filter-2",
+            "organizationId": "org-filter-1",
+            "resourceCode": "RES-FILTER-002",
+            "name": "Filter Truck",
+            "resourceType": "vehicle",
+            "status": "active",
+            "capacityValue": 3.0,
+            "capacityUnit": "slot",
+            "description": None,
+            "createdAt": "2026-04-16T08:00:00Z",
+            "updatedAt": "2026-04-16T08:00:00Z",
+        },
+    )
+
+    response = client.get(
+        "/api/v1/views/shared-resource-allocation-summary?resourceType=vehicle",
+        headers=_auth_headers(actor_role="ops", actor_id="ops-1"),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["items"]
+    assert [item["resourceCode"] for item in payload] == ["RES-FILTER-002"]
+
+
+def test_shared_resource_allocation_summary_denies_unauthorized_roles() -> None:
+    response = client.get(
+        "/api/v1/views/shared-resource-allocation-summary",
+        headers=_auth_headers(actor_role="sales", actor_id="sales-1"),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "FORBIDDEN"
+    assert response.json()["message"] == "Actor is not allowed to read shared resource allocation summary boards."
+    assert memory.list_audit_logs()[-1]["actionName"] == "view.shared_resource_allocation_summary"
+    assert memory.list_audit_logs()[-1]["reasonCode"] == "forbidden_shared_resource_allocation_summary_view"
+
+
 def test_project_scope_summary_views_reject_invalid_project_scope_id() -> None:
     contribution_response = client.get(
         "/api/v1/views/project-contribution-summary?projectScopeId=not-a-uuid",
