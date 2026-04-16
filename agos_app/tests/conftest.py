@@ -18,6 +18,7 @@ from app.services import project_contributions as project_contribution_service
 from app.services import project_cost_records as project_cost_record_service
 from app.services import project_revenue_records as project_revenue_record_service
 from app.services import project_scopes as project_scope_service
+from app.services import shared_resources as shared_resource_service
 from app.services import views as views_service
 from app.store import _db
 from app.store import farm as farm_store
@@ -47,6 +48,7 @@ def default_to_memory_store(monkeypatch: pytest.MonkeyPatch, request: pytest.Fix
     monkeypatch.setattr(project_cost_record_service, "postgres_enabled", lambda: False)
     monkeypatch.setattr(project_revenue_record_service, "postgres_enabled", lambda: False)
     monkeypatch.setattr(project_scope_service, "postgres_enabled", lambda: False)
+    monkeypatch.setattr(shared_resource_service, "postgres_enabled", lambda: False)
     monkeypatch.setattr(views_service.postgres_sync, "is_enabled", lambda: False)
     monkeypatch.setattr(farm_service.postgres_sync, "is_enabled", lambda: False)
     monkeypatch.setattr(view_store, "is_enabled", lambda: False)

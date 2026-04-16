@@ -80,6 +80,14 @@ Policy baseline:
 - P&L theo `ProjectScope` là read surface nhạy cảm; Founder / Super Admin / Admin / Accountant là baseline readers, Viewer / Analyst chỉ nên vào qua read models được duyệt
 - project-scoped membership, per-scope ABAC, và delegated agent permissions là phase sau; docs này không ngầm khẳng định runtime đã enforce các lane đó
 
+### 3.8 SharedResource baseline policy
+`SharedResource` hiện mới mở catalog baseline trong runtime qua `/api/v1/shared-resources` với create/list/get. Allocation hay release sang `ProjectScope` vẫn là phase sau.
+
+Policy baseline:
+- Founder / Super Admin và Admin là nhóm chính được tạo shared resource catalog record
+- raw read lane cho shared resource catalog hiện cũng chỉ mở cho Founder / Super Admin / Admin
+- SharedResource catalog không tự cấp quyền allocate, split cost, hay mutate `ProjectScope`
+
 ---
 
 ## 4. Phạm vi quyền theo domain

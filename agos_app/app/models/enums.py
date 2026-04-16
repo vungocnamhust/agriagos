@@ -45,6 +45,24 @@ class ProjectScopeType(str, Enum):
     shared_service = "shared_service"
 
 
+class SharedResourceStatus(str, Enum):
+    draft = "draft"
+    active = "active"
+    inactive = "inactive"
+    retired = "retired"
+
+
+class SharedResourceType(str, Enum):
+    labor_pool = "labor_pool"
+    vehicle = "vehicle"
+    drying_yard = "drying_yard"
+    warehouse = "warehouse"
+    marketing_budget = "marketing_budget"
+    content_asset = "content_asset"
+    host_capacity = "host_capacity"
+    other = "other"
+
+
 class ProjectAssignmentTargetType(str, Enum):
     plot = "plot"
     crop_cycle = "crop_cycle"

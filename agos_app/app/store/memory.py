@@ -20,6 +20,7 @@ _preferences: dict[str, list[dict[str, Any]]] = defaultdict(list)  # customer_id
 _customer_duplicate_candidates: dict[str, dict[str, Any]] = {}
 _organizations: dict[str, dict[str, Any]] = {}
 _project_scopes: dict[str, dict[str, Any]] = {}
+_shared_resources: dict[str, dict[str, Any]] = {}
 _project_assignments: dict[str, dict[str, Any]] = {}
 _project_contributions: dict[str, dict[str, Any]] = {}
 _project_cost_records: dict[str, dict[str, Any]] = {}
@@ -64,6 +65,10 @@ def list_organizations() -> list[dict[str, Any]]:
 
 def list_project_scopes() -> list[dict[str, Any]]:
     return list(_project_scopes.values())
+
+
+def list_shared_resources() -> list[dict[str, Any]]:
+    return list(_shared_resources.values())
 
 
 def list_project_assignments(project_scope_id: str | None = None) -> list[dict[str, Any]]:
@@ -150,6 +155,10 @@ def get_project_scope(project_scope_id: str) -> dict[str, Any] | None:
     return _project_scopes.get(project_scope_id)
 
 
+def get_shared_resource(shared_resource_id: str) -> dict[str, Any] | None:
+    return _shared_resources.get(shared_resource_id)
+
+
 def get_project_assignment(project_assignment_id: str) -> dict[str, Any] | None:
     return _project_assignments.get(project_assignment_id)
 
@@ -187,6 +196,10 @@ def save_organization(organization_id: str, record: dict[str, Any]) -> None:
 
 def save_project_scope(project_scope_id: str, record: dict[str, Any]) -> None:
     _project_scopes[project_scope_id] = record
+
+
+def save_shared_resource(shared_resource_id: str, record: dict[str, Any]) -> None:
+    _shared_resources[shared_resource_id] = record
 
 
 def save_project_assignment(project_assignment_id: str, record: dict[str, Any]) -> None:

@@ -14,6 +14,7 @@ Sơ đồ này thể hiện nguyên tắc **one truth, many views**: cùng một
 > | `GET /api/v1/views/farm-summary-board` | Farm Summary Board |
 > | `GET /api/v1/events` | Scoped Event Stream — short-term read lane cho operator / analyst use cases |
 > | `GET /api/v1/audit` | Audit Query Surface — operator/debug readback, không phải role-facing business view |
+> | `GET /api/v1/shared-resources` | Shared Resource Catalog View [Phase 1 ✅] |
 >
 > Các view còn lại (Farmer Task View, QC Board, Traceability, Management Metrics) là Phase 2.
 >
@@ -61,6 +62,7 @@ flowchart LR
         V6["Audit Query Surface"]
         V7["Project Scope Directory [Phase 1 ✅]"]
         V8["Project Economics / Contribution Views [Phase 1 ✅ / Phase 2 🔜]"]
+        V9["Shared Resource Catalog View [Phase 1 ✅]"]
     end
 
     subgraph Commands["Allowed Commands"]
@@ -72,6 +74,7 @@ flowchart LR
         CMD5["Admin / Override Commands"]
         CMD6["Project Scope Management Commands [Phase 1 ✅]"]
         CMD7["Project Assignment / Contribution / Economics Commands [Phase 1 ✅ / Phase 2 🔜]"]
+        CMD8["Shared Resource Catalog Commands [Phase 1 ✅]"]
     end
 
     C1 --> V1
@@ -82,6 +85,7 @@ flowchart LR
     C5 --> V6
     C5 --> V7
     C5 --> V8
+    C5 --> V9
 
     Founder --> V1
     Founder --> V0
@@ -92,10 +96,12 @@ flowchart LR
     Founder --> V6
     Founder --> V7
     Founder --> V8
+    Founder --> V9
     Founder --> CMD0
     Founder --> CMD5
     Founder --> CMD6
     Founder --> CMD7
+    Founder --> CMD8
 
     QC --> V2
     QC --> CMD2
@@ -128,10 +134,12 @@ flowchart LR
     Admin --> V6
     Admin --> V7
     Admin --> V8
+    Admin --> V9
     Admin --> CMD0
     Admin --> CMD5
     Admin --> CMD6
     Admin --> CMD7
+    Admin --> CMD8
 
     Accountant --> V3
     Accountant --> V5
@@ -163,3 +171,4 @@ flowchart LR
 - `Organization Profile View [Phase 1 ✅]` và `Organization Management Commands [Phase 1 ✅]` hiện tương ứng với standalone `/api/v1/organizations` read/write lane. Association sang farm-side, commercial-side, và org-scoped RBAC vẫn là phase sau.
 - `Project Scope Directory [Phase 1 ✅]` hiện tương ứng với standalone `/api/v1/projects` read/write lane.
 - `Project Economics / Contribution Views [Phase 1 ✅ / Phase 2 🔜]` hiện đã có `/api/v1/views/project-contribution-summary`, `/api/v1/views/project-pnl-summary`, `/api/v1/views/project-order-allocation-summary`, cost-record lane đầu tiên dưới `/api/v1/projects/{project_scope_id}/cost-records`, và revenue-record lane đầu tiên dưới `/api/v1/projects/{project_scope_id}/revenue-records`; shared-resource reporting vẫn là phase sau, còn allocation reporting hiện mới dừng ở observational order-allocation board chứ chưa phải `FinancialAllocation` lane.
+- `Shared Resource Catalog View [Phase 1 ✅]` và `Shared Resource Catalog Commands [Phase 1 ✅]` hiện tương ứng với `/api/v1/shared-resources` create/list/get baseline; allocation hay release sang `ProjectScope` chưa ship ở runtime hiện tại.

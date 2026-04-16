@@ -284,6 +284,16 @@ Payload tối thiểu:
 - allocation_weight
 - allocated_amount
 
+### `SharedResourceCreated`
+Khi một shared resource catalog record được tạo lần đầu trong Core.
+
+Payload tối thiểu:
+- shared_resource_id
+- organization_id
+- resource_code
+- resource_type
+- status
+
 ### `SharedResourceAllocated`
 Khi một shared resource được allocate cho một `ProjectScope`.
 

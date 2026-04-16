@@ -250,6 +250,7 @@ Runtime Phase 1 hiện đã đi được phần đầu của bước 4 và 5:
 - economics lane đã có `CostRecord` baseline từ confirmed contribution qua `direct_source_link`
 - economics lane hiện cũng đã có `RevenueRecord` baseline từ delivered `Order` đã có active `ProjectAssignment` vào cùng scope
 - reporting lane đã có `/api/v1/views/project-contribution-summary` cho aggregate contribution activity theo `ProjectScope`
+- shared resource lane hiện mới có catalog baseline qua `/api/v1/shared-resources` với create/list/get; allocation và release semantics vẫn là rollout sau
 - reporting lane hiện cũng đã có `/api/v1/views/project-pnl-summary` cho operational P&L summary theo `ProjectScope` từ `CostRecord` và `RevenueRecord`
 - rollback note: migration `20260416_0032_align_project_contribution_actor_columns` là repair migration cho môi trường lệch lịch sử tạo actor columns dưới dạng UUID; trên migration chain chuẩn hiện tại nó là no-op vì `actor_id` và `confirmed_by` đã là text. Dù vậy, downgrade chỉ an toàn khi các giá trị text đó vẫn cast được về UUID; nếu runtime đã ghi text id không phải UUID thì phải clean/remap trước khi rollback
 

@@ -726,6 +726,112 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/shared-resources:
+    get:
+      tags:
+      - SharedResources
+      summary: List Shared Resources
+      operationId: list_shared_resources_api_v1_shared_resources_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SharedResourceListResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags:
+      - SharedResources
+      summary: Create Shared Resource
+      operationId: create_shared_resource_api_v1_shared_resources_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSharedResourceRequest'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SharedResourceResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/shared-resources/{shared_resource_id}:
+    get:
+      tags:
+      - SharedResources
+      summary: Get Shared Resource
+      operationId: get_shared_resource_api_v1_shared_resources__shared_resource_id__get
+      parameters:
+      - name: shared_resource_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Shared Resource Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SharedResourceDetail'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aggregate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     patch:
       tags:
       - ProjectScopes
@@ -6154,6 +6260,174 @@ components:
       - umbrella_program
       - shared_service
       title: ProjectScopeType
+    SharedResourceDetail:
+      properties:
+        sharedResourceId:
+          type: string
+          title: Sharedresourceid
+        organizationId:
+          type: string
+          title: Organizationid
+        resourceCode:
+          type: string
+          title: Resourcecode
+        name:
+          type: string
+          title: Name
+        resourceType:
+          $ref: '#/components/schemas/SharedResourceType'
+        status:
+          $ref: '#/components/schemas/SharedResourceStatus'
+        capacityValue:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Capacityvalue
+        capacityUnit:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Capacityunit
+        createdAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdat
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        updatedAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Updatedat
+      type: object
+      required:
+      - sharedResourceId
+      - organizationId
+      - resourceCode
+      - name
+      - resourceType
+      - status
+      title: SharedResourceDetail
+    SharedResourceListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/SharedResourceSummary'
+          type: array
+          title: Items
+      type: object
+      required:
+      - items
+      title: SharedResourceListResponse
+    SharedResourceResponse:
+      properties:
+        data:
+          $ref: '#/components/schemas/SharedResourceDetail'
+      type: object
+      required:
+      - data
+      title: SharedResourceResponse
+    SharedResourceStatus:
+      type: string
+      enum:
+      - draft
+      - active
+      - inactive
+      - retired
+      title: SharedResourceStatus
+    SharedResourceSummary:
+      properties:
+        sharedResourceId:
+          type: string
+          title: Sharedresourceid
+        organizationId:
+          type: string
+          title: Organizationid
+        resourceCode:
+          type: string
+          title: Resourcecode
+        name:
+          type: string
+          title: Name
+        resourceType:
+          $ref: '#/components/schemas/SharedResourceType'
+        status:
+          $ref: '#/components/schemas/SharedResourceStatus'
+        capacityValue:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Capacityvalue
+        capacityUnit:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Capacityunit
+        createdAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdat
+      type: object
+      required:
+      - sharedResourceId
+      - organizationId
+      - resourceCode
+      - name
+      - resourceType
+      - status
+      title: SharedResourceSummary
+    SharedResourceType:
+      type: string
+      enum:
+      - labor_pool
+      - vehicle
+      - drying_yard
+      - warehouse
+      - marketing_budget
+      - content_asset
+      - host_capacity
+      - other
+      title: SharedResourceType
+    CreateSharedResourceRequest:
+      properties:
+        organizationId:
+          type: string
+          title: Organizationid
+        name:
+          type: string
+          title: Name
+        resourceType:
+          $ref: '#/components/schemas/SharedResourceType'
+        capacityValue:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Capacityvalue
+        capacityUnit:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Capacityunit
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        meta:
+          anyOf:
+          - $ref: '#/components/schemas/Meta'
+          - type: 'null'
+      type: object
+      required:
+      - organizationId
+      - name
+      - resourceType
+      title: CreateSharedResourceRequest
     QCReviewItem:
       properties:
         qcReviewId:
